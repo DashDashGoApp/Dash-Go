@@ -50,7 +50,7 @@ func (a *app) updateStatusWithPreflight(preflight map[string]any) map[string]any
 	detail := firstNonEmpty(strOr(job["detail"], ""), strOr(installerStatus["detail"], ""), tailFile(logPath, 500))
 	return map[string]any{
 		"installedVersion": v, "manifestVersion": manifestVersion(a.dash), "versionMismatch": false,
-		"installerPresent": preflight["installerPresent"], "updateCredentialsPresent": preflight["credentialsPresent"], "updateReady": preflight["ready"],
+		"installerPresent": preflight["installerPresent"], "updateTrackProfilePresent": preflight["updateTrackProfilePresent"], "updateReady": preflight["ready"],
 		"preflight": preflight, "job": job, "updaterUnit": preflight["unit"],
 		"restoreAvailable": len(backups) > 0, "rollbackSupported": len(backups) > 0,
 		"backups": backups, "backupCount": len(backups), "backupAutomaticCount": autoCount, "preActionBackups": preAction,

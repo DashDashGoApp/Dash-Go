@@ -179,11 +179,43 @@ func (a *app) cachedUpdateAvailability(maxAge time.Duration) map[string]any {
 	return availability
 }
 
+// githubReleaseCatalogProblems keeps Dashboard Control's install preflight in
+// lockstep with the canonical GitHub Release resolver. The retired
+// catalog exposed a tarball, manifest, and installer checksum separately;
+// GitHub releases instead expose a self-contained versioned bundle and the
+// release-wide SHA256SUMS asset. Resolver validation already proves exact asset
+// names, upload state, URLs, and digest syntax. This narrow preflight confirms
+// that its safe summary still has every field the installer transaction needs.
+func githubReleaseCatalogProblems(availability map[string]any) []string {
+	if availability["ok"] != true {
+		return []string{strOr(availability["detail"], "GitHub Release discovery is unavailable")}
+	}
+	problems := []string{}
+	for _, item := range []struct {
+		field string
+		label string
+	}{
+		{field: "releaseAsset", label: "release bundle"},
+		{field: "releaseDigest", label: "release-bundle SHA-256"},
+		{field: "checksumsAsset", label: "SHA256SUMS asset"},
+		{field: "checksumsDigest", label: "SHA256SUMS SHA-256"},
+		{field: "releaseUrl", label: "release URL"},
+	} {
+		if jsonutil.StringValue(availability[item.field]) == "" {
+			problems = append(problems, "GitHub Release metadata is missing the "+item.label)
+		}
+	}
+	if availability["immutable"] != true {
+		problems = append(problems, "the resolved GitHub Release is not immutable")
+	}
+	return problems
+}
+
 func (a *app) updatePreflightWithAvailability(availability map[string]any) map[string]any {
 	problems := []string{}
 	installer := filepath.Join(a.home, "install.sh")
 	installerPresent := fileio.Exists(installer)
-	credentialsPresent := fileio.Exists(a.updateProfilePath())
+	trackProfilePresent := fileio.Exists(a.updateProfilePath())
 	runnerPresent := executableRegularFile(a.updateRunnerPath())
 	unit := a.updateUnitSnapshot()
 	job := a.readUpdateJob()
@@ -191,30 +223,14 @@ func (a *app) updatePreflightWithAvailability(availability map[string]any) map[s
 	if !installerPresent {
 		problems = append(problems, "installer is missing from the dashboard account home directory")
 	}
-	if !credentialsPresent {
-		problems = append(problems, "saved update credentials are missing")
-	}
+	// The selected track has a safe installed-version fallback and the installer
+	// recreates its owner-only record on update. Its absence is informative but
+	// never a credential gate or an automatic-update blocker.
 	if !runnerPresent {
 		problems = append(problems, "dedicated updater runner is missing; complete one SSH update or repair")
 	}
-	if availability["ok"] != true {
-		// A failed catalog request has no metadata to inspect. Reporting absent
-		// tarball/hash fields here turns one actionable network/auth failure into
-		// a misleading cascade of imaginary packaging defects.
-		problems = append(problems, strOr(availability["detail"], "update catalog is unavailable"))
-	} else {
-		for _, field := range []string{"tarball", "manifest"} {
-			if jsonutil.StringValue(availability[field]) == "" {
-				problems = append(problems, "update metadata is missing "+field)
-			}
-		}
-		if availability["shaPresent"] != true {
-			problems = append(problems, "update metadata is missing the release SHA256")
-		}
-		if availability["installerShaPresent"] != true {
-			problems = append(problems, "update metadata is missing the shared installer SHA256")
-		}
-	}
+	catalogProblems := githubReleaseCatalogProblems(availability)
+	problems = append(problems, catalogProblems...)
 	if unit["present"] != true {
 		problems = append(problems, strOr(unit["detail"], "dedicated updater service is missing"))
 	}
@@ -234,25 +250,15 @@ func (a *app) updatePreflightWithAvailability(availability map[string]any) map[s
 	if !backupWritable {
 		problems = append(problems, "backup storage is not writable: "+backupDetail)
 	}
-	catalogReady := availability["ok"] == true
-	if catalogReady {
-		for _, field := range []string{"tarball", "manifest"} {
-			if jsonutil.StringValue(availability[field]) == "" {
-				catalogReady = false
-			}
-		}
-		if availability["shaPresent"] != true || availability["installerShaPresent"] != true {
-			catalogReady = false
-		}
-	}
+	catalogReady := len(catalogProblems) == 0
 	ready := len(problems) == 0
-	label, detail := "Ready", "Updater, safety backup, and selected release metadata are ready."
+	label, detail := "Ready", "Updater, safety backup, and selected GitHub Release metadata are ready."
 	if !ready {
 		switch {
 		case updateActive:
 			label, detail = "Update in progress", "An existing update job must finish before another can start."
 		case !catalogReady:
-			label = strOr(availability["label"], "Update source needs attention")
+			label = strOr(availability["label"], "GitHub Release needs attention")
 			detail = strOr(availability["detail"], problems[0])
 		default:
 			label, detail = "Update setup needed", problems[0]
@@ -260,7 +266,7 @@ func (a *app) updatePreflightWithAvailability(availability map[string]any) map[s
 	}
 	return map[string]any{
 		"ok": ready, "ready": ready, "catalogReady": catalogReady, "label": label, "detail": detail, "problems": problems,
-		"installerPresent": installerPresent, "credentialsPresent": credentialsPresent, "runnerPresent": runnerPresent,
+		"installerPresent": installerPresent, "updateTrackProfilePresent": trackProfilePresent, "runnerPresent": runnerPresent,
 		"backupWritable": backupWritable, "availability": availability, "unit": unit, "job": job, "lockHeld": lockHeld,
 		"lockProbeError": lockProbeError,
 	}

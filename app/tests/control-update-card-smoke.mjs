@@ -37,6 +37,8 @@ assert.match(lifecycle,/function closeCtrl\(\)[\s\S]*stopCtrlUpdatePoll\(\)/,"cl
 assert.match(updates,/Check for updates/,"update card must expose an explicit read-only catalog check independent of updater setup");
 assert.match(updates,/\/api\/update\/status\?fresh=1/,"explicit catalog checks must bypass the short update-status cache");
 assert.match(updates,/Update installation setup:/,"update card must distinguish privileged updater setup from catalog availability");
+assert.doesNotMatch(health,/saved update credentials/i,"health messaging must not describe the token-free GitHub updater as credential-gated");
+assert.match(health,/local update service/,"health messaging must name the local updater setup requirement");
 assert.match(updates,/ctrlBuildBackupRestoreSection/,"Update card must compose the durable Backup & Restore subsection");
 assert.match(backups,/function ctrlRunBackupMutation/,"Backup mutations must stay in the stable Update-card subsection");
 assert.match(backups,/\/api\/backup\/restore/,"Backup subsection must retain restore support");

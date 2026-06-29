@@ -213,3 +213,56 @@ func TestInterruptedUpdateRecoveryKeepsFreshLockedAndServiceOwnedJobs(t *testing
 		})
 	}
 }
+
+func TestGitHubReleaseCatalogProblemsAcceptCurrentReleaseMetadata(t *testing.T) {
+	availability := map[string]any{
+		"ok": true, "label": "Up to date", "detail": "1.5.0-beta.39 is current.",
+		"releaseAsset": "Dash-Go_1.5.0-beta.39_release.tar.gz", "releaseDigest": currentTestDigest,
+		"checksumsAsset": "SHA256SUMS", "checksumsDigest": currentTestDigest,
+		"releaseUrl": "https://github.com/DashDashGoApp/Dash-Go/releases/tag/v1.5.0-beta.39", "immutable": true,
+	}
+	if problems := githubReleaseCatalogProblems(availability); len(problems) != 0 {
+		t.Fatalf("current GitHub Release metadata must be ready, got %#v", problems)
+	}
+}
+
+func TestGitHubReleaseCatalogProblemsRejectsRetiredCatalogShape(t *testing.T) {
+	availability := map[string]any{
+		"ok": true, "label": "Up to date", "detail": "current",
+		// This is the old nginx metadata shape. It must never make a GitHub
+		// Release updater ready merely because unrelated legacy fields exist.
+		"tarball": "Dash-Go.tar.gz", "manifest": "MANIFEST.json", "shaPresent": true, "installerShaPresent": true,
+	}
+	problems := githubReleaseCatalogProblems(availability)
+	if len(problems) == 0 {
+		t.Fatal("retired catalog metadata unexpectedly passed GitHub Release preflight")
+	}
+	joined := strings.Join(problems, " | ")
+	for _, want := range []string{"release bundle", "SHA256SUMS asset", "not immutable"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing GitHub Release preflight problem %q in %q", want, joined)
+		}
+	}
+}
+
+func TestUpdatePreflightTreatsTrackProfileAsInformationalNotCredentialGate(t *testing.T) {
+	a := testProfileApp(t)
+	availability := map[string]any{
+		"ok": true, "label": "Up to date", "detail": "1.5.0-beta.39 is current.",
+		"releaseAsset": "Dash-Go_1.5.0-beta.39_release.tar.gz", "releaseDigest": currentTestDigest,
+		"checksumsAsset": "SHA256SUMS", "checksumsDigest": currentTestDigest,
+		"releaseUrl": "https://github.com/DashDashGoApp/Dash-Go/releases/tag/v1.5.0-beta.39", "immutable": true,
+	}
+	preflight := a.updatePreflightWithAvailability(availability)
+	if preflight["catalogReady"] != true {
+		t.Fatalf("current GitHub Release metadata must be catalog-ready: %#v", preflight)
+	}
+	if preflight["updateTrackProfilePresent"] != false {
+		t.Fatalf("missing optional track profile state=%v, want false", preflight["updateTrackProfilePresent"])
+	}
+	for _, problem := range preflight["problems"].([]string) {
+		if strings.Contains(strings.ToLower(problem), "credential") {
+			t.Fatalf("preflight retained a credential gate: %#v", preflight["problems"])
+		}
+	}
+}

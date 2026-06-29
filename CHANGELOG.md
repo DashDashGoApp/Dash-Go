@@ -2,12 +2,17 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## Unreleased — 1.5.0-beta.38
+## Unreleased — 1.5.0-beta.39
+
+- Corrected Dashboard Control’s self-update preflight to consume the canonical immutable GitHub Release bundle and `SHA256SUMS` metadata rather than retired nginx catalog fields.
+- Removed the false update-credential gate from the Dashboard Control status and preflight surfaces; devices remain token-free and use only their local Stable/Beta track preference.
+- Added source and Go regression coverage for the GitHub Release self-update contract before stable promotion.
+
+## Earlier migration increment — 1.5.0-beta.38
 
 - Public-transition privacy correction: public source tests no longer contain private historical markers; the local builder performs the exact private audit outside the repository.
 - Clarified the public GitHub Release transition and conditional private vulnerability-reporting channel.
-
-- Retains the maintainer release guide for privacy-reviewed source import, exact Git tag, local release build, draft-release review, asset verification, and public transition.
+- Retained the maintainer release guide for privacy-reviewed source import, exact Git tag, local release build, draft-release review, asset verification, and public transition.
 - Clarified that private GitHub releases can be rehearsed by authorized maintainers without putting a GitHub token on a Dash-Go VM or Pi; the installed updater remains deliberately anonymous.
 - Made the security-reporting policy conditional on the actual GitHub repository setting; enable and verify private vulnerability reporting before public prerelease publication.
 - Kept normal installed-device updates, Doctor online validation, and repair resolution on the canonical GitHub Release transaction with the beta.35 integrity/recovery guarantees intact.
