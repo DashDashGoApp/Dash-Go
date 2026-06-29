@@ -2,12 +2,19 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## Unreleased — 1.5.0-beta.41
+## Unreleased — 1.5.0-beta.42
 
-- Corrects the missed canonical-installer migration exposed by the first Dashboard Control update rehearsal: every verified release bundle now atomically refreshes `~/install.sh` alongside the managed app payload.
+- Release-candidate updater proof only: no functional application, installer, updater, UI, or package behavior changes from beta.41.
+- Advances the versioned release identity and browser/map cache-buster references so Dashboard Control can prove the full beta.41 → beta.42 transaction on the VM and Pi.
+- Carries beta.41’s canonical `~/install.sh` refresh, legacy-launcher preflight block, staged verification, rollback, service recovery, and kiosk-return behavior unchanged.
+- After the beta.41 → beta.42 touchscreen update succeeds on both target devices, freeze functional code and create one separately versioned immutable `1.5.0` stable release.
+
+## Earlier migration increment — 1.5.0-beta.41
+
+- Corrected the missed canonical-installer migration exposed by the first Dashboard Control update rehearsal: every verified release bundle now atomically refreshes `~/install.sh` alongside the managed app payload.
 - Records the prior home-directory installer in the same rollback stage and restores it if any later commit or runtime verification step fails.
 - Makes Dashboard Control preflight reject a retained legacy `~/install.sh` rather than reporting a false-ready state and failing only after the safety backup/service launch.
-- Adds regression coverage for installer refresh, rollback restoration, bundle installer discovery, and the legacy-installer preflight block.
+- Added regression coverage for installer refresh, rollback restoration, bundle installer discovery, and the legacy-installer preflight block.
 
 ## Earlier migration increment — 1.5.0-beta.40
 

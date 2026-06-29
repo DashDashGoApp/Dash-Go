@@ -4,7 +4,7 @@
 
 ## Current development release
 
-- **Version:** `1.5.0-beta.41`
+- **Version:** `1.5.0-beta.42`
 - **Track:** beta
 - **Stable promotion target:** `1.5.0`
 - **Minimum upgrade version:** `1.4.0`
@@ -14,13 +14,12 @@
 
 ## This beta
 
-Beta.41 corrects the canonical-installer migration gap exposed by the first Dashboard Control update rehearsal.
+Beta.42 is the no-feature release-candidate proof for the repaired Dashboard Control updater path.
 
-- A verified release bundle now atomically refreshes the home-directory `~/install.sh` launcher used by the dedicated Dashboard Control updater, while preserving the prior launcher in the same rollback stage.
-- A later transaction failure restores both the prior managed app payload and the prior canonical installer; no token, alternate host, or legacy credential path is reintroduced.
-- Dashboard Control preflight now detects a retained legacy home installer before it creates a safety backup or launches the updater service, with direct guidance to install one verified GitHub Release bundle.
-- Beta.41 remains release-path-only scope. After a successful Dashboard Control update from beta.39/beta.40 to beta.41, freeze functional code and create one separately versioned immutable `1.5.0` stable release; do not mutate or relabel published betas.
-
+- It carries beta.41’s canonical `~/install.sh` refresh and rollback behavior unchanged.
+- Its only intentional source differences are release identity, versioned browser-cache references, versioned map user agents, and release documentation.
+- The physical acceptance test is a Dashboard Control update from beta.41 to beta.42 on the VM first and then the Pi; do not use `~/install.sh --update` for that proof.
+- After both touchscreen transactions complete with backup, verification, service recovery, kiosk return, and beta.42 readiness, freeze functional code and create one separately versioned immutable `1.5.0` stable release.
 
 ## Recommended operating model
 
