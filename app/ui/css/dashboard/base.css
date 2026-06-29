@@ -1,0 +1,137 @@
+/* ============================================================
+   CONFIG IS IN JAVASCRIPT BELOW (search "CONFIG").
+   This <style> block is pure presentation.
+
+   FONTS: Libre Franklin (body/display) + DM Mono (clock/times).
+   The installer may download them into ui/fonts when available, but
+   the dashboard must stay legible when they are missing. The fallback
+   font faces and stacks below make Raspberry Pi OS / Debian system
+   fonts predictable instead of leaving generic sans/mono resolution
+   to the browser.
+   ============================================================ */
+@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:400;font-display:swap;
+  src:url('fonts/LibreFranklin-400.ttf') format('truetype');}
+@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:600;font-display:swap;
+  src:url('fonts/LibreFranklin-600.ttf') format('truetype');}
+@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:700;font-display:swap;
+  src:url('fonts/LibreFranklin-700.ttf') format('truetype');}
+@font-face{font-family:'Libre Franklin';font-style:normal;font-weight:800;font-display:swap;
+  src:url('fonts/LibreFranklin-800.ttf') format('truetype');}
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:500;font-display:swap;
+  src:url('fonts/DMMono-500.ttf') format('truetype');}
+@font-face{font-family:'Libre Franklin Fallback';font-style:normal;font-weight:400 900;font-display:swap;
+  src:local('DejaVu Sans');size-adjust:107%;}
+@font-face{font-family:'DM Mono Fallback';font-style:normal;font-weight:400 700;font-display:swap;
+  src:local('DejaVu Sans Mono');size-adjust:104%;}
+
+:root{
+  --bg:#0a0a0d;
+  --panel:rgba(255,255,255,0.025);
+  --card:rgba(255,255,255,0.045); /* visible surface over opaque overlays */
+  --line:#43454f;        /* module/section dividers — clearly visible */
+  --line-soft:#303239;   /* day-cell grid lines — visible but secondary */
+  --fg:#e8e8ea;
+  --dim:#8a8a93;
+  --dimmer:#5a5a62;
+  --today:#d9c074;   /* softened gold */
+  --sat:#8bb4d4;     /* softened blue */
+  --sun:#d99a9a;     /* softened red */
+  --accent:#8fc4a6;  /* slightly muted green */
+  --pay:#cda76a;     /* softened amber */
+  --endtime:#9a8fb0; /* muted lavender — distinguishes end time from start */
+  --altweek:rgba(255,255,255,0.022); /* faint stripe to separate weeks */
+  --todaywash:rgba(217,192,116,0.12); /* today-cell highlight wash (themed) */
+  --mono:'DM Mono','DM Mono Fallback','DejaVu Sans Mono','Noto Sans Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'Libre Franklin','Libre Franklin Fallback','Inter','Noto Sans','DejaVu Sans',-apple-system,system-ui,'Segoe UI',sans-serif;
+  --event-title-size:clamp(18px,1.02vw,19px);
+  --event-time-size:16px;
+  --agenda-event-size:clamp(19px,1.08vw,20px);
+  --dash-calendar-dow-size:21px;
+  --dash-day-number-size:23px;
+  --cell-head:34px;
+  --spanbar-lane-step:30px;
+  --weather-day-size:20px;
+  --weather-temp-size:21px;
+  --calendar-event-weight:700;
+  --calendar-event-size-offset:0px;
+  --message-size:clamp(40px,3.2vw,68px);
+  --message-weight:800;
+  /* Target-scoped dashboard typography. Dashboard Control itself stays on
+     the root --sans/--mono baseline rather than inheriting a user area choice. */
+  --dash-calendar-event-font:var(--sans);
+  --dash-calendar-event-weight:700;
+  --dash-calendar-event-size-offset:0px;
+  --dash-clock-font:var(--mono);
+  --dash-clock-date-size:28px;
+  --dash-clock-time-size:82px;
+  --dash-clock-suffix-size:28px;
+  --dash-clock-pad:22px 20px 24px;
+  --dash-clock-weight:600;
+  --dash-weather-font:var(--sans);
+  --dash-weather-display-font:var(--mono);
+  --dash-weather-big-size:clamp(50px,2.9vw,54px);
+  --dash-weather-meta-size:17px;
+  --dash-weather-sub-size:15px;
+  --dash-weather-day-size:20px;
+  --dash-weather-description-size:18px;
+  --dash-weather-temp-size:21px;
+  --dash-weather-primary-weight:500;
+  --dash-weather-meta-weight:400;
+  --dash-weather-emphasis-weight:700;
+  --dash-weather-secondary-weight:600;
+  --dash-message-font:var(--sans);
+  --dash-message-weight:800;
+  --cellgap:1px;
+  /* Calendar geometry has one durable owner: the selected profile value or a
+     user adjustment. Responsive tiers add only safety bounds; they never
+     discard or sentinel-reset the saved preference. */
+  --dash-rowheight-preference:210px;
+  --dash-sidebarwidth-preference:380px;
+  --tier-rowheight-min:150px;
+  --tier-rowheight-max:280px;
+  --tier-sidebarwidth-min:300px;
+  --tier-sidebarwidth-max:520px;
+  --rowheight:clamp(var(--tier-rowheight-min),var(--dash-rowheight-preference),var(--tier-rowheight-max));
+  --sidebarwidth:clamp(var(--tier-sidebarwidth-min),var(--dash-sidebarwidth-preference),var(--tier-sidebarwidth-max));
+  --compliment-height:124px;
+  --compfade:750ms;     /* automatic compliment opacity fade duration */
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+/* Static lazy app shells are present in index.html for stable lifecycle/focus.
+   They must remain visually dormant before each app stylesheet has loaded. */
+#listsapp[aria-hidden="true"],#chorewheel[aria-hidden="true"],#familyboard[aria-hidden="true"],#maintenance[aria-hidden="true"],#routines[aria-hidden="true"]{display:none!important}
+
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--sans);
+  overflow:hidden;
+  /* Kiosk: disable text selection / long-press menus on touch */
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
+
+#app{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) var(--sidebarwidth);
+  grid-template-rows:minmax(0,1fr) var(--compliment-height);
+  grid-template-areas:
+    "calendar   sidebar"
+    "compliment sidebar";
+  height:100vh;width:100vw;
+  gap:3px;background:var(--line);   /* thicker, brighter dividers between major modules */
+}
+#calwrap{grid-area:calendar;}
+#sidebar{
+  grid-area:sidebar;background:var(--bg);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+#compliment{grid-area:compliment;}
+
+/* Permanent, pointer-transparent night dim. It intentionally sits above the
+   dashboard but below interactive overlays, so active Control/popup text never
+   loses contrast at night. Never use a whole-page filter here. */
+#nightdim{position:fixed;inset:0;z-index:90;display:none;pointer-events:none;background:#000;opacity:0;}
+#nightdim.show{display:block;opacity:var(--nightdim-opacity,.35);}

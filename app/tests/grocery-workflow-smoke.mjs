@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+const lists=fs.readFileSync('ui/lists-core.js','utf8')+'\n'+fs.readFileSync('ui/lists-actions.js','utf8');
+const grocery=fs.readFileSync('ui/lists-grocery.js','utf8');
+const http=fs.readFileSync('cmd/dashboard-control-server/todo_http.go','utf8');
+const sync=fs.readFileSync('internal/todo/todo_sync.go','utf8');
+const memory=fs.readFileSync('internal/todo/todo_grocery_memory.go','utf8');
+const memoryHTTP=fs.readFileSync('cmd/dashboard-control-server/todo_grocery_memory_http.go','utf8');
+for(const needle of ['Clear completed','/api/todo/lists/clear-completed','groceryMemory','function confirmClearCompleted']) if(!lists.includes(needle)) throw new Error('lists grocery workflow missing '+needle);
+for(const needle of ['renderQuickAdd','renderManager','addQuickItem','Remove from Quick add','Hidden suggestions','Delete suggestion','/api/todo/grocery-memory']) if(!grocery.includes(needle)) throw new Error('Quick add manager missing '+needle);
+if(/\b(?:window\.)?confirm\(/.test(lists)||/\b(?:window\.)?confirm\(/.test(grocery)) throw new Error('grocery workflow must use the in-overlay confirmation surface, not native confirm');
+for(const needle of ['case "/api/todo/lists/clear-completed"','clearTodoCompleted']) if(!http.includes(needle)) throw new Error('HTTP clear-completed route missing '+needle);
+for(const needle of ['func (a *Service) clearTodoCompleted','a.enqueueTodoOp(&cache, todoPendingOp{Op: "delete"']) if(!sync.includes(needle)) throw new Error('sync grocery workflow missing '+needle);
+if(!memory.includes('func (a *Service) todoRememberGroceryTasks')) throw new Error('Grocery Memory learning helper missing');
+for(const needle of ['todoGroceryMemoryItem','Aliases','Hidden','todoGroceryMemoryLimit','mutateTodoGroceryMemory']) if(!memory.includes(needle)) throw new Error('Grocery Memory model missing '+needle);
+for(const needle of ['/api/todo/grocery-memory','action','hide','restore','delete']) if(!memoryHTTP.includes(needle)) throw new Error('Quick add HTTP route missing '+needle);
+console.log('grocery workflow smoke passed');

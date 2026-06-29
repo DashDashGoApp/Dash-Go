@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Static installer contract: Microsoft To Do / Graph setup remains an explicit, local-first choice.
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+INSTALL="$ROOT/../installer/install.sh"
+need(){ grep -Fq -- "$2" "$1" || { echo "FAIL: missing $3" >&2; exit 1; }; }
+need "$INSTALL" 'valid_microsoft_client_id(){' 'client-ID UUID validation helper'
+need "$INSTALL" 'write_todo_app_settings(){' 'atomic To Do settings writer'
+need "$INSTALL" 'configure_app_setup(){' 'App Setup submenu'
+need "$INSTALL" '12) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup' 'numeric main Microsoft To Do / Graph menu entry'
+need "$INSTALL" 'Use local To Do + Grocery only  recommended/default' 'local-first installer default'
+need "$INSTALL" 'Enable optional Microsoft To Do sync  enter a private client ID' 'explicit Microsoft opt-in'
+need "$INSTALL" 'Create private Microsoft Graph app  Azure CLI registration (advanced)' 'advanced private registration menu choice'
+need "$INSTALL" 'register_todo_private_app_with_azure_cli(){' 'private registration helper'
+need "$INSTALL" 'AZURE_CONFIG_DIR="$todo_az_dir" az login --use-device-code' 'temporary Azure CLI device-code login'
+need "$INSTALL" 'az ad app create' 'private Entra application creation'
+need "$INSTALL" '--is-fallback-public-client true' 'public-client registration setting'
+need "$INSTALL" 'AzureADandPersonalMicrosoftAccount' 'personal and organizational account support'
+need "$INSTALL" '2219042f-cab5-40cc-b0d2-16b1540b4c5f' 'Tasks.ReadWrite delegated scope id'
+need "$INSTALL" 'Microsoft Graph registration guide' 'operator setup guide choice'
+need "$INSTALL" 'Application.ReadWrite.All' 'runtime app-management permission boundary'
+need "$INSTALL" 'Install Azure CLI now? [y/N]:' 'explicit Azure CLI installation consent'
+need "$INSTALL" 'todo_azure_cli_supported_architecture(){' 'Azure CLI architecture guard'
+need "$INSTALL" 'amd64|arm64' 'documented Azure CLI apt package architecture set'
+need "$INSTALL" 'dash-go-azure-cli.sources' 'installer-owned Azure CLI apt source'
+need "$INSTALL" 'temporary source/key changes were rolled back' 'partial Azure CLI source rollback'
+need "$INSTALL" 'Microsoft To Do app registration complete' 'clear Azure registration completion heading'
+need "$INSTALL" 'You do not need to copy the client ID or create a client secret.' 'clear no-copy/no-secret registration guidance'
+need "$INSTALL" 'Select Link Microsoft account and complete the device-code sign-in on a phone or computer.' 'clear post-registration account-link step'
+need "$INSTALL" 'Refresh Microsoft lists, then choose the To Do and Grocery destinations you want to mirror.' 'clear post-registration mapping step'
+need "$INSTALL" 'todo["syncMode"] = mode' 'persisted source selection'
+need "$INSTALL" 'mapping["todo"] = "local-todo"' 'stable local To Do default mapping'
+need "$INSTALL" 'mapping["grocery"] = "local-grocery"' 'stable local Grocery default mapping'
+need "$INSTALL" 'present_dir config/todo' 'local Lists update snapshot preservation'
+need "$INSTALL" '.dashboard-todo.json' 'optional Microsoft token repair preservation'
+need "$INSTALL" 'fallback local Lists restored: config/todo' 'repair fallback local cache restoration'
+echo 'PASS: installer Microsoft To Do / Graph setup stays numeric, discoverable, local-first, and Microsoft opt-in'

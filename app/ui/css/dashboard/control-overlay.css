@@ -1,0 +1,130 @@
+/* Control overlay — opened from the moon-phase button.
+   Talks to the loopback control API in dashboard-control-server. */
+#ctrl{
+  position:fixed;inset:0;z-index:120;display:none;
+  align-items:center;justify-content:center;background:rgba(0,0,0,0.6);
+}
+#ctrl.show{display:flex;}
+#ctrlpanel{
+  background:var(--bg);border:1px solid var(--line);border-radius:14px;
+  width:min(740px,92vw);max-height:88vh;overflow:hidden;
+  padding:var(--ctrl-space-5) var(--ctrl-space-6);position:relative;font-size:18px;
+  /* Fixed shell: only .ctrlpage.show owns ordinary Control scrolling. */
+}
+#ctrlpanel h2{margin:0 0 6px;font-size:24px;color:var(--fg);}
+#ctrlpanel h3{margin:18px 0 8px;font-size:16px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:0.08em;}
+#ctrlclose{
+  position:static;flex:0 0 auto;align-self:flex-start;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.055);border:1px solid var(--line-soft);border-radius:999px;
+  color:var(--dim);font-size:24px;line-height:1;cursor:pointer;
+  padding:0;min-width:48px;min-height:var(--ctrl-summary-min);   /* generous touch target */
+  touch-action:manipulation;
+}
+#ctrlclose:active{background:rgba(255,255,255,0.16);color:var(--fg);}
+/* Theme picker: our own grid instead of a native <select> — WebKitGTK's
+   dropdown popup ignores CSS (light gray on white) and is poor for touch. */
+#themegrid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:var(--ctrl-space-2);
+  width:100%;padding:6px;
+  border:1px solid var(--line-soft);border-radius:9px;
+}
+.themebtn{
+  background:rgba(255,255,255,0.06);border:1px solid var(--line);color:var(--fg);
+  border-radius:8px;padding:9px 6px;font-size:15px;font-family:var(--sans);
+  cursor:pointer;touch-action:manipulation;
+}
+.themebtn:active{background:rgba(255,255,255,0.2);}
+.themebtn.sel{outline:2px solid var(--accent);background:rgba(127,214,168,0.14);}
+.themebtn.cur{border-color:var(--accent);}
+#ctrlstatus{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--ctrl-space-2);}
+#ctrlstatus .stat{background:rgba(255,255,255,0.04);border:1px solid var(--line-soft);
+  border-radius:8px;padding:8px 12px;}
+#ctrlstatus .stat.wide{grid-column:span 2;}   /* IP address: one unbroken line */
+#ctrlstatus .stat .k{font-size:13px;color:var(--dimmer);text-transform:uppercase;letter-spacing:0.06em;}
+#ctrlstatus .stat .v{font-family:var(--mono);font-size:16px;color:var(--fg);margin-top:2px;
+  overflow-wrap:anywhere;line-height:1.25;}   /* IP addresses etc. wrap, never clip */
+.ctrlrow{display:flex;flex-wrap:wrap;gap:var(--ctrl-space-3);align-items:center;}
+.cbtn{
+  background:rgba(255,255,255,0.07);border:1px solid var(--line);color:var(--fg);
+  border-radius:9px;padding:var(--ctrl-space-3) var(--ctrl-space-4);font-size:17px;font-family:var(--sans);
+  cursor:pointer;min-height:var(--ctrl-tap-min);     /* touch-friendly */
+  touch-action:manipulation;          /* no double-tap-zoom wait = instant taps */
+}
+.cbtn:active{background:rgba(255,255,255,0.22);}  /* immediate press feedback */
+.cbtn.danger{border-color:var(--ctrl-danger-border);color:var(--ctrl-danger-fg);}
+.cbtn.armed{background:var(--ctrl-danger-armed-bg);color:var(--ctrl-danger-armed-fg);border-color:var(--ctrl-danger-border);}
+.cbtn.on{background:rgba(127,214,168,0.16);border-color:var(--accent);}
+#ctrlpanel select{
+  background:var(--panel);color:var(--fg);border:1px solid var(--line);
+  border-radius:9px;padding:10px 12px;font-size:17px;min-height:var(--ctrl-tap-min);
+}
+#ctrlcals .cbtn{min-width:130px;}
+#ctrlmsg{margin-top:12px;font-size:15px;color:var(--dim);min-height:1.2em;}
+/* Compliment manager */
+#ctrlcomp .crow{display:flex;gap:var(--ctrl-space-2);align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+/* Shared Control input appearance lives in control/consistency.css. Keep this
+   dashboard-shell rule structural only so it cannot override light themes. */
+#ctrlcomp input{flex:1;min-width:120px;}
+/* Messages uses its active page as the only vertical root. */
+#complist{max-height:none;overflow:visible;border:1px solid var(--line-soft);border-radius:9px;}
+.comprow{display:flex;align-items:center;gap:var(--ctrl-space-2);padding:7px 10px;border-bottom:1px solid var(--line-soft);}
+.comprow:last-child{border-bottom:none;}
+.comprow .ct{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.comprow .cm{font-family:var(--mono);font-size:12px;color:var(--dimmer);white-space:nowrap;}
+.comprow .cbtn{min-height:var(--ctrl-tap-min);padding:4px 12px;font-size:14px;}
+/* On-screen keyboard (the kiosk has no physical keyboard) */
+#osk{display:none;margin-top:8px;}
+#osk.show{display:block;}
+.oskrow{display:flex;gap:5px;justify-content:center;margin-bottom:5px;}
+.oskkey{
+  background:rgba(255,255,255,0.08);border:1px solid var(--line);color:var(--fg);
+  border-radius:7px;min-width:44px;min-height:var(--ctrl-tap-min);font-size:18px;font-family:var(--sans);
+  cursor:pointer;touch-action:manipulation;flex:0 0 auto;
+}
+.oskkey:active{background:rgba(255,255,255,0.25);}
+.oskkey.wide{min-width:76px;font-size:14px;}
+.oskkey.space{flex:1;max-width:280px;}
+#ctrldoctor{
+  display:none;margin-top:14px;
+  background:rgba(0,0,0,0.35);border:1px solid var(--line-soft);border-radius:9px;
+  padding:var(--ctrl-space-3) var(--ctrl-space-4);font-family:var(--mono);font-size:13px;line-height:1.45;
+  white-space:pre-wrap;color:var(--dim);
+}
+.ctrltabs{display:flex;gap:var(--ctrl-space-2);margin:12px 0 10px;position:sticky;top:0;z-index:2;background:var(--bg);padding:4px 0 8px;}
+.ctrltabs .cbtn{flex:1;min-height:var(--ctrl-tap-min);}
+.ctrlpage{display:none;}
+.ctrlpage.show{display:block;}
+.ctrlsec{border:1px solid var(--line-soft);border-radius:10px;margin:10px 0;background:rgba(255,255,255,0.025);overflow:hidden;}
+.ctrlsec>summary{list-style:none;cursor:pointer;padding:var(--ctrl-space-3) var(--ctrl-space-4);font-size:16px;color:var(--dim);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;touch-action:manipulation;}
+.ctrlsec>summary::-webkit-details-marker{display:none;}
+.ctrlsec>summary:after{content:"▾";float:right;color:var(--dimmer);}
+.ctrlsec:not([open])>summary:after{content:"▸";}
+.ctrlsecbody{padding:0 var(--ctrl-space-4) var(--ctrl-space-4);}
+.ctrlgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--ctrl-space-2);}
+.ctrlgrid .stat{background:rgba(255,255,255,0.04);border:1px solid var(--line-soft);border-radius:8px;padding:8px 12px;}
+.ctrlgrid .stat .k{font-size:13px;color:var(--dimmer);text-transform:uppercase;letter-spacing:0.06em;}
+.ctrlgrid .stat .v{font-family:var(--mono);font-size:16px;color:var(--fg);margin-top:2px;overflow-wrap:anywhere;line-height:1.25;}
+.ctrlmini{font-size:14px;color:var(--dim);line-height:1.35;margin:6px 0;}
+.ctrltable{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;}
+.ctrltable th,.ctrltable td{border-bottom:1px solid var(--line-soft);padding:7px 6px;text-align:left;vertical-align:top;}
+.ctrltable th{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:0.06em;}
+.ctrlpill{display:inline-block;border:1px solid var(--line-soft);border-radius:999px;padding:2px 7px;font-size:12px;color:var(--dim);font-family:var(--mono);}
+#ctrlpin{display:none;text-align:center;padding:22px 10px 10px;}
+#ctrlpin.show{display:block;}
+#ctrlpin .dots{font-family:var(--mono);font-size:30px;letter-spacing:8px;min-height:42px;margin:12px 0;color:var(--fg);}
+.pingrid{display:grid;grid-template-columns:repeat(3,72px);gap:var(--ctrl-space-3);justify-content:center;margin-top:8px;}
+.pinbtn{min-width:72px;min-height:58px;border-radius:14px;font-size:24px;font-family:var(--mono);}
+.pinbtn.small{font-size:15px;}
+/* long-press targets shouldn't text-select while held */
+#clock,#sun{-webkit-user-select:none;user-select:none;}
+#sun .moon{touch-action:manipulation;}
+/* small AM/PM marker next to the big clock (12-hour mode only) */
+#ctime .ap{font-size:0.34em;color:var(--dim);margin-left:8px;letter-spacing:0.06em;}
+
+/* The boot bundle can show this small shell before Control-only assets are parsed. */
+#ctrlshellstatus{display:none;margin:18px 0 4px;padding:18px;border:1px solid var(--line-soft);border-radius:10px;color:var(--dim);font-family:var(--mono);font-size:14px;line-height:1.45;}
+#ctrl.ctrl-loading #ctrlshellstatus,#ctrl.ctrl-load-error #ctrlshellstatus{display:flex;align-items:center;gap:var(--ctrl-space-3);flex-wrap:wrap;}
+#ctrl.ctrl-loading #ctrlmain,#ctrl.ctrl-load-error #ctrlmain,#ctrl.ctrl-loading #ctrlpin,#ctrl.ctrl-load-error #ctrlpin{display:none!important;}
+#ctrlshellstatus .cbtn{min-height:var(--ctrl-tap-min);padding:7px 12px;font-size:14px;}

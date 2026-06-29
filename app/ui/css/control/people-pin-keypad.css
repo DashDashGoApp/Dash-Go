@@ -1,0 +1,21 @@
+/* Compact, touch-first numeric entry for personal Family Board inbox PINs. */
+.people-pin-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;letter-spacing:normal;cursor:pointer;touch-action:manipulation}
+.people-pin-entry-value{font-family:var(--mono);font-weight:850;letter-spacing:.15em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.people-pin-entry-action{flex:0 0 auto;color:var(--accent);font-size:13px;font-weight:850;letter-spacing:0;text-transform:uppercase}
+#people-inbox-pin-keypad{position:fixed;inset:0;z-index:10050;display:none;place-items:center;box-sizing:border-box;padding:clamp(12px,3vw,28px);background:rgba(0,0,0,.64)}
+#people-inbox-pin-keypad.show{display:grid}
+.people-pin-keypad-panel{width:min(100%,390px);display:grid;gap:12px;padding:clamp(16px,3vw,24px);border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--fg);box-shadow:0 20px 50px rgba(0,0,0,.42)}
+.people-pin-keypad-title{font-size:21px;font-weight:900;line-height:1.2}
+.people-pin-keypad-detail{margin-top:-5px;color:var(--dim);font-size:14px;line-height:1.38}
+.people-pin-keypad-display{min-height:64px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:14px;background:var(--panel);font-family:var(--mono);font-size:30px;font-weight:900;letter-spacing:.2em}
+.people-pin-keypad-notice{min-height:1.25em;color:var(--warn);font-size:13px;font-weight:750;line-height:1.35;text-align:center}
+.people-pin-keypad-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.people-pin-keypad-grid .cbtn{min-height:58px;font-size:22px;font-weight:850}
+.people-pin-keypad-grid .people-pin-keypad-small{font-size:15px}
+.people-pin-keypad-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.people-pin-keypad-actions .cbtn{min-height:52px}
+@media(max-width:760px){
+  #people-inbox-pin-keypad{align-items:end;padding:10px}
+  .people-pin-keypad-panel{width:100%;border-radius:18px 18px 14px 14px}
+  .people-pin-keypad-grid .cbtn{min-height:54px}
+}

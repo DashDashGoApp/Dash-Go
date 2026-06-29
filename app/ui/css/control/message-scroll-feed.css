@@ -1,0 +1,375 @@
+/* 1.2.1-beta.18: Messages OSK sizing, scrollbar, compact buttons, and feed row layout. */
+#ctrlpage-content.show{
+  scrollbar-width:auto;
+  scrollbar-gutter:stable;
+}
+#ctrlpage-content.show::-webkit-scrollbar{width:16px;}
+#ctrlpage-content.show::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,0.30);
+  border-radius:999px;
+  border:3px solid transparent;
+  background-clip:padding-box;
+}
+#ctrlpage-content.show::-webkit-scrollbar-track{background:rgba(255,255,255,0.05);}
+
+#ctrlpage-content .ctrlsecbody .cbtn{
+  padding:6px 10px;
+  font-size:13px;
+  min-height:var(--ctrl-tap-min);
+}
+#ctrlpage-content .comprow .cbtn,
+#ctrlpage-content .feeditemrow .cbtn,
+#ctrlpage-content .builtinrow .cbtn{
+  padding:4px 8px;
+  font-size:12px;
+  min-height:var(--ctrl-tap-min);
+}
+#ctrlpage-content .sourcegrid .actionbtn,
+#ctrlpage-content .msgweight-grid .actionbtn,
+#ctrlpage-content .recurrencegrid .actionbtn,
+#ctrlpage-content .daygrid .actionbtn,
+#ctrlpage-content .monthgrid .actionbtn{
+  min-height:54px;
+}
+
+#osk{
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
+  width:min(1040px, calc(100vw - 32px));
+  max-width:1040px;
+  box-sizing:border-box;
+  padding:12px 14px max(12px, env(safe-area-inset-bottom));
+}
+#osk .oskrow{
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+#osk .oskrow:last-child{margin-bottom:0;}
+#osk .oskkey{
+  flex:1 1 0;
+  min-width:0;
+  min-height:clamp(52px,6vh,64px);
+  font-size:clamp(18px,1.4vw,22px);
+  padding:0 6px;
+}
+#osk .oskkey.wide{
+  flex:1.6 1 0;
+  min-width:0;
+  font-size:clamp(14px,1.05vw,18px);
+}
+#osk .oskkey.space{
+  flex:5 1 0;
+  max-width:none;
+}
+
+/* 1.2.1-beta.19: Messages scroll stability, temporary preset button grid, and source-card polish. */
+#ctrlpage-content.show{
+  overflow-y:scroll;
+  overflow-anchor:none;
+}
+#ctrlpage-content .ctrlsec,
+#ctrlpage-content .ctrlsecbody,
+#ctrlpage-content .comprow,
+#ctrlpage-content .sourcegrid,
+#ctrlpage-content .feeditemlist,
+#ctrlpage-content .builtinlist,
+#ctrlpage-content .templist,
+#ctrlpage-content .schedlist{
+  overflow-anchor:none;
+}
+#ctrltempmsg .msgpreset .msgweight-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+#ctrltempmsg .msgpreset .actionbtn{
+  min-height:44px;
+  align-items:center;
+}
+@media(max-width:760px){
+  #ctrltempmsg .msgpreset .msgweight-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:760px){
+  #ctrltempmsg .msgpreset .msgweight-grid{grid-template-columns:1fr;}
+}
+#ctrlmain #ctrlpage-content.ctrlpage.show{
+  overflow-y:scroll;
+  scrollbar-width:auto;
+  scrollbar-gutter:stable;
+}
+
+/* 1.2.1-beta.40: Messages tab card-by-card polish.
+   Keep each Messages card calm with compact copy, grid actions, consistent
+   row layout, and predictable empty/data states. */
+#ctrlpage-content .ctrlsecbody{
+  display:block;
+}
+#ctrlpage-content .ctrlstate{
+  padding:10px 12px;
+  border-radius:var(--ctrl-radius-md);
+}
+#ctrlpage-content .ctrlstate-title{
+  font-size:14px;
+  line-height:1.15;
+}
+#ctrlpage-content .ctrlstate-detail{
+  font-size:12px;
+  line-height:1.25;
+  margin-top:3px;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+#ctrlpage-content .msgactiongrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:8px;
+  align-items:stretch;
+  width:100%;
+  margin-bottom:8px;
+}
+#ctrlpage-content .msgactiongrid .cbtn{
+  width:100%;
+  justify-content:center;
+}
+#ctrlpage-content .msgsearchbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(132px,auto);
+  gap:8px;
+  align-items:center;
+  width:100%;
+}
+#ctrlpage-content .msgsearchbar input{min-width:0;}
+#ctrlpage-content .msgsearchbar .cbtn{height:42px;}
+#ctrlpage-content #complist,
+#ctrlpage-content .builtinlist,
+#ctrlpage-content .templist,
+#ctrlpage-content .schedlist,
+#ctrlpage-content .specialdatelist,
+#ctrlpage-content .feeditemlist{
+  display:grid;
+  gap:8px;
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  background:rgba(0,0,0,0.08);
+  padding:8px;
+  box-sizing:border-box;
+}
+#ctrlpage-content #complist:empty,
+#ctrlpage-content .builtinlist:empty,
+#ctrlpage-content .templist:empty,
+#ctrlpage-content .schedlist:empty,
+#ctrlpage-content .specialdatelist:empty,
+#ctrlpage-content .feeditemlist:empty{
+  display:none;
+}
+#ctrlpage-content .comprow,
+#ctrlpage-content .feeditemrow,
+#ctrlpage-content .builtinrow,
+#ctrlpage-content .tempmsgrow,
+#ctrlpage-content .schedmsgrow,
+#ctrlpage-content .specialdaterow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  grid-template-areas:"text edit del" "meta edit del";
+  align-items:center;
+  gap:3px 8px;
+  padding:8px 9px;
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-sm);
+  background:rgba(255,255,255,0.022);
+  border-bottom:1px solid var(--ctrl-line-soft);
+  min-width:0;
+}
+#ctrlpage-content .comprow:last-child{border-bottom:1px solid var(--ctrl-line-soft);}
+#ctrlpage-content .comprow .ct,
+#ctrlpage-content .feeditemrow .ct,
+#ctrlpage-content .builtinrow .ct,
+#ctrlpage-content .tempmsgrow .ct,
+#ctrlpage-content .schedmsgrow .ct,
+#ctrlpage-content .specialdaterow .ct{
+  grid-area:text;
+  min-width:0;
+  white-space:normal;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:14px;
+  line-height:1.25;
+}
+#ctrlpage-content .comprow .cm,
+#ctrlpage-content .feeditemrow .cm,
+#ctrlpage-content .builtinrow .cm,
+#ctrlpage-content .tempmsgrow .cm,
+#ctrlpage-content .schedmsgrow .cm,
+#ctrlpage-content .specialdaterow .cm{
+  grid-area:meta;
+  min-width:0;
+  color:var(--dimmer);
+  font-size:11.5px;
+  line-height:1.2;
+  white-space:normal;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#ctrlpage-content .comprow .cbtn:nth-of-type(1){grid-area:edit;}
+#ctrlpage-content .comprow .cbtn:nth-of-type(2){grid-area:del;}
+#ctrlpage-content .tempmsgrow .cbtn:nth-of-type(1){grid-area:del;}
+#ctrlpage-content .builtinrow .cbtn:nth-of-type(1){grid-area:edit;}
+#ctrlpage-content .comprow .cbtn,
+#ctrlpage-content .feeditemrow .cbtn,
+#ctrlpage-content .builtinrow .cbtn,
+#ctrlpage-content .tempmsgrow .cbtn,
+#ctrlpage-content .schedmsgrow .cbtn,
+#ctrlpage-content .specialdaterow .cbtn{
+  min-width:58px;
+  align-self:center;
+}
+#ctrlpage-content .msgweight-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+#ctrlpage-content .msgweight-grid .actionbtn{
+  min-height:48px;
+  padding:7px 9px;
+}
+#ctrlpage-content .msgweight-grid .actionbtn .bd{
+  display:none;
+}
+#ctrlpage-content .recurrencegrid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+#ctrlpage-content .monthgrid{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+#ctrlsources .compactsourcegrid .actionbtn{
+  min-height:58px;
+  justify-content:center;
+}
+#ctrlsources .compactsourcegrid .actionbtn .bd{
+  -webkit-line-clamp:1;
+  font-size:11px;
+}
+#ctrlsources .sourcehealth .ctrlstate-detail{
+  -webkit-line-clamp:1;
+}
+#ctrlsources .sourceproviderdetails > summary{
+  min-height:var(--ctrl-tap-min);
+  padding:8px 10px;
+}
+@media(max-width:1100px){
+  #ctrlpage-content .msgweight-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrlpage-content .recurrencegrid,
+  #ctrlpage-content .monthgrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:760px){
+  #ctrlpage-content .msgsearchbar,
+  #ctrlpage-content .msgweight-grid,
+  #ctrlpage-content .recurrencegrid,
+  #ctrlpage-content .monthgrid{grid-template-columns:1fr;}
+  #ctrlpage-content .msgactiongrid:not(.singleaction){grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrlpage-content .comprow,
+  #ctrlpage-content .feeditemrow,
+  #ctrlpage-content .builtinrow,
+  #ctrlpage-content .tempmsgrow,
+  #ctrlpage-content .schedmsgrow,
+  #ctrlpage-content .specialdaterow{
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"text text" "meta meta" "edit del";
+  }
+}
+#ctrlpage-content .sourcegrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:8px;
+}
+@media(max-width:1100px){#ctrlpage-content .sourcegrid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:760px){#ctrlpage-content .sourcegrid{grid-template-columns:1fr;}}
+
+/* 1.2.1-beta.47: Messages tab button-grid and row balance cleanup.
+   Keep schedule picker grids visually consistent, avoid single-action buttons
+   ballooning across the card, and remove dead action columns from one-button rows. */
+#ctrlpage-content .recurrencegrid .cbtn,
+#ctrlpage-content .daygrid .cbtn,
+#ctrlpage-content .weekgrid .cbtn,
+#ctrlpage-content .monthgrid .cbtn{
+  min-height:48px;
+  padding:7px 9px;
+  justify-content:center;
+}
+#ctrlpage-content .weekgrid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+#ctrlpage-content .msgactiongrid.singleaction{
+  grid-template-columns:minmax(150px,260px);
+  justify-content:start;
+}
+#ctrlpage-content .msgactiongrid.singleaction .cbtn{
+  max-width:260px;
+}
+#ctrlpage-content .builtinrow,
+#ctrlpage-content .tempmsgrow{
+  grid-template-columns:minmax(0,1fr) minmax(88px,auto);
+}
+#ctrlpage-content .builtinrow{
+  grid-template-areas:"text edit" "meta edit";
+}
+#ctrlpage-content .tempmsgrow{
+  grid-template-areas:"text del" "meta del";
+}
+@media(max-width:760px){
+  #ctrlpage-content .msgactiongrid.singleaction{grid-template-columns:minmax(150px,260px);}
+  #ctrlpage-content .comprow,
+  #ctrlpage-content .feeditemrow,
+  #ctrlpage-content .schedmsgrow,
+  #ctrlpage-content .specialdaterow{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-areas:"text text" "meta meta" "edit del";
+  }
+  #ctrlpage-content .comprow .cbtn,
+  #ctrlpage-content .feeditemrow .cbtn,
+  #ctrlpage-content .schedmsgrow .cbtn,
+  #ctrlpage-content .specialdaterow .cbtn{
+    width:100%;
+    justify-content:center;
+  }
+  #ctrlpage-content .builtinrow,
+  #ctrlpage-content .tempmsgrow{
+    grid-template-columns:minmax(0,1fr) minmax(96px,auto);
+  }
+  #ctrlpage-content .builtinrow{grid-template-areas:"text edit" "meta edit";}
+  #ctrlpage-content .tempmsgrow{grid-template-areas:"text del" "meta del";}
+}
+@media(max-width:760px){
+  #ctrlpage-content .recurrencegrid,
+  #ctrlpage-content .daygrid,
+  #ctrlpage-content .weekgrid,
+  #ctrlpage-content .monthgrid{grid-template-columns:1fr;}
+}
+
+/* 1.2.1-beta.53: Birthday and celebration row action buttons need
+   breathing room on kiosk touch targets. */
+#ctrlpage-content .specialdaterow{
+  grid-template-columns:minmax(0,1fr) minmax(78px,auto) minmax(78px,auto);
+  column-gap:12px;
+}
+#ctrlpage-content .specialdaterow .cbtn{
+  min-width:78px;
+  padding-left:12px;
+  padding-right:12px;
+}
+#ctrlpage-content #ctrlbirthdays .crow,
+#ctrlpage-content #ctrlcelebrations .crow{
+  gap:12px;
+}
+@media(max-width:760px){
+  #ctrlpage-content .specialdaterow{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:12px;
+    row-gap:8px;
+  }
+}

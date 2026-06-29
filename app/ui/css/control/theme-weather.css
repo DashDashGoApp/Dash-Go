@@ -1,0 +1,234 @@
+/* 1.2.1-beta.20: make Dashboard Control inherit the active dashboard theme. */
+:root{
+  --ctrl-line:var(--line);
+  --ctrl-line-soft:var(--line-soft);
+  --ctrl-fill:var(--panel);
+  --ctrl-fill-quiet:var(--panel);
+  --ctrl-accent-bg:var(--panel);
+  --ctrl-accent-bg-strong:var(--panel);
+  --ctrl-accent-border:var(--accent);
+}
+#ctrl.show{color:var(--fg);}
+#ctrlpanel,
+body.ctrl-lite #ctrlpanel{
+  background:var(--bg);
+  color:var(--fg);
+  border:1px solid var(--line);
+}
+#ctrl .ctrlsubtitle,
+#ctrl .cm,
+#ctrl .msgfield-detail,
+#ctrl .msgweight-detail,
+#ctrl .actiongroup-detail,
+#ctrl .bd{color:var(--dim);}
+#ctrl .ctrlsec,
+#ctrl .actiondrawer,
+#ctrl .actiongroup,
+#ctrl .displaygroup,
+#ctrl .ctrlstate,
+#ctrl .ctrlgrid .stat,
+#ctrl .doctorcard,
+#ctrl .terminaltop,
+#ctrl .settingcard,
+#ctrl .messages-subcard,
+body.ctrl-lite #ctrl .ctrlsec,
+body.ctrl-lite #ctrl .actiondrawer,
+body.ctrl-lite #ctrl .actiongroup,
+body.ctrl-lite #ctrl .ctrlstate,
+body.ctrl-lite #ctrl .ctrlgrid .stat{
+  background:var(--panel);
+  border-color:var(--line-soft);
+  color:var(--fg);
+}
+#ctrl .ctrltabs,
+body.ctrl-lite #ctrl .ctrltabs{
+  background:var(--panel);
+  border-color:var(--line-soft);
+}
+#ctrl .cbtn,
+#ctrl button.cbtn,
+body.ctrl-lite #ctrl .ctrltabs .cbtn{
+  color:var(--fg);
+  background:var(--panel);
+  border-color:var(--line-soft);
+}
+#ctrl .cbtn.on,
+#ctrl .cbtn.primary,
+#ctrl .cbtn[aria-pressed="true"],
+#ctrl .ctrltabs .cbtn.on,
+body.ctrl-lite #ctrl .ctrltabs .cbtn.on,
+#ctrl .profileoption.on,
+#ctrl .oskkey.on{
+  color:var(--accent);
+  background:var(--panel);
+  border-color:var(--accent);
+}
+#ctrl details.ctrlsec > summary:after,
+#ctrl details.actiondrawer > summary:after{
+  background:var(--panel);
+  border-color:var(--line-soft);
+  color:var(--accent);
+}
+#osk{
+  background:linear-gradient(var(--panel),var(--panel)),var(--bg);
+  border-color:var(--line);
+}
+#osk .oskhint{color:var(--dim);text-align:center;font-size:12px;font-weight:800;margin-top:6px;}
+#osk .osknumrow{max-width:420px;margin-left:auto;margin-right:auto;}
+#pop .wxsourcefail{opacity:.78;}
+#pop .wxsourcefail div:last-child{color:var(--dim);}
+#ctrlpage-content input,
+#ctrlpage-display input,
+#mapsearch{
+  background:var(--panel);
+  color:var(--fg);
+  border-color:var(--line-soft);
+}
+#ctrl pre,
+#ctrl .ctrloutputconsole,
+#ctrl .ctrltable,
+#ctrl .actionhistory{
+  background:var(--panel);
+  color:var(--fg);
+  border-color:var(--line-soft);
+}
+
+/* 1.2.1-beta.48: light-theme contrast pass for Dashboard Control. */
+html[data-theme="paper"],
+html[data-theme="softmorning"],
+html[data-theme="daylight"]{
+  --ctrl-light-fill:rgba(20,28,34,0.055);
+  --ctrl-light-fill-strong:rgba(20,28,34,0.085);
+}
+html[data-theme="paper"] #ctrl .ctrlsec,
+html[data-theme="paper"] #ctrl .actiondrawer,
+html[data-theme="paper"] #ctrl .actiongroup,
+html[data-theme="paper"] #ctrl .displaygroup,
+html[data-theme="paper"] #ctrl .ctrlstate,
+html[data-theme="paper"] #ctrl .ctrlgrid .stat,
+html[data-theme="paper"] #ctrl .doctorcard,
+html[data-theme="paper"] #ctrl .terminaltop,
+html[data-theme="paper"] #ctrl .settingcard,
+html[data-theme="paper"] #ctrl .messages-subcard,
+html[data-theme="paper"] #ctrl .themeintro,
+html[data-theme="paper"] #themegrid.themegroups,
+html[data-theme="paper"] #ctrl .themegroup,
+html[data-theme="softmorning"] #ctrl .ctrlsec,
+html[data-theme="softmorning"] #ctrl .actiondrawer,
+html[data-theme="softmorning"] #ctrl .actiongroup,
+html[data-theme="softmorning"] #ctrl .displaygroup,
+html[data-theme="softmorning"] #ctrl .ctrlstate,
+html[data-theme="softmorning"] #ctrl .ctrlgrid .stat,
+html[data-theme="softmorning"] #ctrl .doctorcard,
+html[data-theme="softmorning"] #ctrl .terminaltop,
+html[data-theme="softmorning"] #ctrl .settingcard,
+html[data-theme="softmorning"] #ctrl .messages-subcard,
+html[data-theme="softmorning"] #ctrl .themeintro,
+html[data-theme="softmorning"] #themegrid.themegroups,
+html[data-theme="softmorning"] #ctrl .themegroup{
+  background:var(--ctrl-light-fill);
+  border-color:var(--line);
+}
+html[data-theme="paper"] #ctrl .cbtn,
+html[data-theme="paper"] #ctrl button.cbtn,
+html[data-theme="paper"] #ctrl input,
+html[data-theme="paper"] #ctrl textarea,
+html[data-theme="paper"] #ctrl select,
+html[data-theme="softmorning"] #ctrl .cbtn,
+html[data-theme="softmorning"] #ctrl button.cbtn,
+html[data-theme="softmorning"] #ctrl input,
+html[data-theme="softmorning"] #ctrl textarea,
+html[data-theme="softmorning"] #ctrl select{
+  background:var(--ctrl-light-fill-strong);
+  border-color:var(--line);
+  color:var(--fg);
+}
+html[data-theme="paper"] #ctrl .cbtn.on,
+html[data-theme="paper"] #ctrl .cbtn.primary,
+html[data-theme="paper"] #ctrl .cbtn[aria-pressed="true"],
+html[data-theme="paper"] #ctrl .ctrltabs .cbtn.on,
+html[data-theme="softmorning"] #ctrl .cbtn.on,
+html[data-theme="softmorning"] #ctrl .cbtn.primary,
+html[data-theme="softmorning"] #ctrl .cbtn[aria-pressed="true"],
+html[data-theme="softmorning"] #ctrl .ctrltabs .cbtn.on{
+  background:rgba(25,122,99,0.12);
+  border-color:var(--accent);
+  color:var(--fg);
+}
+
+/* Weather source health card */
+#ctrl .wxhealthcard{ margin-top:10px; }
+#ctrl .wxhealthrows{ display:grid; gap:8px; margin-top:10px; }
+#ctrl .wxhealthrow{ border:1px solid var(--line); border-radius:12px; padding:9px 10px; background:rgba(255,255,255,.04); }
+#ctrl .wxhealthrow.ok{ border-color:rgba(120,190,140,.35); }
+#ctrl .wxhealthrow.bad{ border-color:rgba(220,150,110,.40); }
+#ctrl .wxhealthname{ font-weight:800; font-size:.94rem; }
+#ctrl .wxhealthdetail{ margin-top:3px; opacity:.82; font-size:.82rem; line-height:1.25; }
+@media(min-width:1280px){ #ctrl .wxhealthrows{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* 1.3.5-beta.8: Daylight uses the same high-readability Control contrast pass. */
+html[data-theme="daylight"] #ctrl .ctrlsec,
+html[data-theme="daylight"] #ctrl .actiondrawer,
+html[data-theme="daylight"] #ctrl .actiongroup,
+html[data-theme="daylight"] #ctrl .displaygroup,
+html[data-theme="daylight"] #ctrl .ctrlstate,
+html[data-theme="daylight"] #ctrl .ctrlgrid .stat,
+html[data-theme="daylight"] #ctrl .doctorcard,
+html[data-theme="daylight"] #ctrl .terminaltop,
+html[data-theme="daylight"] #ctrl .settingcard,
+html[data-theme="daylight"] #ctrl .messages-subcard,
+html[data-theme="daylight"] #ctrl .themeintro,
+html[data-theme="daylight"] #themegrid.themegroups,
+html[data-theme="daylight"] #ctrl .themegroup{background:rgba(18,34,45,0.045);}
+html[data-theme="daylight"] #ctrl .cbtn,
+html[data-theme="daylight"] #ctrl button.cbtn,
+html[data-theme="daylight"] #ctrl input,
+html[data-theme="daylight"] #ctrl textarea,
+html[data-theme="daylight"] #ctrl select{background:rgba(18,34,45,0.050);}
+html[data-theme="daylight"] #ctrl .cbtn.on,
+html[data-theme="daylight"] #ctrl .cbtn.primary,
+html[data-theme="daylight"] #ctrl .cbtn[aria-pressed="true"],
+html[data-theme="daylight"] #ctrl .ctrltabs .cbtn.on{background:rgba(43,114,143,0.14);}
+
+
+/* Light-theme control contrast fix.
+   Danger drawers stay visually distinct, but labels must remain readable on
+   Paper/Daylight instead of pale peach-on-cream. */
+html[data-theme="paper"] #ctrlpage-control .actiondrawer,
+html[data-theme="softmorning"] #ctrlpage-control .actiondrawer,
+html[data-theme="daylight"] #ctrlpage-control .actiondrawer{
+  background:var(--ctrl-danger-bg);
+  border-color:var(--ctrl-danger-border);
+}
+html[data-theme="paper"] #ctrlpage-control .actiondrawer > summary,
+html[data-theme="softmorning"] #ctrlpage-control .actiondrawer > summary,
+html[data-theme="daylight"] #ctrlpage-control .actiondrawer > summary{
+  color:var(--ctrl-danger-fg);
+}
+html[data-theme="paper"] #ctrlpage-control .actiondrawer > summary small,
+html[data-theme="softmorning"] #ctrlpage-control .actiondrawer > summary small,
+html[data-theme="daylight"] #ctrlpage-control .actiondrawer > summary small{
+  color:var(--dim);
+  opacity:1;
+}
+html[data-theme="paper"] #ctrl .cbtn .bd,
+html[data-theme="softmorning"] #ctrl .cbtn .bd,
+html[data-theme="daylight"] #ctrl .cbtn .bd,
+html[data-theme="paper"] #ctrl .ctrlsubtitle,
+html[data-theme="softmorning"] #ctrl .ctrlsubtitle,
+html[data-theme="daylight"] #ctrl .ctrlsubtitle,
+html[data-theme="paper"] #ctrl .cm,
+html[data-theme="softmorning"] #ctrl .cm,
+html[data-theme="daylight"] #ctrl .cm{
+  color:rgba(37,47,53,0.74);
+}
+html[data-theme="paper"] #ctrl .cbtn.requiresconfirm,
+html[data-theme="paper"] #ctrl .cbtn.danger,
+html[data-theme="softmorning"] #ctrl .cbtn.requiresconfirm,
+html[data-theme="softmorning"] #ctrl .cbtn.danger,
+html[data-theme="daylight"] #ctrl .cbtn.requiresconfirm,
+html[data-theme="daylight"] #ctrl .cbtn.danger{
+  background:var(--ctrl-danger-bg);
+  border-color:var(--ctrl-danger-border);
+  color:var(--ctrl-danger-fg);
+}

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Dash-Go</title>
+<script>
+(function(){
+  // Apply the same CSS-pixel tier before the dashboard stylesheet is parsed.
+  // The later fit controller owns measured docking, but this avoids a first
+  // frame rendered with base-sized Calendar/Sidebar geometry on small or XL
+  // panels. innerWidth/innerHeight intentionally already represent effective
+  // CSS pixels, including desktop display scaling.
+  window.dashboardFitTierFromViewport=function(width,height){
+    var w=Math.max(1,Math.round(Number(width)||0));
+    var h=Math.max(1,Math.round(Number(height)||0));
+    if(w>=2400||h>=1500)return "xl";
+    if(w>=1280&&h>=720)return "base";
+    if(w>=1024&&h>=600)return "compact";
+    if(w>=860&&h>=520)return "dense";
+    return "min";
+  };
+  try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
+  window.dashboardAssetFallback=function(node){
+    try{
+      var fb=node.getAttribute('data-fallback');
+      if(!fb || node.getAttribute('data-fallback-used')==='1') return;
+      node.setAttribute('data-fallback-used','1');
+      if(node.tagName==='LINK') node.href=fb; else node.src=fb;
+    }catch(e){}
+  };
+}());
+</script>
+<link rel="stylesheet" href="ui/dashboard.css?v=1.5.0-beta.38" data-fallback="/ui/dashboard.css" onerror="dashboardAssetFallback(this)">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.0-beta.38">
+<!-- Optional per-device settings written by the installer. Sets
+     window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
+     birthdays:[...] }. Missing file is harmless (404 ignored). -->
+<script>
+(function(){
+  var q="?t="+Date.now();
+  document.write('<script src="config/config.local.js'+q+'" data-fallback="/config/config.local.js'+q+'" onerror="dashboardAssetFallback(this)"><\/script>');
+}());
+</script>
+</head>
+<body>
+<div id="nightdim" aria-hidden="true"></div>
+<div id="alertbar"></div>
+<div id="alerttab"></div>
+<div id="demobadge" role="status">DEMO MODE — Run installer again to reset and configure this dashboard</div>
+<div id="app">
+  <section id="calwrap">
+    <div id="calhead"></div>
+    <div id="calscroll" data-scroll-policy="hot-list"></div>
+    <button id="snapback">↑ TODAY</button>
+  </section>
+
+  <div id="sidebar">
+    <section id="agenda">
+      <div id="clock">
+        <div id="fitclockinfo"><div id="cdate"></div><div id="ctime"></div></div>
+        <nav id="fitdocktabs" aria-label="Dashboard panels" hidden>
+          <button id="fitdock-agenda-tab" type="button" aria-controls="fitdocksheet" aria-expanded="false">Agenda</button>
+          <button id="fitdock-weather-tab" type="button" aria-controls="fitdocksheet" aria-expanded="false">Weather</button>
+        </nav>
+      </div>
+      <div id="agendalist" data-scroll-policy="hot-list"></div>
+      <button id="fitdock-weather-compact" class="fitdock-inline-toggle" type="button" hidden aria-controls="fitdocksheet" aria-expanded="false"><span>Weather</span><span class="fitdock-tab-detail">Open forecast</span></button>
+    </section>
+
+    <section id="weather">
+      <button id="fitdock-weather-toggle" class="fitdock-inline-toggle" type="button" hidden aria-controls="fitdocksheet" aria-expanded="false"><span>Weather</span><span class="fitdock-tab-detail">Forecast ▾</span></button>
+      <div id="wxnow"><div class="loading">weather…</div></div>
+      <div id="wx14" data-scroll-policy="hot-list"></div>
+    </section>
+  </div>
+
+  <section id="compliment">
+    <button id="cblaunch" class="cb-launch" type="button" aria-label="Open apps" aria-haspopup="dialog" aria-controls="applauncher"><span class="cb-launch-dots" aria-hidden="true"><span></span><span></span><span></span></span></button>
+    <div id="sun"><span class="moon"></span><span class="suntimes"><span id="sunrise">–</span><span id="sunset">–</span></span></div>
+    <div id="comptext">Hello, gorgeous.</div>
+    <button id="familyboardfooter" class="family-board-footer" type="button" hidden aria-label="Open Family Message Board"></button>
+    <button id="stale" type="button" hidden aria-live="polite" aria-label="Check soon status"></button>
+    <div id="sunspacer" aria-hidden="true"></div>
+  </section>
+
+  <!-- Static shell only. Dashboard Lists Dock content/listeners are created lazily
+       when the user explicitly enables it in Dashboard Control. -->
+  <section id="listsdock" aria-label="Dashboard Lists dock" aria-hidden="true" hidden>
+    <header id="listsdock-head" class="listsdock-head"></header>
+    <div id="listsdock-body" class="listsdock-body" data-scroll-policy="hot-list"></div>
+  </section>
+</div>
+
+<div id="fitdocksheet" hidden aria-hidden="true">
+  <section id="fitdockpanel" role="dialog" aria-modal="true" aria-labelledby="fitdocktitle">
+    <header id="fitdockhead"><h2 id="fitdocktitle">Dashboard panel</h2><button id="fitdockclose" type="button" aria-label="Close dashboard panel">×</button></header>
+    <div id="fitdockbody" data-scroll-policy="hot-list"></div>
+  </section>
+</div>
+
+<div id="ctrl" class="osk-host"><div id="ctrlpanel">
+  <div class="ctrlhead">
+    <div>
+      <h2>Dashboard Control</h2>
+      <div class="ctrlsubtitle">Maintenance, display, calendar, and message tools for this kiosk.</div>
+    </div>
+    <button id="ctrlclose" aria-label="Close Dashboard Control">×</button>
+  </div>
+  <div id="ctrlmsg"></div>
+  <div id="ctrlshellstatus" role="status" aria-live="polite"></div>
+  <div id="ctrlpin"></div>
+  <div id="ctrlmain">
+    <div class="ctrltabs" aria-label="Dashboard Control sections">
+      <button class="cbtn on" data-ctrlpage="overview">Overview</button>
+      <button class="cbtn" data-ctrlpage="display">Display</button>
+      <button class="cbtn" data-ctrlpage="calendars">Calendars</button>
+      <button class="cbtn" data-ctrlpage="content">Messages</button>
+      <button class="cbtn" data-ctrlpage="control">Control</button>
+      <button class="cbtn" data-ctrlpage="system">System</button>
+    </div>
+    <div class="ctrlpage show" id="ctrlpage-overview" data-scroll-policy="control-page">
+      <details class="ctrlsec" data-lazy="status"><summary>Device status</summary><div class="ctrlsecbody"><div id="ctrlstatus"></div></div></details>
+      <details class="ctrlsec" data-lazy="health"><summary>Health check</summary><div class="ctrlsecbody"><div id="ctrlhealth"></div></div></details>
+      <details class="ctrlsec ctrlsec-actions"><summary>Quick actions</summary><div class="ctrlsecbody"><div class="ctrlrow actiongrid" id="ctrlactions"></div></div></details>
+    </div>
+    <div class="ctrlpage" id="ctrlpage-display" data-scroll-policy="control-page" data-accordion>
+      <details class="ctrlsec" data-lazy="theme"><summary>Theme</summary><div class="ctrlsecbody"><div class="ctrlrow" id="ctrltheme"></div></div></details>
+      <details class="ctrlsec" data-lazy="visuals"><summary>Visual style</summary><div class="ctrlsecbody"><div id="ctrlvisualstyle"></div></div></details>
+      <details class="ctrlsec" data-lazy="dashboarddisplay"><summary>Dashboard display</summary><div class="ctrlsecbody"><div id="ctrldashboarddisplay"></div></div></details>
+      <details class="ctrlsec" data-lazy="weatheralerts"><summary>Weather &amp; alerts</summary><div class="ctrlsecbody"><div id="ctrlweatheralerts"></div></div></details>
+      <details class="ctrlsec" data-lazy="mapcache"><summary>Event maps &amp; cache</summary><div class="ctrlsecbody"><div id="ctrlmapcache"></div></div></details>
+      <details class="ctrlsec" data-lazy="screen"><summary>Screen controls &amp; sleep schedule</summary><div class="ctrlsecbody"><div id="ctrlscreensettings"></div></div></details>
+    </div>
+    <div class="ctrlpage" id="ctrlpage-calendars" data-scroll-policy="control-page">
+      <details class="ctrlsec" data-lazy="calendarlayout"><summary>Calendar layout, density &amp; text</summary><div class="ctrlsecbody"><div id="ctrluisettings"></div></div></details>
+      <details class="ctrlsec" data-lazy="moon"><summary>Moon</summary><div class="ctrlsecbody"><div id="ctrlmoon"></div></div></details>
+      <details class="ctrlsec" data-lazy="calhealth"><summary>Calendar source health</summary><div class="ctrlsecbody"><div id="ctrlcalhealth"></div></div></details>
+      <details class="ctrlsec" data-lazy="cache"><summary>Event cache</summary><div class="ctrlsecbody"><div id="ctrlcache"></div></div></details>
+      <details class="ctrlsec" data-lazy="cals"><summary>Calendar visibility</summary><div class="ctrlsecbody"><div class="ctrlrow" id="ctrlcals"></div></div></details>
+    </div>
+    <div class="ctrlpage" id="ctrlpage-content" data-scroll-policy="control-page" data-accordion>
+      <details class="ctrlsec" data-lazy="content"><summary>Personal messages</summary><div class="ctrlsecbody"><div id="ctrlcomp"></div></div></details>
+      <details class="ctrlsec" data-lazy="tempmsg"><summary>Temporary messages</summary><div class="ctrlsecbody"><div id="ctrltempmsg"></div></div></details>
+      <details class="ctrlsec" data-lazy="schedmsg"><summary>Scheduled messages</summary><div class="ctrlsecbody"><div id="ctrlschedmsg"></div></div></details>
+      <details class="ctrlsec" data-lazy="birthdays"><summary>Birthdays</summary><div class="ctrlsecbody"><div id="ctrlbirthdays"></div></div></details>
+      <details class="ctrlsec" data-lazy="celebrations"><summary>Celebrations</summary><div class="ctrlsecbody"><div id="ctrlcelebrations"></div></div></details>
+      <details class="ctrlsec" data-lazy="builtins"><summary>Default messages</summary><div class="ctrlsecbody"><div id="ctrlbuiltins"></div></div></details>
+      <details class="ctrlsec" data-lazy="feeds"><summary>Jokes / Quotes / Facts</summary><div class="ctrlsecbody"><div id="ctrlfeeds"></div></div></details>
+      <details class="ctrlsec" data-lazy="sources"><summary>Feed providers &amp; API keys</summary><div class="ctrlsecbody"><div id="ctrlsources"></div></div></details>
+    </div>
+    <div class="ctrlpage" id="ctrlpage-control" data-scroll-policy="control-page">
+      <div class="ctrlstack" id="ctrlstack-control">
+        <details class="ctrlsec ctrlsec-profile" data-lazy="profile"><summary>Performance profile</summary><div class="ctrlsecbody"><div id="ctrlprofile"></div></div></details>
+        <div class="ctrlcardrow ctrlcardrow-control-secondary">
+          <details class="ctrlsec ctrlsec-security" data-lazy="security"><summary>Security / PIN</summary><div class="ctrlsecbody"><div id="ctrlsecurity"></div></div></details>
+          <details class="ctrlsec" data-lazy="location"><summary>Location</summary><div class="ctrlsecbody"><div class="ctrlrow" id="ctrlloc"></div></div></details>
+        </div>
+        <details class="ctrlsec ctrlsec-people" data-lazy="people"><summary>People</summary><div class="ctrlsecbody"><div id="ctrlpeople" data-people-control-root aria-live="polite"></div></div></details>
+        <details class="ctrlsec ctrlsec-todo" data-lazy="todo"><summary>Lists / optional Microsoft To Do</summary><div class="ctrlsecbody"><div id="ctrltodo" data-todo-control-root aria-live="polite"></div></div></details>
+      </div>
+    </div>
+    <div class="ctrlpage" id="ctrlpage-system" data-scroll-policy="control-page" data-accordion>
+      <div class="ctrlstack" id="ctrlstack-system">
+        <details class="ctrlsec ctrlsec-maintenance" data-lazy="update"><summary>Update / Restore / Backup</summary><div class="ctrlsecbody"><div id="ctrlupdate"></div><pre id="ctrlupdatelog" data-scroll-policy="console"></pre></div></details>
+        <details class="ctrlsec ctrlsec-systemupdate" data-lazy="systemupdate"><summary>System update</summary><div class="ctrlsecbody"><div id="ctrlsystemupdate"></div><pre id="ctrlsystemupdatelog" data-scroll-policy="console"></pre></div></details>
+        <details class="ctrlsec ctrlsec-terminal" data-lazy="terminal"><summary>Terminal access</summary><div class="ctrlsecbody"><div id="ctrlterminal"></div></div></details>
+        <details class="ctrlsec ctrlsec-history" data-lazy="history"><summary>Recent actions</summary><div class="ctrlsecbody"><div id="ctrlhistory"></div></div></details>
+        <details class="ctrlsec ctrlsec-diagnostics" data-lazy="diagnostics"><summary>Diagnostics</summary><div class="ctrlsecbody"><div id="ctrldiag"></div></div></details>
+        <details class="ctrlsec ctrlsec-power"><summary>Power &amp; updates</summary><div class="ctrlsecbody"><div id="ctrlpoweractions"></div></div></details>
+      </div>
+    </div>
+  </div>
+  <pre id="ctrldoctor" data-scroll-policy="console"></pre>
+</div></div>
+
+<div id="scrim"><div id="pop" data-scroll-policy="modal">
+  <div id="pophead">
+    <div id="poptop"><div id="poptitle"></div><button id="popclose" aria-label="Close popup">×</button></div>
+    <div id="popwhen"></div>
+  </div>
+  <div id="popbody"></div>
+</div></div>
+
+<div id="mapfull" aria-hidden="true">
+  <div id="mapbar">
+    <div id="maptitle">Map</div>
+    <input id="mapsearch" readonly placeholder="Search Google Maps…">
+    <button id="mapgo" class="cbtn on">Search</button>
+    <button id="mapclose" class="cbtn" aria-label="Close map">× Close</button>
+  </div>
+  <div id="mapframewrap"><iframe id="mapframe" aria-label="Interactive map"></iframe><div id="maphint">Interactive map closes after 5 minutes without dashboard input.</div></div>
+  <div id="mapkeyboard"></div>
+</div>
+
+<div id="radarfull" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="radartitle">
+  <div id="radarbar"><div><div id="radartitle">Weather radar</div><div id="radarprovider">Loading provider…</div></div><button id="radarclose" class="cbtn" aria-label="Close radar">× Close</button></div>
+  <div id="radarstage"><div id="radarbase"></div><div id="radarframes"></div><canvas id="radarlitecanvas" width="512" height="512" hidden aria-label="Latest regional weather radar"></canvas><div id="radarcenter" aria-hidden="true"></div><div id="radarbusy" hidden>Loading radar…</div><div id="radarerror" hidden></div><div id="radarattribution">Base map © OpenStreetMap contributors · Radar provider shown above</div></div>
+  <div id="radarcontrols"><div id="radarbuttons"><button id="radarprev" class="cbtn" aria-label="Previous radar frame">‹</button><button id="radarplay" class="cbtn" aria-pressed="false">Play</button><button id="radarnext" class="cbtn" aria-label="Next radar frame">›</button><button id="radarnow" class="cbtn" aria-label="Latest radar frame">Now</button><button id="radarzoom" class="cbtn" aria-label="Toggle radar zoom" hidden>Zoom in</button><button id="radarrefresh" class="cbtn" aria-label="Refresh latest regional radar" hidden>Refresh</button></div><div id="radarreadout"><div id="radarstamp">Latest available</div><input id="radarscrub" aria-label="Radar timeline" type="range" min="0" max="0" value="0"></div></div>
+</div>
+
+<div id="applauncher" class="app-launcher" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="applauncher-title">
+  <section class="app-launcher-panel" role="document">
+    <header class="app-launcher-head">
+      <div><h2 id="applauncher-title">Apps</h2><p id="applauncher-subtitle">Open a dashboard tool.</p></div>
+      <button id="applauncherclose" class="app-launcher-close" type="button" aria-label="Close apps">×</button>
+    </header>
+    <div id="applaunchergrid" class="app-launcher-grid"></div>
+    <div id="applauncherstatus" class="app-launcher-status" role="status" aria-live="polite"></div>
+  </section>
+</div>
+
+<div id="listsapp" hidden class="lists-app osk-host" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="listsapp-title">
+  <section class="lists-panel" role="document">
+    <header class="lists-head">
+      <div><h2 id="listsapp-title">Lists</h2><p id="listsapp-status" role="status" aria-live="polite">Loading…</p></div>
+      <button id="listsapp-close" class="lists-close" type="button" aria-label="Close lists">×</button>
+    </header>
+    <main id="listsapp-body" class="lists-body" data-scroll-policy="modal"></main>
+  </section>
+</div>
+
+<div id="chorewheel" hidden class="chore-wheel osk-host" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="chorewheel-title">
+  <section class="cw-panel" role="document">
+    <header class="cw-head">
+      <div><h2 id="chorewheel-title">Chore Wheel</h2><p id="chorewheel-status" role="status" aria-live="polite">Loading Chore Wheel…</p></div>
+      <button id="chorewheel-close" class="cw-close" type="button" aria-label="Close Chore Wheel">×</button>
+    </header>
+    <nav id="chorewheel-tabs" class="cw-tabs" aria-label="Chore Wheel sections"></nav>
+    <main id="chorewheel-body" class="cw-body" data-scroll-policy="modal"></main>
+  </section>
+</div>
+
+<div id="familyboard" hidden class="family-board osk-host" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="familyboard-title">
+  <section class="fb-panel" role="document">
+    <header class="fb-head">
+      <div><h2 id="familyboard-title">Family Message Board</h2><p id="familyboard-status" role="status" aria-live="polite">Loading family notes…</p></div>
+      <button id="familyboard-close" class="fb-close" type="button" aria-label="Close Family Message Board">×</button>
+    </header>
+    <nav id="familyboard-tabs" class="fb-tabs" aria-label="Family Message Board sections"></nav>
+    <main id="familyboard-body" class="fb-body" data-scroll-policy="modal"></main>
+  </section>
+</div>
+
+<div id="maintenance" hidden class="maintenance-app osk-host" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="maintenance-title">
+  <section class="mt-panel" role="document">
+    <header class="mt-head">
+      <div><h2 id="maintenance-title">Maintenance</h2><p id="maintenance-status" role="status" aria-live="polite">Loading maintenance tasks…</p></div>
+      <button id="maintenance-close" class="mt-close" type="button" aria-label="Close Maintenance">×</button>
+    </header>
+    <nav id="maintenance-tabs" class="mt-tabs" aria-label="Maintenance sections"></nav>
+    <main id="maintenance-body" class="mt-body" data-scroll-policy="modal"></main>
+  </section>
+</div>
+<div id="routines" hidden class="routines-app osk-host" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="routines-title">
+  <section class="rt-panel" role="document">
+    <header class="rt-head">
+      <div><h2 id="routines-title">Routines</h2><p id="routines-status" role="status" aria-live="polite">Loading routines…</p></div>
+      <button id="routines-close" class="rt-close" type="button" aria-label="Close Routines">×</button>
+    </header>
+    <nav id="routines-tabs" class="rt-tabs" aria-label="Routines sections"></nav>
+    <main id="routines-body" class="rt-body" data-scroll-policy="modal"></main>
+  </section>
+</div>
+
+<script src="ui/js/app.bundle.js?v=1.5.0-beta.38" defer data-fallback="/ui/js/app.bundle.js" onerror="dashboardAssetFallback(this)"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+/* Demo-mode badge: visible only for seeded demo installs. */
+#demobadge{
+  position:fixed;left:50%;top:10px;transform:translateX(-50%);
+  z-index:1200;display:none;max-width:min(760px,calc(100vw - 28px));
+  padding:7px 14px;border-radius:999px;border:1px solid rgba(255,213,138,.55);
+  background:rgba(42,28,6,.92);color:#ffd58a;font:800 13px/1 var(--sans);
+  letter-spacing:.08em;text-transform:uppercase;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.32);
+  pointer-events:none;
+}
+html.demo-mode #demobadge{display:block;}
+html.demo-mode #calwrap{box-shadow:inset 0 2px 0 rgba(255,213,138,.16);}
+@media (max-width:1100px){#demobadge{font-size:11px;padding:6px 10px;top:6px;}}

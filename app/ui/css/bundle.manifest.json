@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "bundles": {
+    "dashboard": [
+      "dashboard/base.css",
+      "dashboard/demo-mode.css",
+      "dashboard/responsive.css",
+      "dashboard/lite-dashboard.css",
+      "dashboard/calendar.css",
+      "dashboard/app-calendar-actions.css",
+      "dashboard/sidebar-weather-messages.css",
+      "dashboard/control-overlay.css",
+      "dashboard/weather-alerts.css",
+      "dashboard/popups-alerts-maps.css",
+      "dashboard/day-timeline-popup.css",
+      "dashboard/event-popup-compact.css",
+      "dashboard/control-status-maintenance.css",
+      "dashboard/control-theme-actions-lite.css",
+      "dashboard/control-visual-style.css",
+      "dashboard/touch-radar.css",
+      "dashboard/app-launcher.css",
+      "dashboard/lists-dock.css",
+      "dashboard/family-board-footer.css"
+    ],
+    "control": [
+      "control/tokens.css",
+      "control/lite-performance.css",
+      "control/console-shell-tabs.css",
+      "control/display-profile.css",
+      "control/display-location.css",
+      "control/dashboard-typography.css",
+      "control/tabs-shell.css",
+      "control/consistency.css",
+      "control/messages-osk.css",
+      "control/message-forms.css",
+      "control/message-scroll-feed.css",
+      "control/theme-weather.css",
+      "control/panel-polish.css",
+      "control/todo.css",
+      "control/people.css",
+      "control/people-pin-keypad.css",
+      "control/information-architecture.css",
+      "control/layout.css"
+    ]
+  }
+}

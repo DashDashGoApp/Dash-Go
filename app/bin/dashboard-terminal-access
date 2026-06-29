@@ -1,0 +1,6 @@
+#!/bin/sh
+# SSH-only terminal-access administrator switch. The dashboard control server
+# owns the private owner-only state and validates the supported commands.
+set -eu
+DASH="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+exec "$DASH/bin/dashboard-control-server" --terminal-access "$@"

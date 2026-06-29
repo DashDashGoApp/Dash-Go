@@ -1,0 +1,24 @@
+# Keep project sources portable between Windows, WSL, and Raspberry Pi OS.
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.go text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.ics text eol=lf
+*.svg text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.tar.gz binary

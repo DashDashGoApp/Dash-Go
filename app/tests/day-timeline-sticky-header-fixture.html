@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dash-Go Dense Day Timeline Sticky Toolbar Fixture</title>
+<style>
+:root{--panel:#17212a;--bg:#101820;--fg:#eef5f7;--dim:#bac8cd;--line-soft:rgba(255,255,255,.16);--accent:#7fd6a8}
+body{margin:0;background:#101820;color:var(--fg);font:16px system-ui}
+#pop{width:700px;height:520px;margin:20px auto;background:var(--panel);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+#pophead{padding:18px 20px 14px;border-bottom:1px solid var(--line-soft);background:var(--panel);position:relative;z-index:40;flex:0 0 auto}
+#popbody{flex:1;min-height:0;overflow-y:auto;padding:0 18px 22px}
+.dt-viewbar{position:sticky;top:0;z-index:30;isolation:isolate;display:flex;margin:0 -18px 12px;padding:14px 18px 10px;background:linear-gradient(var(--panel),var(--panel)),var(--bg);box-shadow:0 8px 12px -12px rgba(0,0,0,.62)}
+.dt-viewtoggle{padding:4px;border:1px solid var(--line-soft);border-radius:999px}.dt-viewbtn{padding:8px 14px;border:0;border-radius:999px;background:rgba(127,214,168,.16);color:var(--fg);font-weight:800}
+.dt-allday{margin-top:0;border:1px solid var(--line-soft);border-radius:14px;padding:10px}.dt-allday-card{display:block;width:100%;margin:6px 0 0;padding:12px;border:1px solid rgba(127,214,168,.32);border-left:6px solid var(--accent);border-radius:12px;background:rgba(127,214,168,.12);color:var(--fg);text-align:left}
+.dt-grid{position:relative;height:1320px;margin-top:12px;border:1px solid var(--line-soft);border-radius:14px;background:repeating-linear-gradient(to bottom,transparent 0 74px,rgba(255,255,255,.12) 75px)}
+.dt-hours{position:absolute;inset:0 auto 0 0;width:70px;border-right:1px solid var(--line-soft)}.dt-hours span{display:block;height:74px;padding:7px 8px 0 0;text-align:right;color:var(--dim);font:12px monospace}
+.dt-events{position:absolute;left:78px;right:8px;top:0;bottom:0}.dt-event{position:absolute;padding:10px 12px;border-left:6px solid var(--accent);background:rgba(127,214,168,.16);border-radius:10px;color:var(--fg);box-sizing:border-box;z-index:2}.dt-event small{display:block;color:var(--dim);margin-top:3px}
+</style>
+<div id="pop"><div id="pophead"><strong>Dense family day</strong><div>30 events · fixture starts scrolled</div></div><div id="popbody"><div class="dt-viewbar"><div class="dt-viewtoggle"><button class="dt-viewbtn">Timeline</button><button class="dt-viewbtn">List</button></div></div><section class="dt-allday"><strong>All day</strong><div id="allday"></div></section><div class="dt-grid"><div class="dt-hours" id="hours"></div><div class="dt-events" id="events"></div></div></div></div>
+<script>
+const all=document.querySelector('#allday'),events=document.querySelector('#events'),hours=document.querySelector('#hours');
+for(let i=0;i<8;i++){const b=document.createElement('button');b.className='dt-allday-card';b.textContent=`All-day fixture ${i+1} — long title keeps a card above the timeline`;all.append(b);}
+for(let i=0;i<18;i++){const h=document.createElement('span');h.textContent=`${String(6+i).padStart(2,'0')}:00`;hours.append(h);}
+for(let i=0;i<22;i++){
+  const card=document.createElement('button');card.className='dt-event';
+  const overlap=i<8,top=overlap?178+i*13:Math.min(1200,120+i*54),left=overlap?`${(i%4)*25}%`:'0%',width=overlap?'calc(25% - 7px)':'100%';
+  card.style.cssText=`top:${top}px;left:${left};width:${width};height:${overlap?68:46+(i%3)*12}px`;
+  card.innerHTML=`Event ${i+1}${overlap?' — overlap cluster':''}<small>${overlap?'09:00–10:15':'timed card'}</small>`;events.append(card);
+}
+requestAnimationFrame(()=>{document.querySelector('#popbody').scrollTop=260;});
+</script>

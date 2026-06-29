@@ -1,0 +1,40 @@
+/* Shared Household People card: quiet Control-surface forms with explicit touch fields. */
+.ctrlsec-people .ctrlsecbody{min-height:0}
+.people-editor,.people-group,.people-row,.people-confirm{display:grid;gap:10px}
+.people-editor{padding:15px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.people-editor-title{color:var(--fg);font-size:18px;font-weight:850;line-height:1.22}
+.people-editor-note{margin-top:-4px;color:var(--dim);font-size:14px;line-height:1.4}
+.people-field{display:grid;gap:7px;min-width:0}
+.people-field-label{color:var(--dim);font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.people-add-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.people-add-actions{margin:0;align-self:end;flex-wrap:nowrap}
+.people-add-actions .cbtn{min-height:52px;white-space:nowrap}
+.people-rename-actions{margin-top:2px}
+.people-group{margin-top:14px}
+.people-row{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.people-row-title{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.people-row-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.people-state{flex:0 0 auto;padding:3px 8px;border:1px solid var(--line);border-radius:999px;font-size:.78em;font-weight:700}
+.people-state.active{background:color-mix(in srgb,var(--good,#5ebd75) 18%,var(--panel));color:var(--text)}
+.people-state.archived{opacity:.72;background:var(--panel2)}
+.people-impact{font-size:.84em;color:var(--muted)}
+.people-row-actions{margin-top:1px}
+.people-confirm{padding:11px;border:1px solid var(--warn);border-radius:10px;background:var(--panel2)}
+.people-confirm-delete{border-color:var(--danger)}
+.people-reassign-select{width:100%;min-height:42px}
+.people-archived-group{opacity:.86}
+@media(max-width:760px){
+  .people-add-controls{grid-template-columns:1fr}
+  .people-add-actions{width:100%}
+  .people-add-actions .cbtn{width:100%}
+  .people-row-actions .cbtn,.people-confirm .cbtn{flex:1 1 calc(50% - 6px)}
+  .people-row-actions .danger{flex-basis:100%}
+}
+
+.people-inbox-state{color:var(--dim);font-size:.86em;font-weight:700}
+.people-pin-editor{border-color:var(--accent)}
+.people-pin-input{letter-spacing:.18em}
+.people-notifications{display:grid;gap:9px;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.people-notification-actions{gap:8px}
+.people-notification-status{color:var(--muted);font-size:.84em;line-height:1.35}
+@media(max-width:760px){.people-notification-actions{display:grid;grid-template-columns:1fr}.people-notification-actions .cbtn{width:100%}}

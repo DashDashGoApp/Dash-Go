@@ -1,0 +1,17 @@
+/* Dashboard Control shared spacing, target, and layout scale.
+   The final layout layer consumes these tokens; feature CSS may use them too. */
+:root{
+  --ctrl-space-1:4px;
+  --ctrl-space-2:8px;
+  --ctrl-space-3:12px;
+  --ctrl-space-4:16px;
+  --ctrl-space-5:20px;
+  --ctrl-space-6:24px;
+  --ctrl-tap-min:44px;
+  --ctrl-summary-min:48px;
+  --ctrl-action-min:64px;
+  --ctrl-action-min-lg:76px;
+  --ctrl-bp-stack:760px;
+  --ctrl-bp-two:1100px;
+  --ctrl-bp-wide:1280px;
+}

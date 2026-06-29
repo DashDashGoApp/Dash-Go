@@ -1,0 +1,199 @@
+/* Dashboard Control authoritative layout layer.
+   Loaded last by runtime_assets.go's sorted source bundle. This replaces the
+   retired hard-fix stack and keeps structural rules together without cascade escalation. */
+#ctrl{
+  --ctrl-gap:var(--ctrl-space-3);
+}
+
+/* Fixed Control shell: header and tabs stay stable while only the active
+   page owns ordinary vertical scrolling. This is structural CSS, not state
+   managed by PIN JavaScript. */
+#ctrl.show{
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  box-sizing:border-box;
+}
+#ctrlpanel{
+  /* Baseline shell width. A large-screen-only cap is declared below so the
+     centered Control still has intentional margins without wasting 1080p width. */
+  width:min(1180px,calc(100vw - 56px));
+  height:min(920px,calc(100vh - 44px));
+  max-height:calc(100vh - 44px);
+  min-height:min(700px,calc(100vh - 44px));
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+#ctrlpanel .ctrlhead,
+#ctrlpanel #ctrlmsg,
+#ctrlpanel #ctrlpin{
+  flex:0 0 auto;
+}
+
+/* 1920×1080-class displays have room for wider, shorter action grids. Keep the
+   modal bounded and leave a deliberate backdrop margin; narrow/Pi layouts retain
+   the proven 1180px shell above. */
+@media(min-width:1280px){
+  #ctrl.show{padding:24px;}
+  #ctrlpanel{width:min(1480px,calc(100vw - 96px));}
+}
+#ctrlmain{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#ctrlmain[hidden]{display:none;}
+#ctrlmain .ctrltabs{
+  flex:0 0 auto;
+  position:static;
+  z-index:3;
+}
+#ctrlmain .ctrlpage{
+  min-height:0;
+  max-height:none;
+  overflow:hidden;
+}
+#ctrlmain .ctrlpage.show[data-scroll-policy="control-page"]{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:4px;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
+  /* Only the visible tab gets a scroll-position hint; hidden pages do not
+     reserve a compositor layer on Lite. */
+  will-change:scroll-position;
+}
+#ctrlmain .ctrlpage.show .ctrlstack{
+  padding-bottom:8px;
+}
+#ctrlmain .ctrlpage.show::-webkit-scrollbar{width:10px;}
+#ctrlmain .ctrlpage.show::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,0.14);
+  border-radius:999px;
+}
+
+/* Small-screen shell geometry belongs with the shell base above, not in the
+   console/tab file. The final layout layer therefore remains the only owner
+   of #ctrlpanel's constrained page-scroll relationship. */
+@media(max-width:760px){
+  #ctrl.show{padding:10px;}
+  #ctrlpanel{
+    width:min(980px,96vw);
+    height:90vh;
+    max-height:90vh;
+    min-height:0;
+  }
+}
+
+#ctrl .ctrlpage.show{display:block;width:100%;}
+#ctrl .ctrlstack{
+  display:flex;flex-direction:column;align-items:stretch;gap:var(--ctrl-gap);
+  width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box;
+}
+#ctrl .ctrlstack>.ctrlsec,
+#ctrl .ctrlstack>.ctrlcardrow>.ctrlsec{
+  display:block;width:100%;max-width:100%;min-width:0;grid-column:1/-1;
+  margin:0;box-sizing:border-box;float:none;clear:both;
+}
+#ctrl .ctrlcardrow{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:var(--ctrl-gap);
+  width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box;
+}
+#ctrl .ctrlsec>summary,
+#ctrl .actiondrawer>summary{
+  min-height:var(--ctrl-summary-min);display:flex;align-items:center;
+  justify-content:space-between;gap:var(--ctrl-space-3);
+  padding-inline:var(--ctrl-space-4);box-sizing:border-box;
+}
+#ctrl .ctrlsec>summary:after,
+#ctrl .actiondrawer>summary:after{float:none;margin-left:var(--ctrl-space-3);flex:0 0 auto;}
+#ctrl .ctrlsecbody,#ctrl .ctrlsec .ctrlsecbody{width:100%;box-sizing:border-box;overflow:visible;}
+#ctrl .ctrlsec-maintenance[open] .ctrlsecbody,
+#ctrl .ctrlsec-systemupdate[open] .ctrlsecbody{max-height:none;overflow:visible;}
+#ctrl #ctrlhealth .doctorstate.small{font-size:18px;line-height:1.12;}
+#ctrl #ctrlpage-overview details.ctrlsec[data-lazy="health"] .ctrlsecbody{max-height:none;overflow:visible;}
+
+/* Shared control rhythm and touch floor. Inline token values intentionally win
+   over old one-off values, while specialized compact data chips remain readable. */
+#ctrl :is(.ctrlrow,.ctrlgrid,.settinggrid,.actiongroup-grid,.profilegrid,.weatherhealthgrid,.mapmaintenance,.mapcacheprimarygrid,.mapproviderlist){gap:var(--ctrl-gap);}
+#ctrl :is(.ctrlsec,.actiongroup,.settingcard,.mapcachemetric,.mapproviderrow,.weatherhealthrow){padding:var(--ctrl-space-3);}
+#ctrl :is(.cbtn,.themebtn,.pinbtn,.oskkey,.inline-time-editor .cbtn,.comprow .cbtn){min-height:var(--ctrl-tap-min);}
+#ctrl .cbtn.actionbtn{min-height:var(--ctrl-action-min);}
+#ctrl .actiongroup-danger .cbtn.actionbtn,
+#ctrl .actiondrawer .cbtn.actionbtn,
+#ctrl #ctrlhealth .doctor-overview-actions .cbtn.actionbtn,
+#ctrl #ctrldiag .doctor-actiongroup .cbtn.actionbtn{min-height:var(--ctrl-action-min-lg);}
+#ctrl .comprow .cbtn{padding:var(--ctrl-space-2) var(--ctrl-space-3);}
+#ctrl .ctrlsecbody{padding:0 var(--ctrl-space-4) var(--ctrl-space-4);}
+#ctrl .ctrltabs{gap:var(--ctrl-space-2);margin:var(--ctrl-space-3) 0 var(--ctrl-space-2);padding:var(--ctrl-space-1) 0 var(--ctrl-space-2);}
+#ctrl .ctrltabs .cbtn{min-height:var(--ctrl-tap-min);}
+#ctrl .ctrltabs .cbtn.on{position:relative;}
+#ctrl .ctrltabs .cbtn.on:after{content:"";position:absolute;left:22%;right:22%;bottom:5px;height:2px;border-radius:999px;background:var(--accent);}
+
+/* Default to intrinsic grids instead of repeated breakpoint-specific column
+   declarations. Feature editors with true day/month/pin matrices retain their
+   own local grids; action and settings surfaces become self-sizing. */
+#ctrl .ctrlpage .actiongroup-grid,
+#ctrl .ctrlpage .ctrlgrid,
+#ctrl .ctrlpage .settinggrid,
+#ctrl .ctrlpage .profilegrid,
+#ctrl .ctrlpage .weatherhealthgrid,
+#ctrl .ctrlpage .mapmaintenance,
+#ctrl .ctrlpage .mapcacheprimarygrid,
+#ctrl .ctrlpage .calmanager-top-actions,
+#ctrl .ctrlpage .calmanager-actions{
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));
+}
+#ctrl #ctrlpage-display .grid-1-feature .actiongroup-grid{grid-template-columns:minmax(0,1fr);}
+#ctrl #ctrlpage-display .grid-2-feature .actiongroup-grid,
+#ctrl #ctrlhealth .doctor-overview-actions .actiongroup-grid,
+#ctrl #ctrldiag .doctor-actiongroup .actiongroup-grid{width:100%;margin-inline:0;}
+#ctrl #ctrlpage-display .actiongroup-grid>.cbtn.actionbtn,
+#ctrl #ctrlhealth .doctor-overview-actions .actiongroup-grid>.cbtn.actionbtn,
+#ctrl #ctrldiag .doctor-actiongroup .actiongroup-grid>.cbtn.actionbtn{width:100%;max-width:var(--ctrl-action-button-max);justify-self:center;}
+
+/* Overview and Control keep their deliberate concise, grouped action language. */
+#ctrl #ctrlactions.actiongrid,#ctrl #ctrlpoweractions{display:flex;flex-direction:column;gap:var(--ctrl-gap);align-items:stretch;}
+#ctrl #ctrlpage-overview .actiongroup-common,#ctrl #ctrlpage-control .actiongroup-common{border-color:var(--line-soft);background:rgba(255,255,255,.028);}
+#ctrl #ctrlpage-overview .actiongroup-common .actiongroup-detail,#ctrl #ctrlpage-control .actiongroup-common .actiongroup-detail{display:none;}
+#ctrl #ctrlpage-overview .actiongroup-common .actiongroup-grid,#ctrl #ctrlpage-control .actiongroup-common .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));}
+#ctrl #ctrlpage-control .actiondrawer{width:100%;box-sizing:border-box;border:1px solid var(--ctrl-danger-border);border-radius:14px;background:var(--ctrl-danger-bg);overflow:hidden;}
+#ctrl #ctrlpage-control .actiondrawer>summary{color:var(--ctrl-danger-fg);font-weight:850;text-transform:uppercase;letter-spacing:.075em;font-size:13px;}
+#ctrl #ctrlpage-control .actiondrawer>summary small{font-family:var(--sans);font-size:12px;text-transform:none;letter-spacing:0;color:var(--dim);font-weight:700;}
+#ctrl #ctrlpage-control .actiondrawer-body{padding:0 var(--ctrl-space-3) var(--ctrl-space-3);}
+#ctrl #ctrlpage-control .actiondrawer .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));}
+
+/* Three shared layout tiers. CSS custom properties document the scale; media
+   queries use the same fixed boundaries because custom properties cannot be
+   evaluated in media conditions. */
+@media (min-width:1280px){
+  #ctrl #ctrlpage-control .ctrlcardrow-control-secondary{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;}
+  #ctrl #ctrlscreensettings .ctrlcardrow-screen,#ctrl #ctrldiag .ctrlcardrow-doctor{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
+  #ctrl #ctrlscreensettings .ctrlcardrow-screen>.actiongroup,#ctrl #ctrldiag .ctrlcardrow-doctor>.actiongroup{display:flex;flex-direction:column;min-height:0;}
+  #ctrl #ctrlscreensettings .ctrlcardrow-screen>.actiongroup>.actiongroup-grid,#ctrl #ctrldiag .ctrlcardrow-doctor>.actiongroup>.actiongroup-grid{flex:1 1 auto;min-height:0;}
+}
+@media (max-width:1100px){
+  #ctrl .ctrltabs{grid-template-columns:repeat(3,minmax(0,1fr));}
+  #ctrl .ctrlpage .actiongroup-grid,#ctrl .ctrlpage .settinggrid,#ctrl .ctrlpage .ctrlgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));}
+}
+@media(max-width:760px){
+  #ctrl .ctrltabs{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrl .ctrlpage .actiongroup-grid,
+  #ctrl .ctrlpage .settinggrid,
+  #ctrl .ctrlpage .ctrlgrid,
+  #ctrl .ctrlpage .profilegrid,
+  #ctrl .ctrlpage .weatherhealthgrid,
+  #ctrl .ctrlpage .mapmaintenance,
+  #ctrl .ctrlpage .mapcacheprimarygrid,
+  #ctrl .ctrlpage .calmanager-top-actions,
+  #ctrl .ctrlpage .calmanager-actions{grid-template-columns:1fr;}
+  #ctrl .ctrlcardrow{grid-template-columns:1fr;}
+  #ctrl .inline-time-editor{grid-template-columns:1fr;}
+}

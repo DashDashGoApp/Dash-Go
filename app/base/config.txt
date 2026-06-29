@@ -1,0 +1,56 @@
+# =====================================================================
+#  config.txt - Raspberry Pi boot settings  (touch calendar kiosk)
+#  NOTE: applies to Raspberry Pi hardware only — skip on other devices.
+#  Display settings match the known-good original (fake KMS). Only
+#  low-risk optimizations applied on top.
+# =====================================================================
+
+# ---- Graphics: FAKE KMS (matches the working original) ----
+# This is dtoverlay=vc4-fkms-v3d, exactly as the original working config
+# used. It creates /dev/dri/card0 (so LightDM/X are happy) AND lets the
+# firmware manage HDMI output (which your monitor/adapter renders cleanly).
+# Full KMS (vc4-kms-v3d) caused a sync-but-black screen on this hardware.
+dtoverlay=vc4-fkms-v3d
+max_framebuffers=2
+
+# ---- Display ----
+display_auto_detect=1
+disable_overscan=1
+
+# ---- GPU memory split ----
+# Original used 32. Fake KMS uses this split (unlike full KMS), so keep a
+# safe value. 32 is the field-tested stable split for the 1080p Pi Zero 2 W
+# Surf/WebKit kiosk and matches README.md: it leaves the most RAM on the
+# 512MB ARM side for WebKit. (16 was too low. Raise to 64 only on >=1GB
+# boards if you see GPU-side framebuffer pressure at 1080p.)
+gpu_mem=32
+
+# ---- Overclock: STOCK (no overclock) ----
+# Original had arm_freq=1200/over_voltage=6, but those were Pi-4 values
+# from the shared config and are tuned for a fanless Pi.
+# Running stock is coolest and safest; the workload is memory-bound anyway.
+# To add mild headroom later: arm_freq=1100, over_voltage=2.
+
+# ---- Trim unused hardware (safe, non-display) ----
+dtparam=audio=off
+camera_auto_detect=0
+dtoverlay=disable-bt
+
+# ---- Faster boot (cosmetic-only changes, no display risk) ----
+# Skip the rainbow splash screen and the firmware's default 1s pause.
+disable_splash=1
+boot_delay=0
+
+# ---- Hardware watchdog (appliance hardening) ----
+# If the system ever hard-freezes, the SoC's watchdog reboots it within
+# ~15s instead of leaving a black screen until someone notices. Pairs with
+# the systemd side (RuntimeWatchdogSec=15) which the installer configures.
+# NOTE: this chip's watchdog maxes out at 15 seconds — never set the
+# systemd value higher than that or the watchdog silently won't engage.
+dtparam=watchdog=on
+
+# =====================================================================
+#  If the screen is ever black at boot: the FIRST thing to restore is
+#  dtoverlay=vc4-fkms-v3d (NOT vc4-kms-v3d, NOT legacy/no-overlay).
+#  Health checks:  vcgencmd measure_temp   /   vcgencmd get_throttled
+# =====================================================================

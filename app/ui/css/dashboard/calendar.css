@@ -1,0 +1,194 @@
+/* ============ CALENDAR (top-left) ============ */
+#calwrap{background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column;}
+#calhead{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:var(--dash-calendar-dow-size);font-weight:600;
+  color:var(--dim);letter-spacing:0.055em;
+  flex:0 0 auto;
+}
+#calhead>div{padding:8px 10px;text-transform:uppercase;}
+.dow-sat{color:var(--sat);} .dow-sun{color:var(--sun);}
+
+#calscroll{
+  flex:1 1 auto;
+  overflow-y:auto;overflow-x:hidden;     /* free native touch-scroll, like the sidebar */
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  position:relative;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+  contain:content;
+  /* Promote the scroll container to its own GPU compositing layer at load,
+     so WebKit doesn't do that work lazily on the FIRST scroll (which caused
+     the "first gesture doesn't take, second one works" lag). translateZ(0)
+     forces the layer up front; will-change tells the compositor to expect
+     scroll-position changes. */
+  transform:translateZ(0);
+  will-change:scroll-position;
+  backface-visibility:hidden;
+}
+#calscroll::-webkit-scrollbar{display:none;}
+
+.weekrow{
+  position:relative;                /* anchor for the absolute .spanbar children */
+  display:grid;grid-template-columns:repeat(7,1fr);
+  border-bottom:1px solid var(--line-soft);
+  height:var(--rowheight);          /* fixed so all rows + columns align */
+  contain:layout style paint;       /* isolate each row so scroll repaints stay cheap */
+}
+.weekrow.alt{ background:var(--altweek); }   /* faint stripe on every other week */
+.dnum .dwrap{display:inline-flex;align-items:flex-start;gap:7px;min-width:0;flex:0 0 auto;}
+.weeknum{
+  display:inline-flex;align-items:center;vertical-align:top;
+  font-family:var(--mono);font-size:12.5px;line-height:1.05;letter-spacing:.03em;
+  color:var(--dimmer);background:rgba(0,0,0,.18);
+  border:1px solid var(--line-soft);border-radius:999px;padding:3px 6px;
+  pointer-events:none;opacity:.86;font-weight:700;margin-top:1px;
+}
+.daycell{
+  border-right:1px solid var(--line-soft);
+  padding:3px 4px 4px;position:relative;
+  display:flex;flex-direction:column;gap:3px;
+  overflow:hidden;
+  cursor:pointer;                    /* whole cell taps to show all events */
+  touch-action:pan-y;
+}
+.daycell .ev,.spanbar{touch-action:pan-y;}
+.daycell .evlist{
+  position:absolute;left:4px;right:4px;top:var(--cell-head);bottom:4px;
+  display:flex;flex-direction:column;gap:3px;
+  overflow:hidden;min-height:0;   /* no per-cell scroll; clip + "+N more" */
+}
+.daycell:last-child{border-right:none;}
+.daycell.other{opacity:0.4;}
+.daycell.today{
+  background:var(--todaywash);
+  /* Theme-colored ring so "today" is spottable at a glance in EVERY theme —
+     inset so the grid doesn't shift; 2px reads clearly from across a room. */
+  box-shadow:inset 0 0 0 2px var(--today);
+  border-radius:3px;
+}
+.dnum{
+  font-family:var(--mono);font-size:var(--dash-day-number-size);font-weight:700;color:var(--fg);
+  display:flex;justify-content:space-between;align-items:flex-start;
+  margin-bottom:2px;
+}
+.daycell.today .dnum .d{
+  color:#0a0a0d;background:var(--today);
+  border-radius:5px;padding:0 7px;font-weight:700;
+}
+.daycell.sat .dnum{color:var(--sat);}
+.daycell.sun .dnum{color:var(--sun);}
+.dnum .wx{font-size:16px;color:var(--dimmer);font-weight:600;min-width:0;overflow:hidden;text-overflow:clip;margin-left:4px;}
+.dnum .wx b{color:var(--dim);font-weight:600;}
+
+.ev{
+  font-family:var(--dash-calendar-event-font);font-size:calc(var(--event-title-size) + var(--dash-calendar-event-size-offset));line-height:1.18;font-weight:var(--dash-calendar-event-weight);
+  padding:3px 6px;border-radius:4px;
+  background:rgba(255,255,255,0.06);
+  border-left:3px solid var(--accent);
+  cursor:pointer;flex:0 0 auto;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  overflow:hidden;
+}
+.ev.pay{background:rgba(154,143,176,0.16);border-left-color:var(--pay);color:#d7c9eb;}
+.ev.holiday{background:rgba(139,180,212,0.13);border-left-color:var(--sat);}
+.ev.birthday{background:rgba(217,192,116,0.14);border-left-color:var(--today);}
+
+/* Multi-day events render as continuous bars laid over the week row (one
+   lane per overlapping event, up to 3 lanes; beyond that they fall back to
+   per-cell entries). Normal day events use an absolute layer with the same
+   top origin as span bars. JS only pushes that layer down for days actually
+   crossed by a span, removing the old header-flow gap entirely. */
+.spanbar{
+  position:absolute;min-height:29px;font-family:var(--dash-calendar-event-font);font-size:calc(var(--event-title-size) + var(--dash-calendar-event-size-offset));line-height:1.18;font-weight:var(--dash-calendar-event-weight);
+  padding:3px 6px;border-radius:4px;z-index:2;box-sizing:border-box;
+  background:rgba(255,255,255,0.09);border-left:3px solid var(--accent);
+  overflow:hidden;white-space:normal;text-overflow:clip;cursor:pointer;
+  display:flex;align-items:center;gap:5px;
+  font-family:inherit;font-weight:inherit;color:inherit;
+}
+.spanbar .spantitle{
+  min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:clip;white-space:normal;overflow-wrap:break-word;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;
+  font-family:inherit;font-size:calc(var(--event-title-size) + var(--dash-calendar-event-size-offset));font-weight:inherit;line-height:1.18;color:inherit;
+}
+.spanbar .spantime{flex:0 0 auto;font-family:var(--mono);font-size:var(--event-time-size);font-weight:600;color:var(--dimmer);line-height:1.18;}
+.spanbar .spantime-end{margin-left:auto;}
+.spanbar .spancont{flex:0 0 auto;color:var(--dim);}
+
+.spanbar.holiday{background:rgba(139,180,212,0.18);border-left-color:var(--sat);}
+.spanbar.pay{background:rgba(154,143,176,0.2);border-left-color:var(--pay);color:#d7c9eb;}
+.spanbar.birthday{background:rgba(217,192,116,0.16);border-left-color:var(--today);}
+.spanbar.other{opacity:0.4;}
+.weekrow .daycell .evlist{margin-top:var(--cell-span-offset,0px);}
+.ev .t{color:var(--dimmer);margin-right:5px;font-family:var(--mono);font-size:var(--event-time-size);font-weight:600;}
+.ev .etitle{font-family:inherit;font-size:calc(var(--event-title-size) + var(--dash-calendar-event-size-offset));font-weight:inherit;line-height:1.18;color:inherit;overflow-wrap:break-word;word-break:break-word;}
+.more{font-size:16px;color:var(--accent);padding:2px 6px;font-family:var(--mono);font-weight:700;}
+.autofit-hidden{display:none!important;}
+
+#snapback{
+  position:absolute;right:14px;bottom:14px;z-index:6;
+  font-family:var(--mono);font-size:17px;letter-spacing:0.05em;
+  background:var(--today);color:#0a0a0d;border:none;
+  padding:10px 18px;border-radius:24px;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+  box-shadow:0 2px 14px rgba(0,0,0,0.5);
+}
+#snapback.show{opacity:1;pointer-events:auto;}
+
+/* 1.2.1-beta.53: light-theme calendar contrast and week-number polish. */
+html[data-theme="paper"] .daycell.other,
+html[data-theme="softmorning"] .daycell.other,
+html[data-theme="daylight"] .daycell.other{opacity:.58;}
+html[data-theme="paper"] .spanbar.other,
+html[data-theme="softmorning"] .spanbar.other,
+html[data-theme="daylight"] .spanbar.other{opacity:.58;}
+html[data-theme="paper"] .ev,
+html[data-theme="softmorning"] .ev,
+html[data-theme="daylight"] .ev{background:rgba(20,28,34,0.078);}
+html[data-theme="paper"] .spanbar,
+html[data-theme="softmorning"] .spanbar,
+html[data-theme="daylight"] .spanbar{background:rgba(20,28,34,0.088);}
+html[data-theme="paper"] .weeknum,
+html[data-theme="softmorning"] .weeknum,
+html[data-theme="daylight"] .weeknum{background:rgba(20,28,34,0.072);color:#4f5a60;}
+html[data-theme="paper"] .ev.pay,
+html[data-theme="softmorning"] .ev.pay,
+html[data-theme="daylight"] .ev.pay,
+html[data-theme="paper"] .spanbar.pay,
+html[data-theme="softmorning"] .spanbar.pay,
+html[data-theme="daylight"] .spanbar.pay{background:rgba(147,102,20,0.165);color:#4d3510;border-left-color:var(--pay);}
+html[data-theme="paper"] .ev.holiday,
+html[data-theme="softmorning"] .ev.holiday,
+html[data-theme="daylight"] .ev.holiday{background:rgba(23,111,143,0.115);}
+html[data-theme="paper"] .ev.birthday,
+html[data-theme="softmorning"] .ev.birthday,
+html[data-theme="daylight"] .ev.birthday,
+html[data-theme="paper"] .spanbar.birthday,
+html[data-theme="softmorning"] .spanbar.birthday,
+html[data-theme="daylight"] .spanbar.birthday{background:rgba(166,106,18,0.125);color:#493613;}
+
+
+/* Compact month-grid rows for app-owned Chores/Maintenance feeds. These are
+   synthetic display rows only; the Agenda and full-day views retain every item. */
+.ev.appcalgroup{display:flex;align-items:center;gap:6px;border-left-width:3px;background:rgba(255,255,255,0.08);}
+.ev.appcalgroup .etitle{min-width:0;flex:1 1 auto;}
+.ev.appcalgroup .appgroup-hint{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--dimmer);font-weight:700;letter-spacing:.035em;}
+#pop.eventpop .appgroup-popup{display:grid;gap:10px;min-width:0;}
+#pop.eventpop .appgroup-note{margin:0;color:var(--dim);font-size:16px;line-height:1.35;}
+#pop.eventpop .appgroup-list{display:grid;gap:8px;}
+#pop.eventpop .appgroup-item{display:grid;gap:3px;width:100%;min-height:52px;padding:9px 11px;text-align:left;border:1px solid var(--line-soft);border-left:4px solid var(--accent);border-radius:9px;background:var(--card);color:var(--fg);font:inherit;appearance:none;-webkit-appearance:none;cursor:pointer;}
+#pop.eventpop .appgroup-item-title{font-weight:760;line-height:1.22;}
+#pop.eventpop .appgroup-item-detail{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;color:var(--dim);font-size:14px;line-height:1.28;}
+#pop.eventpop .appgroup-open-action{width:100%;min-height:48px;border:1px solid var(--accent);border-radius:10px;background:var(--card);color:var(--accent);font:inherit;font-weight:760;appearance:none;-webkit-appearance:none;cursor:pointer;}
+html[data-theme="paper"] .ev.appcalgroup,html[data-theme="softmorning"] .ev.appcalgroup,html[data-theme="daylight"] .ev.appcalgroup{background:rgba(20,28,34,.095);}
+/* Routines calendar group: person cards expand locally without a second modal. */
+#pop.eventpop .routine-calendar-person{display:grid;gap:8px;padding:10px;border:1px solid var(--line-soft);border-radius:10px;background:var(--card)}
+#pop.eventpop .routine-calendar-sessions{display:grid;gap:10px;padding:2px 0 0}
+#pop.eventpop .routine-calendar-session{display:grid;gap:7px;padding:10px;border-left:3px solid var(--accent);background:var(--panel);border-radius:8px}
+#pop.eventpop .routine-calendar-steps{display:grid;gap:6px}
+#pop.eventpop .routine-calendar-step{display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px;line-height:1.3}
+#pop.eventpop .routine-calendar-step input{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto}
+#pop.eventpop .routine-calendar-session small{color:var(--dim);font-weight:750}

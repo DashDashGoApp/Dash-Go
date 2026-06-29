@@ -1,0 +1,255 @@
+/* ============ RESPONSIVE DASHBOARD FIT ============
+   The fit controller applies html[data-fit] from the CSS-pixel viewport.
+   CSS owns geometry; JavaScript only promotes scarce layouts into dock/stack
+   states after a real measurement says the normal sidebar cannot stay usable. */
+:root{
+  --dash-weather-icon-size:clamp(70px,4.2vw,84px);
+  --dash-weather-row-pad:9px 12px;
+  --dash-weather-day-col:58px;
+  --dash-weather-icon-col:40px;
+  --dash-weather-row-icon-size:34px;
+  --dash-agenda-pad:10px 20px 9px;
+  --dash-agenda-time-min:82px;
+}
+:root[data-fit="xl"]{
+  --tier-sidebarwidth-min:300px;
+  --tier-sidebarwidth-max:520px;
+  --tier-rowheight-min:150px;
+  --tier-rowheight-max:300px;
+  --dash-clock-time-size:clamp(82px,7.2vh,120px);
+  --dash-clock-date-size:32px;
+  --dash-clock-suffix-size:32px;
+  --dash-clock-pad:24px 24px 26px;
+  --dash-calendar-dow-size:24px;
+  --dash-day-number-size:26px;
+  --event-title-size:clamp(19px,1.1vw,22px);
+  --event-time-size:17px;
+  --agenda-event-size:clamp(20px,1.15vw,23px);
+  --dash-weather-big-size:clamp(54px,3.25vw,66px);
+  --dash-weather-meta-size:19px;
+  --dash-weather-sub-size:17px;
+  --dash-weather-day-size:22px;
+  --dash-weather-description-size:19px;
+  --dash-weather-temp-size:23px;
+  --dash-weather-icon-size:clamp(84px,4.6vw,106px);
+  --dash-weather-row-icon-size:38px;
+  --dash-weather-row-pad:11px 16px;
+  --dash-agenda-pad:12px 24px 11px;
+  --dash-agenda-time-min:92px;
+  --cell-head:40px;
+  --spanbar-lane-step:33px;
+  --compliment-height:clamp(124px,12vh,200px);
+}
+:root[data-fit="base"]{
+  --tier-sidebarwidth-min:300px;
+  --tier-sidebarwidth-max:520px;
+  --tier-rowheight-min:150px;
+  --tier-rowheight-max:280px;
+  --dash-clock-time-size:82px;
+  --dash-clock-date-size:28px;
+  --dash-clock-suffix-size:28px;
+  --dash-clock-pad:22px 20px 24px;
+  --dash-calendar-dow-size:21px;
+  --dash-day-number-size:23px;
+  --event-title-size:clamp(18px,1.02vw,19px);
+  --event-time-size:16px;
+  --agenda-event-size:clamp(19px,1.08vw,20px);
+  --cell-head:34px;
+  --spanbar-lane-step:30px;
+  --compliment-height:124px;
+}
+:root[data-fit="compact"]{
+  --tier-sidebarwidth-min:280px;
+  --tier-sidebarwidth-max:340px;
+  --tier-rowheight-min:132px;
+  --tier-rowheight-max:168px;
+  --dash-clock-time-size:64px;
+  --dash-clock-date-size:24px;
+  --dash-clock-suffix-size:23px;
+  --dash-clock-pad:16px 16px 18px;
+  --dash-calendar-dow-size:18px;
+  --dash-day-number-size:20px;
+  --event-title-size:17px;
+  --event-time-size:14px;
+  --agenda-event-size:17px;
+  --dash-weather-big-size:46px;
+  --dash-weather-meta-size:15px;
+  --dash-weather-sub-size:14px;
+  --dash-weather-day-size:17px;
+  --dash-weather-description-size:15px;
+  --dash-weather-temp-size:17px;
+  --dash-weather-icon-size:68px;
+  --dash-weather-row-icon-size:28px;
+  --dash-weather-row-pad:7px 10px;
+  --dash-weather-day-col:50px;
+  --dash-weather-icon-col:32px;
+  --dash-agenda-pad:8px 16px;
+  --dash-agenda-time-min:70px;
+  --cell-head:30px;
+  --spanbar-lane-step:27px;
+  --compliment-height:112px;
+}
+:root[data-fit="dense"]{
+  --tier-sidebarwidth-min:240px;
+  --tier-sidebarwidth-max:260px;
+  --tier-rowheight-min:104px;
+  --tier-rowheight-max:132px;
+  --dash-clock-time-size:52px;
+  --dash-clock-date-size:20px;
+  --dash-clock-suffix-size:19px;
+  --dash-clock-pad:12px 13px 14px;
+  --dash-calendar-dow-size:16px;
+  --dash-day-number-size:18px;
+  --event-title-size:16px;
+  --event-time-size:13px;
+  --agenda-event-size:16px;
+  --dash-weather-big-size:39px;
+  --dash-weather-meta-size:14px;
+  --dash-weather-sub-size:13px;
+  --dash-weather-day-size:15px;
+  --dash-weather-description-size:14px;
+  --dash-weather-temp-size:16px;
+  --dash-weather-icon-size:56px;
+  --dash-weather-row-icon-size:25px;
+  --dash-weather-row-pad:6px 9px;
+  --dash-weather-day-col:45px;
+  --dash-weather-icon-col:29px;
+  --dash-agenda-pad:7px 13px;
+  --dash-agenda-time-min:60px;
+  --cell-head:27px;
+  --spanbar-lane-step:24px;
+  --compliment-height:96px;
+}
+:root[data-fit="min"]{
+  --tier-sidebarwidth-min:240px;
+  --tier-sidebarwidth-max:260px;
+  --tier-rowheight-min:96px;
+  --tier-rowheight-max:116px;
+  --dash-clock-time-size:44px;
+  --dash-clock-date-size:18px;
+  --dash-clock-suffix-size:17px;
+  --dash-clock-pad:8px 12px 9px;
+  --dash-calendar-dow-size:15px;
+  --dash-day-number-size:17px;
+  --event-title-size:15px;
+  --event-time-size:12px;
+  --agenda-event-size:15px;
+  --dash-weather-big-size:36px;
+  --dash-weather-meta-size:13px;
+  --dash-weather-sub-size:12px;
+  --dash-weather-day-size:14px;
+  --dash-weather-description-size:13px;
+  --dash-weather-temp-size:15px;
+  --dash-weather-icon-size:50px;
+  --dash-weather-row-icon-size:23px;
+  --dash-weather-row-pad:6px 8px;
+  --dash-weather-day-col:42px;
+  --dash-weather-icon-col:28px;
+  --dash-agenda-pad:6px 12px;
+  --dash-agenda-time-min:56px;
+  --cell-head:26px;
+  --spanbar-lane-step:23px;
+  --compliment-height:84px;
+}
+
+#app,#calwrap,#sidebar{min-width:0;min-height:0;}
+#calhead{font-size:var(--dash-calendar-dow-size);}
+#calhead>div{padding:clamp(5px,.75vh,8px) clamp(5px,.65vw,10px);}
+.dnum{font-size:var(--dash-day-number-size);}
+.daycell .evlist{top:var(--cell-head);}
+.dnum .wx{font-size:clamp(12px,calc(var(--dash-day-number-size) * .7),16px);}
+.ev,.spanbar{overflow-wrap:break-word;}
+.spanbar .spantitle{white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;}
+
+#clock{padding:var(--dash-clock-pad);}
+.agday{padding:var(--dash-agenda-pad);}
+.agev{gap:clamp(7px,1vw,12px);margin-top:clamp(5px,.7vh,7px);}
+.agev .at{min-width:var(--dash-agenda-time-min);font-size:clamp(14px,calc(var(--agenda-event-size) * .95),18px);}
+.agev .at .end,.agev .at.allday{font-size:clamp(12px,calc(var(--agenda-event-size) * .82),16px);}
+
+#wxnow{padding:clamp(8px,1.2vh,13px) clamp(10px,1.1vw,20px) clamp(8px,1vh,11px);gap:clamp(9px,1.15vw,22px);}
+#wxnow .ico{font-size:var(--dash-weather-icon-size);}
+.wxday{grid-template-columns:var(--dash-weather-day-col) var(--dash-weather-icon-col) minmax(0,1fr) minmax(64px,max-content);gap:clamp(6px,.75vw,10px);padding:var(--dash-weather-row-pad);}
+.wxday .ic{font-size:var(--dash-weather-row-icon-size);}
+
+#compliment{
+  height:var(--compliment-height);
+  min-height:var(--compliment-height);
+  max-height:var(--compliment-height);
+  flex-basis:var(--compliment-height);
+}
+:root[data-fit="dense"] #compliment .cb-launch{width:42px;min-width:42px;height:78px;min-height:78px;border-radius:0 15px 15px 0;}
+:root[data-fit="dense"] #compliment .cb-launch-dots{gap:6px;}
+:root[data-fit="dense"] #compliment .cb-launch-dots span{width:7px;height:7px;}
+:root[data-fit="dense"] #sun{font-size:17px;gap:8px;}
+:root[data-fit="dense"] #sun .moon{font-size:58px;}
+:root[data-fit="dense"] #comptext{min-height:66px;padding:8px 24px;max-width:min(82%,calc(100vw - 250px));}
+:root[data-fit="min"] #compliment .cb-launch{width:38px;min-width:38px;height:66px;min-height:66px;border-radius:0 13px 13px 0;}
+:root[data-fit="min"] #compliment .cb-launch-dots{gap:5px;}
+:root[data-fit="min"] #compliment .cb-launch-dots span{width:6px;height:6px;}
+:root[data-fit="min"] #sun{font-size:14px;gap:6px;}
+:root[data-fit="min"] #sun .moon{font-size:46px;}
+:root[data-fit="min"] #comptext{min-height:54px;padding:5px 20px;max-width:calc(100% - 138px);}
+:root[data-fit="min"] .dnum .wx{display:none;}
+
+/* Step 1: retain current conditions, dock only the long forecast list. */
+.fitdock-inline-toggle{
+  display:none;align-items:center;justify-content:space-between;gap:10px;
+  width:100%;min-height:46px;padding:0 14px;border:0;border-top:1px solid var(--line-soft);
+  background:var(--panel);color:var(--fg);font:800 15px/1 var(--sans);text-align:left;
+}
+.fitdock-inline-toggle .fitdock-tab-detail{color:var(--dim);font-weight:700;}
+.fitdock-inline-toggle:focus-visible,#fitdocktabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}
+#app.fit-dock-weather:not(.fit-dock-sidebar):not(.fit-stack) #wx14{display:none;}
+#app.fit-dock-weather:not(.fit-dock-sidebar):not(.fit-stack) #fitdock-weather-toggle{display:flex;}
+
+/* Step 2: keep Agenda/clock visible and expose full Weather through one tab. */
+#app.fit-dock-sidebar:not(.fit-stack) #weather{display:none;}
+#app.fit-dock-sidebar:not(.fit-stack) #fitdock-weather-compact{display:flex;}
+
+/* Step 3: calendar-first stacked layout. The existing clock becomes a slim
+   top strip, and Agenda/Weather remain accessible through docked real buttons. */
+#app.fit-stack{
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) var(--compliment-height);
+  grid-template-areas:"clock" "calendar" "compliment";
+}
+#app.fit-stack #sidebar,#app.fit-stack #agenda{display:contents;}
+#app.fit-stack #clock{
+  grid-area:clock;display:flex;align-items:center;gap:10px;
+  padding:var(--dash-clock-pad);border-bottom:1px solid var(--line);text-align:left;
+}
+#app.fit-stack #fitclockinfo{display:flex;align-items:baseline;gap:10px;min-width:0;}
+#app.fit-stack #cdate{font-size:var(--dash-clock-date-size);}
+#app.fit-stack #ctime{margin-top:0;font-size:var(--dash-clock-time-size);}
+#app.fit-stack #agendalist,#app.fit-stack #weather,#app.fit-stack #fitdock-weather-compact{display:none;}
+#fitdocktabs{
+  position:static;z-index:7;display:none;gap:7px;
+  padding:5px;border:1px solid var(--line-soft);border-radius:999px;background:var(--bg);
+}
+#fitdocktabs button{
+  min-height:38px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--fg);
+  padding:0 12px;font:800 13px/1 var(--sans);
+}
+#app.fit-stack #fitdocktabs{display:flex;flex:0 0 auto;margin-left:auto;}
+
+/* Reusable measured dock sheet. Sources are moved, never cloned, so existing
+   weather/agenda event handlers, scroll policy, and cached data stay intact. */
+#fitdocksheet[hidden]{display:none!important;}
+#fitdocksheet{
+  position:fixed;inset:0;z-index:1180;display:grid;place-items:center;
+  padding:clamp(10px,3vw,28px);background:rgba(0,0,0,.72);color:var(--fg);
+}
+#fitdockpanel{
+  width:min(760px,100%);height:min(92vh,860px);min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);
+  border:1px solid var(--line);border-radius:20px;overflow:hidden;background:linear-gradient(var(--panel),var(--bg));box-shadow:0 24px 80px rgba(0,0,0,.55);
+}
+#fitdockhead{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:62px;padding:12px 16px;border-bottom:1px solid var(--line);}
+#fitdocktitle{font-size:clamp(20px,2vw,27px);font-weight:850;}
+#fitdockclose{width:46px;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);font:900 30px/1 var(--sans);}
+#fitdockbody{min-height:0;overflow:hidden;background:var(--bg);}
+#fitdockbody>#agenda,#fitdockbody>#weather{display:flex;height:100%;min-height:0;border:0;}
+#fitdockbody>#agenda{width:100%;}
+#fitdockbody>#wx14{display:flex;height:100%;min-height:0;}
+#fitdockbody #fitdock-weather-toggle,#fitdockbody #fitdock-weather-compact{display:none!important;}
+@media(prefers-reduced-motion:reduce){#fitdocksheet{animation:none;}}

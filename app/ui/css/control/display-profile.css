@@ -1,0 +1,56 @@
+/* Profile / Display controlled surface layout.
+   One centered 1190px content rail owns wide Control bodies. Child grids fill that
+   rail; short action buttons cap inside their tracks instead of left-pinning a
+   smaller group and creating a one-sided gap. */
+#ctrl{--ctrl-editor-max:1190px;--ctrl-action-button-max:420px;}
+#ctrl .ctrlcontentrail,#ctrluisettings{width:min(100%,var(--ctrl-editor-max));box-sizing:border-box;margin-inline:auto;}
+#ctrluisettings{display:flex;flex-direction:column;gap:10px;}
+#ctrluisettings .settinggrid-calendar-general{display:grid;grid-template-columns:1fr;gap:10px;width:100%;box-sizing:border-box;margin-inline:0;}
+#ctrluisettings .settinggrid-calendar-profile{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;box-sizing:border-box;margin-inline:0;}
+#ctrluisettings .calendarprofilegroup{display:flex;flex-direction:column;gap:8px;}
+#ctrluisettings .calendarprofilegroup-head{padding:1px 2px 0;}
+#ctrluisettings .calendarprofilegroup-title{color:var(--fg);font-size:15px;font-weight:850;letter-spacing:.01em;}
+#ctrluisettings .calendarprofilegroup-detail{margin-top:3px;color:var(--dimmer);font-size:12px;line-height:1.28;}
+#ctrluisettings .settingcard--event-text{width:100%;}
+#ctrluisettings .weeknumber-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px;}
+#ctrluisettings .weeknumber-buttons .cbtn{min-height:48px;}
+#ctrluisettings .settingcard{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:118px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,.04);}
+#ctrluisettings .settinglabel{color:var(--dim);font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;}
+#ctrluisettings .settingvalue{font-family:var(--mono);color:var(--fg);font-size:24px;line-height:1;}
+#ctrluisettings .settingbuttons{margin-top:auto;}
+#ctrluisettings .settingbuttons .cbtn{flex:1 1 0;min-height:48px;min-width:48px;font-size:22px;font-weight:900;}
+#ctrlscreensettings{display:flex;flex-direction:column;gap:12px;}
+.inline-time-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,180px) auto auto;gap:10px;align-items:center;margin-top:10px;padding:12px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.035);}.inline-time-copy{font-weight:850;}.inline-time-editor .cbtn{min-width:48px;min-height:48px;}
+
+/* Performance Profile chooses or restores a device tier. Individual controls
+   intentionally live beside the feature they affect. */
+#ctrlprofile{display:flex;flex-direction:column;gap:12px;}
+#ctrlprofile .profiletop{padding:14px 16px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,.04);}
+#ctrlprofile .profileeyebrow,#ctrlprofile .profilegroup-title{color:var(--dimmer);font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.08em;}
+#ctrlprofile .profiletitle{color:var(--fg);font-size:24px;font-weight:900;line-height:1.05;margin-top:3px;}
+#ctrlprofile .profiledetail{color:var(--dim);font-size:14px;line-height:1.35;margin-top:6px;}
+#ctrlprofile .profilebadge{flex:0 0 auto;border-radius:999px;padding:7px 10px;background:rgba(127,214,168,.14);border:1px solid rgba(127,214,168,.24);color:var(--accent);font-family:var(--mono);font-size:12px;text-transform:uppercase;}
+#ctrlprofile .profilebadge.custom{color:var(--ctrl-warn-fg);background:var(--ctrl-warn-bg);border-color:var(--ctrl-warn-border);}
+#ctrlprofile .profilechanges{border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.028);overflow:hidden;}
+#ctrlprofile .profilechanges>summary{min-height:52px;display:flex;align-items:center;padding:0 13px;cursor:pointer;font-weight:850;color:var(--fg);touch-action:manipulation;}
+#ctrlprofile .profilechanges-list{display:grid;gap:8px;margin:0;padding:0 12px 12px;color:var(--dim);}
+#ctrlprofile .profilechange{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.9fr);gap:10px;align-items:center;padding:10px;border:1px solid var(--line-soft);border-radius:10px;background:rgba(255,255,255,.022);}
+#ctrlprofile .profilechange-title{color:var(--fg);font-weight:850;font-size:14px;}
+#ctrlprofile .profilechange-values{display:grid;gap:3px;font-size:12px;line-height:1.3;color:var(--dimmer);}
+#ctrlprofile .profilechange-value.current{color:var(--accent);font-weight:800;}
+#ctrlprofile .profilegrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+#ctrlprofile .profilegrid .profileoption{min-height:72px;justify-content:flex-start;text-align:left;padding:12px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,.04);}
+#ctrlprofile .profilegrid .profileoption .bt{font-size:15px;line-height:1.15;}
+#ctrlprofile .profilegrid .profileoption .bd{font-size:12px;line-height:1.25;margin-top:4px;}
+#ctrlprofile .profilegrid .profileoption.on{background:rgba(127,214,168,.15);border-color:rgba(127,214,168,.32);}
+#ctrlprofile .profile-reset-note{margin:0;}
+
+@media(max-width:1100px){
+  #ctrlprofile .profilegrid,#ctrluisettings .settinggrid-calendar-profile{grid-template-columns:1fr;}
+  #ctrlprofile .profilechange{grid-template-columns:1fr;}
+  .inline-time-editor{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:760px){
+  #ctrluisettings .settinggrid,#ctrluisettings .settinggrid-calendar-general,#ctrluisettings .settinggrid-calendar-profile{grid-template-columns:1fr;width:100%;max-width:none;}
+  .inline-time-editor{grid-template-columns:1fr;}
+}

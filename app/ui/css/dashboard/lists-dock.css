@@ -1,0 +1,171 @@
+/* Optional dashboard Lists ticker. It is a real in-flow third grid row, never
+   a translated overlay: Calendar and sidebar shrink in place when it appears. */
+:root{
+  --listsdock-compact-h:64px;
+  --listsdock-expanded-h:clamp(142px,28vh,238px);
+}
+#app.lists-dock-visible{
+  grid-template-rows:minmax(0,1fr) var(--compliment-height) var(--listsdock-compact-h);
+  grid-template-areas:
+    "calendar   sidebar"
+    "compliment sidebar"
+    "listsdock  listsdock";
+}
+#app.lists-dock-visible.lists-dock-expanded{
+  grid-template-rows:minmax(0,1fr) var(--compliment-height) var(--listsdock-expanded-h);
+}
+#app.lists-dock-visible #calwrap,
+#app.lists-dock-visible #sidebar,
+#app.lists-dock-visible #calscroll{min-height:0;}
+
+#listsdock{
+  grid-area:listsdock;
+  display:none;
+  grid-template-rows:auto minmax(0,1fr);
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+  background:var(--bg);
+  color:var(--fg);
+  border-top:1px solid var(--line);
+}
+#app.lists-dock-visible #listsdock{display:grid;}
+.listsdock-head{
+  min-width:0;
+  min-height:var(--listsdock-compact-h);
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:8px 16px;
+  background:var(--bg);
+}
+.listsdock-summary{display:flex;align-items:baseline;gap:8px;white-space:nowrap;}
+.listsdock-title{font-size:17px;font-weight:850;line-height:1.1;}
+.listsdock-count{color:var(--dim);font-size:14px;font-weight:750;}
+.listsdock-sync-warning{min-width:44px;min-height:44px;border:1px solid var(--accent);border-radius:999px;background:var(--card);color:var(--accent);padding:0 11px;font:850 13px/1 var(--sans);white-space:nowrap;}
+.listsdock-sync-warning:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.listsdock-ticker{
+  min-width:0;
+  min-height:44px;
+  overflow:hidden;
+  border:1px solid var(--line-soft);
+  border-radius:999px;
+  background:var(--panel);
+  color:var(--fg);
+  padding:0;
+  font:750 15px/1 var(--sans);
+  text-align:left;
+}
+.listsdock-ticker-viewport{display:block;overflow:hidden;min-width:0;width:100%;}
+.listsdock-ticker-track{display:flex;width:max-content;transform:translate3d(0,0,0);}
+.listsdock-ticker-copy{display:block;flex:0 0 auto;padding:0 48px 0 14px;white-space:nowrap;line-height:42px;}
+.listsdock-ticker.is-moving .listsdock-ticker-track{animation:listsdock-ticker-crawl var(--listsdock-ticker-seconds,42s) linear infinite;will-change:transform;}
+.listsdock-ticker:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.listsdock-ticker:focus-visible .listsdock-ticker-track{animation-play-state:paused;}
+@keyframes listsdock-ticker-crawl{from{transform:translate3d(0,0,0);}to{transform:translate3d(-50%,0,0);}}
+.listsdock-action{
+  min-height:46px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--card);
+  color:var(--fg);
+  padding:0 14px;
+  font:800 15px/1 var(--sans);
+  white-space:nowrap;
+}
+.listsdock-action.primary{border-color:var(--accent);color:var(--accent);}
+.listsdock-action:focus-visible,.listsdock-tab:focus-visible,.listsdock-check:focus-visible,.listsdock-task-title:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.listsdock-action:disabled,.listsdock-check:disabled{opacity:.54;cursor:default;}
+.listsdock-body{
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  padding:0 16px 12px;
+}
+.listsdock-body::-webkit-scrollbar{display:none;}
+#app.lists-dock-visible:not(.lists-dock-expanded) .listsdock-body{display:none;}
+.listsdock-tabs{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:0 0 10px;scrollbar-width:none;}
+.listsdock-tabs::-webkit-scrollbar{display:none;}
+.listsdock-tab{
+  min-height:42px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--panel);
+  color:var(--dim);
+  padding:0 14px;
+  font:800 14px/1 var(--sans);
+  white-space:nowrap;
+}
+.listsdock-tab.on{border-color:var(--accent);background:var(--card);color:var(--fg);}
+.listsdock-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin:0 0 10px;}
+.listsdock-add{text-align:left;overflow:hidden;text-overflow:ellipsis;}
+.listsdock-task-list{display:grid;gap:7px;}
+.listsdock-task{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr);
+  align-items:center;
+  min-width:0;
+  min-height:46px;
+  border:1px solid var(--line-soft);
+  border-radius:14px;
+  background:var(--panel);
+  overflow:hidden;
+}
+.listsdock-check{
+  width:44px;
+  min-height:44px;
+  border:0;
+  border-right:1px solid var(--line-soft);
+  background:transparent;
+  color:var(--accent);
+  font:900 20px/1 var(--sans);
+}
+.listsdock-task-title{
+  display:grid;
+  gap:2px;
+  min-width:0;
+  min-height:44px;
+  border:0;
+  background:transparent;
+  color:var(--fg);
+  text-align:left;
+  padding:7px 13px;
+  font:700 16px/1.2 var(--sans);
+  overflow:hidden;
+}
+.listsdock-task-title-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.listsdock-task-person{min-width:0;color:var(--accent);font:800 12px/1.2 var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.listsdock-empty{min-height:64px;display:grid;place-items:center;border:1px dashed var(--line);border-radius:14px;color:var(--dim);font-size:15px;text-align:center;padding:10px;}
+.listsdock-task-status{margin-top:9px;color:var(--fg);font-size:14px;line-height:1.35;}
+
+@media(prefers-reduced-motion:reduce){
+  .listsdock-ticker.is-moving .listsdock-ticker-track{animation:none;transform:translate3d(0,0,0);}
+}
+@media(max-width:900px){
+  :root{--listsdock-compact-h:58px;--listsdock-expanded-h:clamp(128px,27vh,174px);}
+  .listsdock-head{padding:6px 10px;gap:7px;}
+  .listsdock-body{padding:0 10px 10px;}
+  .listsdock-action{min-height:42px;padding:0 11px;font-size:14px;}
+  .listsdock-ticker{min-height:40px;font-size:14px;}
+  .listsdock-ticker-copy{line-height:38px;padding-right:40px;}
+  .listsdock-title{font-size:16px;}
+  .listsdock-count{font-size:13px;}
+}
+@media(max-width:640px){
+  .listsdock-summary{gap:5px;}
+  .listsdock-title{font-size:14px;}
+  .listsdock-count{font-size:12px;}
+  .listsdock-toolbar{grid-template-columns:1fr;}
+}
+
+/* Calendar-first fit mode takes precedence over the optional task ticker. The
+   dock remains enabled in its local state and returns automatically when the
+   viewport grows; it never steals the only usable calendar area on min panels. */
+#app.fit-stack.lists-dock-visible{
+  grid-template-rows:auto minmax(0,1fr) var(--compliment-height);
+  grid-template-areas:"clock" "calendar" "compliment";
+}
+#app.fit-stack.lists-dock-visible #listsdock{display:none;}

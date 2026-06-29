@@ -1,0 +1,141 @@
+/* 1.2.1-beta.38: Display > Location should be task-focused, compact,
+   and include a static OpenStreetMap preview so the selected region can be
+   verified on the kiosk before saving. */
+#ctrlloc.locpanel{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+  width:100%;
+}
+#ctrlloc .loccard,
+#ctrlloc .loceditor,
+#ctrlloc .locresult{
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  background:rgba(255,255,255,0.035);
+  box-shadow:none;
+}
+#ctrlloc .loccard{
+  display:grid;
+  grid-template-columns:minmax(250px,0.82fr) minmax(260px,1fr);
+  gap:12px;
+  padding:12px;
+  align-items:stretch;
+}
+#ctrlloc .locinfo{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:7px;
+}
+#ctrlloc .loceyebrow{
+  color:var(--dimmer);
+  font-size:11px;
+  font-weight:850;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+#ctrlloc .loctitle{
+  color:var(--fg);
+  font-size:21px;
+  font-weight:900;
+  line-height:1.08;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#ctrlloc .loccoords{
+  color:var(--dim);
+  font-family:var(--mono);
+  font-size:13px;
+}
+#ctrlloc .locactions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:4px;
+}
+#ctrlloc .locactions .actionbtn{
+  min-height:56px;
+  padding:8px 10px;
+}
+#ctrlloc .locactions .actionbtn .bt{font-size:14px;}
+#ctrlloc .locactions .actionbtn .bd{font-size:11.5px;margin-top:3px;}
+#ctrlloc .locmapcard{
+  min-height:156px;
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-sm);
+  overflow:hidden;
+  background:rgba(0,0,0,0.16);
+  position:relative;
+}
+#ctrlloc .locmapimg{
+  width:100%;
+  height:100%;
+  min-height:156px;
+  object-fit:cover;
+  display:block;
+}
+#ctrlloc .locmapfallback{
+  display:none;
+  min-height:156px;
+  align-items:center;
+  justify-content:center;
+  color:var(--dim);
+  font-size:13px;
+}
+#ctrlloc .locmapfallback.show{display:flex;}
+#ctrlloc .loceditor{
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+#ctrlloc .locresults{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+#ctrlloc .locresult{
+  padding:10px;
+  display:grid;
+  grid-template-columns:140px minmax(0,1fr);
+  gap:10px;
+  align-items:stretch;
+}
+#ctrlloc .locresult .locmapcard,
+#ctrlloc .locresult .locmapimg,
+#ctrlloc .locresult .locmapfallback{
+  min-height:96px;
+}
+#ctrlloc .locresultinfo{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+#ctrlloc .locresultinfo .loctitle{font-size:15px;}
+#ctrlloc .locresultinfo .cbtn{margin-top:auto;min-height:var(--ctrl-tap-min);}
+@media(max-width:1100px){
+  #ctrlloc .loccard,
+  #ctrlloc .locresults{grid-template-columns:1fr;}
+}
+@media(max-width:760px){
+  #ctrlloc .locactions,
+  #ctrlloc .locresult{grid-template-columns:1fr;}
+}
+
+/* Security timing is one mutually-exclusive decision. Keep short and longer
+   sessions in count-aware rows instead of a thin seven-option toolbar. */
+#ctrlsecurity .locktiming-body{display:flex;flex-direction:column;gap:12px;}
+#ctrlsecurity .locktiming-cluster{display:flex;flex-direction:column;gap:7px;}
+#ctrlsecurity .locktiming-label{color:var(--dimmer);font-size:12px;font-weight:850;letter-spacing:.075em;text-transform:uppercase;}
+#ctrlsecurity .locktiming-grid{display:grid;gap:8px;}
+#ctrlsecurity .locktiming-grid-short{grid-template-columns:repeat(3,minmax(0,1fr));}
+#ctrlsecurity .locktiming-grid-long{grid-template-columns:repeat(4,minmax(0,1fr));}
+#ctrlsecurity .locktiming-grid .cbtn.actionbtn{min-height:64px;padding:9px 10px;text-align:left;}
+#ctrlsecurity .locktiming-grid .cbtn.actionbtn .bt{font-size:15px;line-height:1.12;}
+#ctrlsecurity .locktiming-grid .cbtn.actionbtn .bd{font-size:12px;line-height:1.2;margin-top:3px;}
+@media(max-width:1100px){#ctrlsecurity .locktiming-grid-short,#ctrlsecurity .locktiming-grid-long{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:760px){#ctrlsecurity .locktiming-grid-short,#ctrlsecurity .locktiming-grid-long{grid-template-columns:1fr;}}

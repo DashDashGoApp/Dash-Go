@@ -1,0 +1,198 @@
+/* 1.1.0 control-panel polish: clearer sections, calmer buttons, touch-friendly cards. */
+.ctrlhead{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:0 0 10px 0;}
+.ctrlsubtitle{font-size:14px;line-height:1.35;color:var(--dimmer);margin-top:3px;}
+#ctrlpanel{padding:24px 28px 26px;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015)),var(--bg);box-shadow:0 18px 55px rgba(0,0,0,0.52);}
+#ctrlmsg{background:rgba(0,0,0,0.18);border:1px solid transparent;border-radius:10px;padding:8px 10px;margin:10px 0 4px;min-height:1.2em;}
+#ctrlmsg:empty{padding:0;border:0;background:transparent;margin:0;min-height:0;}
+.ctrltabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:14px 0 14px;background:var(--bg);padding:6px 0 10px;}
+.ctrltabs .cbtn{min-height:42px;padding:8px 10px;font-size:15px;border-radius:999px;background:rgba(255,255,255,0.045);color:var(--dim);}
+.ctrltabs .cbtn.on{color:var(--fg);background:rgba(127,214,168,0.18);box-shadow:inset 0 0 0 1px rgba(127,214,168,0.24);}
+.ctrlsec{border-radius:14px;margin:12px 0;background:rgba(255,255,255,0.032);box-shadow:inset 0 1px 0 rgba(255,255,255,0.035);}
+.ctrlsec>summary{padding:14px 16px;font-size:14px;color:var(--fg);letter-spacing:0.07em;}
+.ctrlsecbody{padding:0 16px 16px;}
+.ctrlrow{gap:9px;}
+.ctrlrow.compact .cbtn{min-height:38px;padding:7px 12px;font-size:14px;}
+.ctrlrow.actiongrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;align-items:stretch;width:100%;}
+.actiongrid>.cbtn{width:100%;min-height:70px;justify-content:flex-start;text-align:left;}
+.cbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;transition:background 0.08s ease,border-color 0.08s ease,transform 0.08s ease;}
+.cbtn:active{transform:translateY(1px);}
+.cbtn.primary{background:rgba(127,214,168,0.16);border-color:rgba(127,214,168,0.58);}
+.cbtn.actionbtn{flex-direction:column;align-items:flex-start;padding:11px 13px;line-height:1.2;}
+.cbtn.actionbtn .bt{font-weight:700;font-size:16px;color:var(--fg);}
+.cbtn.actionbtn .bd{font-size:12px;color:var(--dimmer);line-height:1.28;margin-top:2px;}
+.cbtn.danger{background:var(--ctrl-danger-bg);border-color:var(--ctrl-danger-border);color:var(--ctrl-danger-fg);}
+.ctrlgrid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
+.ctrlgrid .stat{border-radius:11px;padding:10px 12px;background:rgba(255,255,255,0.045);}
+.ctrlmini{font-size:14px;color:var(--dimmer);margin:8px 0 10px;}
+.ctrltable th,.ctrltable td{padding:8px 7px;}
+@media (max-width:760px){
+  .ctrltabs{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ctrltabs .cbtn:last-child{grid-column:1 / -1;}
+  .ctrlrow.actiongrid{grid-template-columns:1fr;}
+}
+
+/* 1.1.0 alpha correction: keep Control sections as one consistent full-width stack.
+   The earlier two-column experiment made the lower accordions look staggered on the kiosk. */
+#ctrlpage-control.show{display:flex;flex-direction:column;gap:10px;align-items:stretch;}
+#ctrlpage-control .ctrlsec{margin:0;width:100%;grid-column:1 / -1;}
+/* Tables use .ctrltable-scroll; ordinary card bodies do not become scrollers. */
+#ctrlpage-control .ctrlsecbody{overflow:visible;}
+
+/* 1.1.0 Section 2: Update / Restore / Backup belongs under Control. */
+#ctrlupdate{display:flex;flex-direction:column;gap:12px;}
+#ctrlupdatelog{margin-top:10px;}
+.maintenancegrid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));}
+.maintenanceactions{margin-top:2px;}
+.maintenanceactions .danger,
+.maintenanceactions .actionbtn{min-height:76px;align-items:flex-start;}
+.compacttable td:first-child{font-family:var(--mono);font-size:12px;word-break:break-word;}
+.warntext{color:var(--ctrl-warn-fg);}
+@media(max-width:760px){.maintenancegrid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+
+/* 1.1.0 Section 3: health summary / status-at-a-glance. */
+#ctrlhealth{display:flex;flex-direction:column;gap:12px;}
+.healthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
+.healthtop.ok{border-color:rgba(127,214,168,0.38);background:rgba(127,214,168,0.10);}
+.healthtop.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.09);}
+.healthtop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.09);}
+.healthlabel{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
+.healthstate{font-size:28px;font-weight:800;line-height:1.05;margin-top:2px;}
+.healthstamp{font-family:var(--mono);font-size:12px;color:var(--dimmer);white-space:nowrap;}
+.healthgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px;}
+.healthpill{min-height:58px;border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.075);display:flex;flex-direction:column;justify-content:center;gap:3px;}
+.healthpill.ok{border-color:rgba(127,214,168,0.34);}
+.healthpill.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.055);}
+.healthpill.bad{border-color:rgba(255,138,138,0.42);background:rgba(255,138,138,0.06);}
+.healthpill.unknown{opacity:0.78;}
+.healthpill .hl{font-family:var(--mono);font-size:11px;letter-spacing:0.10em;text-transform:uppercase;color:var(--dimmer);}
+.healthpill .hv{font-size:17px;font-weight:700;color:var(--fg);line-height:1.1;}
+.healthactions{margin-top:0;}
+@media(max-width:760px){.healthtop{align-items:flex-start;flex-direction:column;}.healthstamp{white-space:normal;}.healthstate{font-size:24px;}}
+
+
+/* 1.1.0 Section 4: clearer update / rollback / backup visibility. */
+.maintnotice{border-radius:13px;padding:12px 14px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
+.maintnotice.ok{border-color:rgba(127,214,168,0.34);background:rgba(127,214,168,0.08);}
+.maintnotice.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.08);}
+.maintnotice.bad{border-color:rgba(255,138,138,0.42);background:rgba(255,138,138,0.08);}
+.maintnotice .mtitle{font-weight:800;font-size:17px;line-height:1.15;}
+.maintnotice .mdetail{font-size:13px;color:var(--dimmer);line-height:1.35;margin-top:3px;}
+.maintenancegrid .stat.quiet{box-shadow:none;background:rgba(255,255,255,0.035);}
+.maintenancegrid .stat.ok{box-shadow:inset 0 0 0 1px rgba(127,214,168,0.24);}
+.maintenancegrid .stat.warn{box-shadow:inset 0 0 0 1px rgba(255,213,138,0.30);background:rgba(255,213,138,0.055);}
+.maintenancegrid .stat.bad{box-shadow:inset 0 0 0 1px rgba(255,138,138,0.34);background:rgba(255,138,138,0.055);}
+.maintenancegrid .stat.unknown{opacity:0.78;}
+.update-detail{border-left:3px solid rgba(255,255,255,0.12);padding-left:10px;}
+.ctrlsubhead{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);margin:2px 0 0;}
+.backuptable th:nth-child(2),.backuptable td:nth-child(2){white-space:nowrap;}
+@media(max-width:900px){.maintenancegrid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.maintenancegrid{grid-template-columns:1fr;}}
+
+/* 1.1.0 Section 5: doctor/status integration. */
+.doctorcard{border:1px solid var(--line-soft);border-radius:14px;padding:13px 15px;background:rgba(255,255,255,0.04);margin:10px 0;}
+.doctorcard.ok{border-color:rgba(127,214,168,0.30);background:rgba(127,214,168,0.075);}
+.doctorcard.warn{border-color:rgba(255,213,138,0.34);background:rgba(255,213,138,0.075);}
+.doctorcard.bad{border-color:rgba(255,138,138,0.34);background:rgba(255,138,138,0.075);}
+.doctorhead{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;}
+.doctorlabel{font-size:12px;color:var(--dimmer);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;}
+.doctorstate{font-size:20px;color:var(--fg);font-weight:800;margin-top:2px;}
+.doctorstamp{font-family:var(--mono);font-size:12px;color:var(--dimmer);text-align:right;}
+.doctormeta{font-family:var(--mono);font-size:13px;color:var(--dim);margin-top:8px;}
+.doctorpolicy{font-size:12px;line-height:1.3;color:var(--dimmer);margin-top:5px;}
+.doctorissues{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.doctorissue{font-size:13px;line-height:1.35;color:var(--dim);border-left:3px solid var(--line);padding-left:8px;}
+.doctorissue.warn{border-left-color:#ffd58a;}
+.doctorissue.bad{border-left-color:#ff8a8a;}
+
+/* 1.1.0 Section 6: terminal availability/status polish. */
+#ctrlterminal{display:flex;flex-direction:column;gap:12px;}
+.terminaltop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:13px 15px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);}
+.terminaltop.ok{border-color:rgba(127,214,168,0.34);background:rgba(127,214,168,0.08);}
+.terminaltop.warn{border-color:rgba(255,213,138,0.36);background:rgba(255,213,138,0.075);}
+.terminaltop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.075);}
+.terminaltop.unknown{opacity:0.82;}
+.terminallabel{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
+.terminalstate{font-size:22px;font-weight:800;color:var(--fg);line-height:1.08;margin-top:2px;}
+.terminalstamp{font-family:var(--mono);font-size:12px;color:var(--dimmer);text-align:right;white-space:nowrap;}
+.terminalgrid .stat.ok{border-color:rgba(127,214,168,0.30);}
+.terminalgrid .stat.warn{border-color:rgba(255,213,138,0.34);}
+.terminalgrid .stat.bad{border-color:rgba(255,138,138,0.38);}
+.terminalproblems{display:flex;flex-direction:column;gap:6px;}
+.terminalproblem{font-size:13px;line-height:1.35;color:var(--dim);border-left:3px solid #ffd58a;padding-left:8px;}
+.repairhint{font-family:var(--mono);}
+.terminalactions .actionbtn{min-height:74px;}
+@media(max-width:760px){.terminaltop{align-items:flex-start;flex-direction:column;}.terminalstamp{white-space:normal;text-align:left;}.terminalstate{font-size:20px;}}
+
+
+/* 1.1.0 Section 7: recent maintenance action history. */
+#ctrlhistory{display:flex;flex-direction:column;gap:10px;}
+.actionhistory{display:flex;flex-direction:column;gap:8px;}
+.actionitem{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1px solid var(--line-soft);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.04);}
+.actionitem.ok{border-color:rgba(127,214,168,0.24);}
+.actionitem.warn{border-color:rgba(255,213,138,0.30);background:rgba(255,213,138,0.05);}
+.actionitem.bad{border-color:rgba(255,138,138,0.34);background:rgba(255,138,138,0.055);}
+.actionmain{min-width:0;}
+.actiontitle{font-weight:800;color:var(--fg);font-size:15px;line-height:1.2;}
+.actiondetail{font-size:13px;color:var(--dimmer);line-height:1.32;margin-top:2px;overflow-wrap:anywhere;}
+.actionmeta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-family:var(--mono);font-size:12px;color:var(--dimmer);white-space:nowrap;text-align:right;}
+.actionbadge{display:inline-flex;border-radius:999px;padding:3px 8px;border:1px solid rgba(255,255,255,0.12);font-family:var(--mono);font-size:11px;letter-spacing:0.04em;text-transform:uppercase;}
+.actionbadge.ok{border-color:rgba(127,214,168,0.38);color:#9ee3b9;}
+.actionbadge.warn{border-color:rgba(255,213,138,0.42);color:#ffd58a;}
+.actionbadge.bad{border-color:rgba(255,138,138,0.42);color:#ffaaaa;}
+.historyactions{margin-top:2px;}
+@media(max-width:700px){.actionitem{flex-direction:column;}.actionmeta{align-items:flex-start;text-align:left;white-space:normal;}}
+
+/* 1.1.0 Section 8: safer pre-action backups and bounded retention. */
+.ctrlbackupcard{border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,0.035);overflow:hidden;}
+.ctrlbackupcard>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;cursor:pointer;font-weight:800;color:var(--fg);text-transform:uppercase;letter-spacing:0.075em;font-size:13px;touch-action:manipulation;}
+.ctrlbackupcard>summary::-webkit-details-marker{display:none;}
+.ctrlbackupcard>summary:after{content:"▸";color:var(--dimmer);margin-left:8px;}
+.ctrlbackupcard[open]>summary{border-bottom:1px solid var(--line-soft);}
+.ctrlbackupcard[open]>summary:after{content:"▾";}
+.backupcount{font-family:var(--mono);font-size:12px;color:var(--dimmer);letter-spacing:0;text-transform:none;margin-left:auto;}
+.backupcardbody{max-height:none;overflow:visible;padding:10px;display:flex;flex-direction:column;gap:8px;}
+.backuplist{display:flex;flex-direction:column;gap:8px;}
+.backupitem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid rgba(255,255,255,0.08);border-radius:12px;background:rgba(255,255,255,0.035);padding:10px 10px 10px 12px;}
+.backuptitle{font-size:14px;font-weight:800;color:var(--fg);line-height:1.2;overflow-wrap:anywhere;}
+.backupreason{font-family:var(--sans);font-size:12px;color:var(--dimmer);margin-top:2px;line-height:1.25;}
+.backupmeta{font-family:var(--mono);font-size:11px;color:var(--dimmer);margin-top:4px;line-height:1.25;}
+.backupactions{display:flex;gap:8px;align-items:stretch;}
+.backupbtn{min-height:42px;padding:8px 11px;border-radius:10px;font-size:13px;}
+.backupbtn.restore{border-color:rgba(127,214,168,0.30);}
+.backupbtn.delete{border-color:rgba(255,138,138,0.30);}
+@media(max-width:760px){.backupitem{grid-template-columns:1fr;}.backupactions{justify-content:flex-end;}}
+
+/* 1.1.0 Section 9: calendar source health. */
+#ctrlcalhealth{display:flex;flex-direction:column;gap:12px;}
+.calhealthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
+.calhealthtop.ok{border-color:rgba(127,214,168,0.38);background:rgba(127,214,168,0.10);}
+.calhealthtop.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.09);}
+.calhealthtop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.09);}
+.calhealthlabel{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
+.calhealthstate{font-size:26px;font-weight:800;line-height:1.05;margin-top:2px;}
+.calhealthdetail{font-size:14px;color:var(--dim);margin-top:5px;}
+.calhealthstamp{font-family:var(--mono);font-size:12px;color:var(--dimmer);white-space:nowrap;}
+.calhealthactions{margin:0;}
+.calhealthtable{margin-top:0;}
+.calhealthtable .calname{display:flex;align-items:center;gap:8px;font-weight:800;}
+.caldot{display:inline-block;width:10px;height:10px;border-radius:999px;box-shadow:0 0 0 2px rgba(255,255,255,0.10);flex:0 0 auto;}
+.calmeta{font-size:12px;color:var(--dimmer);margin-top:3px;}
+.calbadge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);white-space:nowrap;}
+.calbadge.ok{border-color:rgba(127,214,168,0.35);background:rgba(127,214,168,0.10);}
+.calbadge.warn{border-color:rgba(255,213,138,0.40);background:rgba(255,213,138,0.10);}
+.calbadge.bad{border-color:rgba(255,138,138,0.40);background:rgba(255,138,138,0.10);}
+.calbadge.unknown{opacity:.82;}
+.calissue{font-size:12px;color:var(--dim);line-height:1.3;margin-top:4px;max-width:420px;}
+.calrow.bad .calissue{color:var(--fg);}
+@media(max-width:760px){.calhealthtop{align-items:flex-start;flex-direction:column;}.calhealthstamp{white-space:normal;}.calhealthstate{font-size:24px;}}
+
+/* 1.4.3-beta.97: Update card keeps backup/restore visible and independent of active progress polling. */
+.ctrlbackuprestore{display:flex;flex-direction:column;gap:10px;margin-top:2px;}
+.ctrlbackuprestore .ctrlsubhead{margin:3px 2px 0;}
+.backupsummary{margin:0;}
+.backuprestoreactions{margin:0;}
+.backuplocknotice{display:none;border-left:3px solid rgba(255,213,138,0.48);padding-left:10px;}
+.backuprestoreactions .actionbtn{min-height:66px;}
+.ctrlbackuprestore .ctrlbackupcard{margin:0;}
+@media(max-width:760px){.backuprestoreactions{grid-template-columns:1fr;}.backuprestoreactions .actionbtn{min-height:58px;}}

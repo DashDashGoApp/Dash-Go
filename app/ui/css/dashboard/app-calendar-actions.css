@@ -1,0 +1,24 @@
+/* Actionable Calendar app rows: quick completion only; full editing remains in the app. */
+#pop.eventpop .appgroup-action-popup{grid-template-rows:auto minmax(0,1fr) auto;min-height:0}
+#pop.eventpop .appgroup-action-list{display:grid;gap:8px;min-height:0;overflow:auto;padding-right:2px}
+#pop.eventpop .appgroup-action-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:9px;align-items:center;min-height:62px;padding:9px 11px;border:1px solid var(--line-soft);border-left:4px solid var(--accent);border-radius:10px;background:var(--card);color:var(--fg)}
+#pop.eventpop .appgroup-action-check{display:grid;place-items:center;width:44px;height:44px;margin:-3px;cursor:pointer}
+#pop.eventpop .appgroup-action-check input{width:24px;height:24px;margin:0;accent-color:var(--accent)}
+#pop.eventpop .appgroup-action-copy{display:grid;gap:3px;min-width:0}
+#pop.eventpop .appgroup-action-copy strong{line-height:1.25;overflow-wrap:anywhere}
+#pop.eventpop .appgroup-action-copy small{color:var(--dim);font-size:14px;line-height:1.28}
+#pop.eventpop .appgroup-action-state{align-self:center;color:var(--dim);font-family:var(--mono);font-size:12px;font-weight:760;text-align:right;line-height:1.25}
+#pop.eventpop .appgroup-action-row.is-complete .appgroup-action-state{color:var(--accent)}
+#pop.eventpop .appgroup-action-row.is-complete{border-left-color:var(--accent);opacity:.9}
+#pop.eventpop .appgroup-action-error{border-left-color:var(--danger,#d87979)}
+#pop.eventpop .appgroup-action-section{margin:6px 0 0;color:var(--dim);font-family:var(--mono);font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+#pop.eventpop .appgroup-open-action{position:sticky;bottom:0;z-index:1;box-shadow:0 -8px 14px rgba(0,0,0,.22)}
+#pop.eventpop .routine-calendar-complete{min-height:42px;padding:8px 11px;border:1px solid var(--accent);border-radius:8px;background:var(--card);color:var(--accent);font:inherit;font-weight:760;appearance:none;-webkit-appearance:none;cursor:pointer}
+#pop.eventpop .routine-calendar-complete:disabled,#pop.eventpop .appgroup-action-check input:disabled{cursor:default;opacity:.64}
+#pop.eventpop .routine-calendar-step input:disabled{opacity:.64}
+@media(max-width:700px){
+ #pop.eventpop .appgroup-action-row{grid-template-columns:42px minmax(0,1fr);gap:8px}
+ #pop.eventpop .appgroup-action-state{grid-column:2;text-align:left;font-size:11px}
+ #pop.eventpop .appgroup-action-check{width:42px;height:42px}
+}
+@media(prefers-reduced-motion:reduce){#pop.eventpop .appgroup-action-row{transition:none}}

@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
+
+const root=resolve(process.argv[2]||".");
+const read=rel=>readFileSync(resolve(root,rel),"utf8");
+const core=read("ui/lists-core.js");
+const actions=read("ui/lists-actions.js");
+const css=read("ui/lists.css");
+const routes=read("cmd/dashboard-control-server/todo_http_tasks.go");
+const manual=read("internal/todo/todo_manual_sync.go");
+const store=read("internal/todo/todo_store.go");
+
+assert.match(core,/syncActive&&activeListOrigin\(\)===\"microsoft\"/,"Sync now must only render for an active Microsoft-backed list");
+assert.match(core,/id=\"listsapp-sync-now\"/,"Lists app must provide a stable Sync now control");
+assert.match(core,/id=\"listsapp-sync-note\"/,"Lists app must show an app-local sync status message");
+assert.match(core,/One request per list every 25 seconds/,"Lists app must explain the family-facing request limit");
+assert.match(core,/manualSyncTimer/,"Lists app must maintain a bounded cooldown countdown");
+assert.match(core,/stopManualSyncCountdown/,"Lists close must cancel the cooldown timer");
+assert.match(actions,/function syncCurrentListNow\(/,"Lists app must own a direct active-list sync action");
+assert.match(actions,/\/sync-now/,"Lists app must use the per-list manual sync endpoint");
+assert.match(actions,/applyInboundSyncStatus\(response\.inboundSync,response\.manualSync\)/,"direct app sync must update local UI state without waiting for a browser reload");
+assert.match(actions,/manualSyncDuration\(seconds\)/,"direct app sync feedback must show sub-minute cooldowns accurately");
+assert.match(css,/\.lists-sync-now/,"Sync now must have an explicit touch-sized style");
+assert.match(css,/\.lists-sync-note/,"sync feedback must have a stable layout region");
+assert.match(routes,/parts\[4\] == \"sync-now\"[\s\S]*?todoRequestManualListSync/,"server must own direct app Sync now admission");
+assert.match(routes,/\"manualSync\":\s*result\.ManualSync/,"server must return safe cooldown/running state to the app");
+assert.match(manual,/todoManualListSyncCooldown\s*=\s*25\s*\*\s*time\.Second/,"server must bound each active list to one manual request every 25 seconds");
+assert.match(manual,/todoRequestManualListSync/,"server must enforce the limit rather than trusting a disabled browser button");
+assert.match(manual,/todoBeginInboundRun/,"manual app sync must enter the existing one-at-a-time coordinator");
+assert.match(store,/\"manualListSync\": a\.todoManualListSyncStatuses\(\)/,"status must provide initial safe manual-sync state");
+console.log("PASS: per-app Microsoft To Do Sync now contract");

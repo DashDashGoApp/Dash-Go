@@ -1,0 +1,40 @@
+/* Lite dashboard steady-state paint diet. These rules preserve calendar
+   content and normal touch scrolling while reducing compositor work on the
+   Pi Zero 2 W. They are deliberately scoped to the profile class. */
+
+/* Do not enable row culling until the Calendar's existing span/event geometry
+   pipeline marks the current DOM transaction as complete. The @supports guard
+   makes this a no-op on older WebKitGTK engines. */
+@supports (content-visibility:auto){
+  html.profile-lite #calscroll[data-week-cull-ready="1"] .weekrow{
+    content-visibility:auto;
+    contain-intrinsic-size:auto var(--rowheight);
+  }
+  /* The cull controller marks the visible rows plus a small directional
+     overscan window as warm so quick Pi touch-scrolls do not show blank cells. */
+  html.profile-lite #calscroll[data-week-cull-ready="1"] .weekrow[data-cull-near="1"]{
+    content-visibility:visible;
+  }
+}
+
+/* The Lists dock crawl continuously consumes a compositor layer. On Lite the
+   first copy remains readable and available without perpetual translation. */
+html.profile-lite .listsdock-ticker.is-moving .listsdock-ticker-track{
+  animation:none;
+  transform:translate3d(0,0,0);
+  will-change:auto;
+}
+
+/* Retain the normal short message fade, but do not reserve an opacity layer
+   while the dashboard is idle. Browsers can promote it only during a swap. */
+html.profile-lite #comptext{
+  will-change:auto;
+  backface-visibility:visible;
+}
+
+/* Remove only decorative static drop shadows. Keep functional inset contrast
+   such as the calendar Today ring and preserve all scroll-container layers. */
+html.profile-lite #compliment .cb-launch,
+html.profile-lite #snapback{
+  box-shadow:none;
+}

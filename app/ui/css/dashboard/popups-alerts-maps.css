@@ -1,0 +1,394 @@
+/* ============ POPUP ============ */
+#scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);
+  display:none;align-items:center;justify-content:center;z-index:110;
+}
+html[data-theme="paper"] #scrim,
+html[data-theme="softmorning"] #scrim,
+html[data-theme="daylight"] #scrim{background:rgba(18,28,34,0.48);}
+#scrim.show{display:flex;}
+#pop{
+  background:linear-gradient(var(--panel),var(--panel)),var(--bg);
+  color:var(--fg);border:1px solid var(--line);
+  border-radius:14px;max-width:560px;width:88%;max-height:82vh;min-height:0;
+  /* Generic event/weather/message popup: one native modal scroll root. Day
+     Timeline overrides this to keep #popbody as its specialized root. */
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;
+  touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  box-shadow:0 16px 60px rgba(0,0,0,0.48);
+}
+html[data-theme="paper"] #pop,
+html[data-theme="softmorning"] #pop,
+html[data-theme="daylight"] #pop{box-shadow:0 18px 54px rgba(18,28,34,0.28);}
+#pop::-webkit-scrollbar{display:none;}
+#pophead{
+  position:sticky;top:0;z-index:2;
+  padding:18px 20px 14px;border-bottom:1px solid var(--line-soft);
+  background:linear-gradient(var(--panel),var(--panel)),var(--bg);
+  color:var(--fg);box-shadow:0 8px 18px rgba(0,0,0,0.14);
+}
+html[data-theme="paper"] #pophead,
+html[data-theme="softmorning"] #pophead,
+html[data-theme="daylight"] #pophead{box-shadow:0 8px 18px rgba(18,28,34,0.10);}
+#poptop{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+#poptitle{font-size:26px;font-weight:700;line-height:1.25;min-width:0;overflow-wrap:anywhere;color:var(--fg);}
+#popwhen{font-family:var(--mono);font-size:19px;margin-top:8px;display:flex;flex-direction:column;gap:3px;color:var(--dim);}
+#popwhen .wstart{color:var(--accent);}
+#popwhen .wend{color:var(--endtime);}
+#popbody{padding:18px 24px 24px;font-size:18px;line-height:1.55;color:var(--dim);white-space:pre-wrap;}
+#popbody .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line-soft);color:var(--fg);}
+/* First-paint popup skeleton: the shell appears before large event/day DOM builds. */
+.popup-skeleton,.popup-error{min-height:96px;display:flex;align-items:center;color:var(--dimmer);font-family:var(--mono);font-size:14px;}
+.popup-skeleton:before{content:"";width:10px;height:10px;margin-right:9px;border-radius:999px;background:var(--accent);box-shadow:18px 0 0 rgba(127,214,168,.52),36px 0 0 rgba(127,214,168,.22);}
+.dt-popup-session,.dt-viewhost{min-width:0;}
+
+#popbody .row span:first-child{color:var(--dim);}
+.eventmap{margin-top:14px;border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;background:rgba(255,255,255,0.035);}
+.eventmap .mapcap{font-family:var(--mono);font-size:13px;color:var(--dimmer);padding:8px 10px;border-bottom:1px solid var(--line-soft);white-space:normal;}
+.eventmap .mapcontrols{
+  display:flex;gap:6px;padding:7px 8px;border-bottom:1px solid var(--line-soft);
+  background:rgba(255,255,255,0.025);
+}
+.eventmap .mapstyles{padding-bottom:4px;}
+.eventmap .mapzooms{padding-top:4px;}
+.eventmap .mapzoom,.eventmap .mapstyle{
+  flex:1 1 0;min-width:0;min-height:34px;border-radius:7px;border:1px solid var(--line-soft);
+  background:rgba(255,255,255,0.06);color:var(--dim);font-family:var(--mono);font-size:13px;
+  touch-action:manipulation;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.eventmap .mapstyle{font-size:12px;}
+.eventmap .mapzoom.on,.eventmap .mapstyle.on{border-color:var(--accent);color:var(--fg);background:rgba(127,214,168,0.14);}
+.eventmap .mapzoom:active,.eventmap .mapstyle:active{background:rgba(255,255,255,0.18);}
+.eventmap .mapstage{position:relative;width:100%;aspect-ratio:26/11;min-height:120px;max-height:230px;overflow:hidden;background:var(--bg);}
+.eventmap .mapmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:13px;color:var(--dimmer);padding:0 10px;text-align:center;background:var(--bg);}
+.eventmap img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;background:var(--bg);}
+.eventmap.loading{min-height:220px;display:flex;align-items:center;justify-content:center;padding:12px 14px;color:var(--dimmer);font-family:var(--mono);font-size:14px;}
+.locbtn{
+  background:rgba(255,255,255,0.055);border:1px solid var(--line-soft);color:var(--fg);
+  border-radius:8px;padding:7px 10px;font:inherit;text-align:left;line-height:1.35;
+  cursor:pointer;touch-action:manipulation;white-space:pre-wrap;max-width:100%;
+}
+.locbtn:active{background:rgba(255,255,255,0.18);}
+.locbtn .hint{display:block;margin-top:4px;font-family:var(--mono);font-size:12px;color:var(--accent);}
+#mapfull{
+  position:fixed;inset:0;z-index:130;background:var(--bg);color:var(--fg);
+  display:none;flex-direction:column;overflow:hidden;
+}
+#mapfull.show{display:flex;}
+#mapbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(var(--panel),var(--panel)),var(--bg);
+}
+#maptitle{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:26vw;min-width:64px;}
+#mapsearch{
+  box-sizing:border-box;flex:1;min-width:0;min-height:52px;
+  background:linear-gradient(var(--panel),var(--panel)),var(--bg);color:var(--fg);-webkit-text-fill-color:var(--fg);caret-color:var(--fg);
+  border:1px solid var(--line);border-radius:12px;padding:0 14px;font:700 17px/1.2 var(--sans);outline:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);appearance:none;-webkit-appearance:none;
+}
+#mapsearch:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:3px;}
+#mapframewrap{flex:1 1 auto;min-height:0;background:var(--bg);position:relative;overflow:hidden;}
+#mapframe{width:100%;height:100%;border:0;background:var(--bg);}
+#maphint{
+  position:absolute;left:12px;bottom:12px;right:12px;pointer-events:none;
+  font-family:var(--mono);font-size:12px;color:rgba(255,255,255,0.68);
+  text-shadow:0 1px 3px rgba(0,0,0,0.9);
+}
+#maptools{
+  position:absolute;left:12px;top:12px;z-index:3;display:flex;flex-direction:column;gap:7px;
+  max-width:min(360px,calc(100% - 24px));pointer-events:auto;
+}
+#maptools .maptoolrow{display:flex;gap:7px;}
+#maptools .maptoolbtn{
+  flex:1 1 0;min-width:54px;min-height:44px;border:1px solid rgba(255,255,255,0.25);border-radius:10px;
+  background:rgba(15,15,20,0.84);color:var(--fg);font-family:var(--mono);font-size:17px;font-weight:800;
+  box-shadow:0 4px 14px rgba(0,0,0,0.22);touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+#maptools .maptoolbtn.wide{flex:1.8 1 0;font-size:13px;}
+#maptools .maptoolbtn:disabled{opacity:.36;color:var(--dimmer);}
+#maptools .maptoolbtn:not(:disabled):active{background:rgba(255,255,255,0.18);}
+#maptools .maptoolhint{
+  max-width:340px;border:1px solid rgba(255,255,255,0.16);border-radius:10px;padding:7px 9px;
+  background:rgba(9,9,13,0.72);color:rgba(255,255,255,0.72);font-family:var(--mono);font-size:11px;line-height:1.25;
+}
+#mapkeyboard{
+  flex:0 0 auto;border-top:1px solid var(--line);padding:12px 16px max(12px, env(safe-area-inset-bottom));background:linear-gradient(var(--panel),var(--panel)),var(--bg);
+}
+#mapkeyboard .oskrow{display:flex;justify-content:center;gap:8px;margin:0 auto 8px;max-width:1040px;}
+#mapkeyboard .oskrow:last-child{margin-bottom:0;}
+#mapkeyboard .oskkey{
+  flex:1 1 0;min-width:0;min-height:clamp(50px,6vh,64px);border-radius:9px;
+  font-size:clamp(18px,1.4vw,22px);padding:0 6px;
+}
+#mapkeyboard .oskkey.wide{flex:1.6 1 0;min-width:0;font-size:clamp(14px,1.05vw,18px);}
+#mapkeyboard .oskkey.space{flex:5 1 0;max-width:none;}
+#mapkeyboard .oskkey.on{border-color:var(--accent);color:var(--accent);background:rgba(127,214,168,0.12);}
+#mapkeyboard .maposkhint{color:var(--dim);text-align:center;font-family:var(--mono);font-size:12px;font-weight:800;margin-top:6px;}
+@media (max-height:700px){
+  #mapbar{padding:8px 10px;}
+  #mapkeyboard{padding:8px 10px;}
+  #mapkeyboard .oskrow{gap:6px;margin-bottom:6px;}
+  #mapkeyboard .oskkey{min-height:44px;font-size:17px;}
+  #maptools .maptoolbtn{min-height:38px;font-size:15px;}
+  #maptools .maptoolhint{display:none;}
+}
+#popbody .hourrow{font-family:var(--mono);font-size:18px;}
+#popwhen .wxsvg{width:1.22em;height:1.22em;}
+#popbody .hourrow span:first-child{display:inline-flex;align-items:center;gap:8px;}
+#popbody .hourrow .wxsvg{width:1.24em;height:1.24em;flex:0 0 auto;}
+.wxhourblock{margin-top:12px;white-space:normal;}
+.wxhourhead{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--fg);font-weight:700;margin-bottom:2px;}
+.wxhourtoggle{min-height:32px;border:1px solid var(--line-soft);border-radius:999px;background:rgba(255,255,255,0.06);color:var(--fg);font-family:var(--mono);font-size:12px;padding:5px 10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+.wxhourtoggle:focus{outline:none;}
+.wxhourtoggle:active{background:rgba(255,255,255,0.16);}
+#popclose{
+  flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  min-width:46px;min-height:46px;padding:0;margin:-4px -4px 0 0;
+  border:1px solid var(--line-soft);border-radius:999px;
+  background:rgba(255,255,255,0.055);color:var(--dim);
+  font-size:22px;line-height:1;cursor:pointer;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+#popclose:active{background:rgba(255,255,255,0.16);color:var(--fg);}
+.loading{padding:24px;color:var(--dimmer);font-family:var(--mono);font-size:18px;}
+
+.wxsrcpill{border-color:rgba(127,214,168,0.30);background:rgba(127,214,168,0.08);}
+.wxsourcecompare{margin-top:14px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,0.035);overflow:hidden;white-space:normal;}
+.wxsourcehead{padding:9px 12px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);font-size:12px;letter-spacing:0.10em;text-transform:uppercase;color:var(--dimmer);}
+summary.wxsourcehead{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;min-height:44px;box-sizing:border-box;}
+summary.wxsourcehead::marker{color:var(--dim);font-size:13px;}
+.wxsources:not([open])>summary.wxsourcehead{border-bottom:0;}
+.wxsourcesgrid{display:block;}
+.wxsourcerow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.wxsourcerow:last-child{border-bottom:0;}
+.wxsourcerow b{display:block;color:var(--fg);font-size:15px;line-height:1.2;}
+.wxsourcerow span{display:block;color:var(--dimmer);font-size:12px;line-height:1.25;}
+.wxsourcerow>div:last-child{text-align:right;color:var(--fg);font-family:var(--mono);font-size:14px;}
+.wxsourcerow{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;}
+.wxsourcerow:focus{outline:none;}
+.wxsourcerow:active{background:rgba(255,255,255,0.08);}
+.wxsourcedisabled{opacity:.58;background:rgba(255,255,255,0.025);}
+.wxsourcedisabled b{text-decoration:line-through;text-decoration-thickness:1px;text-underline-offset:3px;}
+.wxsourcedisabled>div:last-child{color:var(--dimmer);}
+.wxsourcenotes{font-size:13px;background:rgba(255,255,255,0.025);}
+.wxsourcenotes .wxsourcehead{font-size:11px;padding:7px 10px;letter-spacing:0.08em;}
+.wxsourcenotes .row{font-size:13px;line-height:1.25;padding:6px 10px;color:var(--dimmer);}
+.wxsourcenotes .row span:first-child{flex:1;text-align:left;}
+@media(max-width:640px){.wxsourcerow{grid-template-columns:1fr;}.wxsourcerow>div:last-child{text-align:left;}}
+
+
+/* 1.3.5-beta.8: popup cards and controls follow readability/light themes.
+   Day, event, alert, and weather popups now use the active dashboard theme
+   instead of a hard-coded dark shell. */
+html[data-theme="paper"] #pop .eventmap,
+html[data-theme="paper"] #pop .wxsourcecompare,
+html[data-theme="paper"] #pop .wxsourcerow,
+html[data-theme="paper"] #pop .wxsummaryrow,
+html[data-theme="paper"] #pop .wxhero,
+html[data-theme="paper"] #pop #popbody .hourrow,
+html[data-theme="paper"] #pop .wxhourtoggle,
+html[data-theme="paper"] #pop #popclose,
+html[data-theme="softmorning"] #pop .eventmap,
+html[data-theme="softmorning"] #pop .wxsourcecompare,
+html[data-theme="softmorning"] #pop .wxsourcerow,
+html[data-theme="softmorning"] #pop .wxsummaryrow,
+html[data-theme="softmorning"] #pop .wxhero,
+html[data-theme="softmorning"] #pop #popbody .hourrow,
+html[data-theme="softmorning"] #pop .wxhourtoggle,
+html[data-theme="softmorning"] #pop #popclose,
+html[data-theme="daylight"] #pop .eventmap,
+html[data-theme="daylight"] #pop .wxsourcecompare,
+html[data-theme="daylight"] #pop .wxsourcerow,
+html[data-theme="daylight"] #pop .wxsummaryrow,
+html[data-theme="daylight"] #pop .wxhero,
+html[data-theme="daylight"] #pop #popbody .hourrow,
+html[data-theme="daylight"] #pop .wxhourtoggle,
+html[data-theme="daylight"] #pop #popclose{
+  background:var(--panel);
+  border-color:var(--line);
+}
+html[data-theme="paper"] #pop .wxsourcerow,
+html[data-theme="paper"] #pop.weatherpop #popbody .hourrow,
+html[data-theme="softmorning"] #pop .wxsourcerow,
+html[data-theme="softmorning"] #pop.weatherpop #popbody .hourrow,
+html[data-theme="daylight"] #pop .wxsourcerow,
+html[data-theme="daylight"] #pop.weatherpop #popbody .hourrow{
+  box-shadow:inset 0 0 0 1px rgba(18,34,45,0.025);
+}
+html[data-theme="paper"] #pop .wxsourcehead,
+html[data-theme="softmorning"] #pop .wxsourcehead,
+html[data-theme="daylight"] #pop .wxsourcehead{color:var(--dim);}
+html[data-theme="paper"] #pop .wxsourcedisabled,
+html[data-theme="softmorning"] #pop .wxsourcedisabled,
+html[data-theme="daylight"] #pop .wxsourcedisabled{opacity:.72;}
+
+/* 1.3.3-beta.3: avoid continuous alert pulse/filter repaint cost on lite-class kiosks. */
+html[data-profile="lite"] #alerttab.sev-extreme,
+html[data-profile="zero2"] #alerttab.sev-extreme,
+html[data-profile="low"] #alerttab.sev-extreme,
+html[data-profile="low-power"] #alerttab.sev-extreme,
+html.profile-lite #alerttab.sev-extreme,
+html[data-profile="lite"] #alertbar.sev-extreme,
+html[data-profile="zero2"] #alertbar.sev-extreme,
+html[data-profile="low"] #alertbar.sev-extreme,
+html[data-profile="low-power"] #alertbar.sev-extreme,
+html.profile-lite #alertbar.sev-extreme{
+  animation:none!important;filter:none!important;background:#b81732;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.18);
+}
+
+/* 1.3.5: weather day popup scan cleanup. Temperature
+   becomes a hero story, the metric band drops to five value-forward cards,
+   and hourly rows align time/icon/temp/precip columns for faster scanning. */
+#pop.weatherpop .wxhero{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);align-items:center;gap:12px 20px;margin:0 0 12px;border:1px solid var(--line-soft);border-radius:16px;background:rgba(255,255,255,.04);padding:18px 22px;}
+#pop.weatherpop .wxherotemps{display:flex;align-items:baseline;gap:10px;min-width:0;}
+#pop.weatherpop .wxherohigh{color:var(--fg);font-weight:900;font-size:52px;line-height:.95;letter-spacing:-0.05em;}
+#pop.weatherpop .wxherolow{color:var(--dim);font-weight:800;font-size:23px;line-height:1;white-space:nowrap;}
+#pop.weatherpop .wxherometa{display:grid;gap:4px;color:var(--dim);font-size:15px;line-height:1.15;}
+#pop.weatherpop .wxherometa span:first-child{font-weight:800;color:var(--dim);}
+#pop.weatherpop .wxsummarygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;margin-bottom:14px;}
+#pop.weatherpop .wxdetailstack{display:block;}
+#pop.weatherpop .wxhourrows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;}
+#pop.weatherpop .wxsummaryrow{display:grid;grid-template-columns:24px minmax(0,1fr);grid-template-rows:auto auto auto;align-items:center;gap:2px 8px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.035);padding:10px 12px;min-height:86px;}
+#pop.weatherpop .wxstaticon{width:22px;height:22px;color:var(--fg);opacity:.78;grid-column:1;grid-row:1;flex:0 0 auto;}
+#pop.weatherpop .wxsummarylabel{color:var(--dimmer);font-size:13px;line-height:1.12;min-width:0;grid-column:2;grid-row:1;}
+#pop.weatherpop .wxsummaryvalue{font-weight:850;color:var(--fg);font-size:22px;line-height:1.05;text-align:left;white-space:nowrap;grid-column:1 / -1;grid-row:2;}
+#pop.weatherpop .wxsummaryunit{display:block;color:var(--dim);font-size:12px;line-height:1.12;min-height:1em;grid-column:1 / -1;grid-row:3;}
+#pop.weatherpop .wxuvsev.uv-low{color:#7fd68a;}
+#pop.weatherpop .wxuvsev.uv-mod{color:#e0c84f;}
+#pop.weatherpop .wxuvsev.uv-high{color:#e8a34d;}
+#pop.weatherpop .wxuvsev.uv-vhigh{color:#ef715e;}
+#pop.weatherpop .wxuvsev.uv-ext{color:#c18bf0;}
+#pop.weatherpop #popbody .hourrow.wxhourrow{display:grid;grid-template-columns:72px 34px minmax(48px,1fr) 54px;align-items:center;gap:8px;border-bottom:1px solid var(--line-soft);padding:7px 0;}
+#pop.weatherpop #popbody .hourrow.wxhourrow span{min-width:0;}
+#pop.weatherpop .wxhourtime{color:var(--dim);font-weight:650;}
+#pop.weatherpop .wxhouricon{display:flex;align-items:center;justify-content:center;color:var(--dim);}
+#pop.weatherpop .wxhourtemp{color:var(--fg);font-weight:850;text-align:left;}
+#pop.weatherpop .wxhourprecip{color:var(--dimmer);font-weight:650;text-align:right;}
+#pop.weatherpop .wxhourprecip-on{color:#7ec4ff;font-weight:800;}
+.wxsourcecardtop,.wxsourcecardmeta{min-width:0;}
+.wxsourcecardtop strong{color:var(--fg);font-family:var(--mono);font-size:14px;white-space:nowrap;}
+.wxsourcecardmeta span{display:block;}
+@media (max-width:640px){
+  #pop.weatherpop .wxhero{grid-template-columns:1fr;padding:14px 16px;}
+  #pop.weatherpop .wxherohigh{font-size:44px;}
+  #pop.weatherpop .wxsummarygrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #pop.weatherpop #popbody .hourrow.wxhourrow{grid-template-columns:62px 28px minmax(40px,1fr) 46px;font-size:15px;}
+}
+@media (min-width:1200px) and (min-height:760px){
+  #pop.weatherpop{max-width:min(1180px,92vw);width:92vw;max-height:86vh;}
+  #pop.weatherpop #popbody{display:block;padding:18px 22px 24px;}
+  #pop.weatherpop .wxhero{margin-bottom:14px;padding:20px 28px;}
+  #pop.weatherpop .wxherohigh{font-size:64px;}
+  #pop.weatherpop .wxherolow{font-size:25px;}
+  #pop.weatherpop .wxherometa{font-size:16px;}
+  #pop.weatherpop .wxsummarygrid{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:18px;}
+  #pop.weatherpop .wxsummaryrow{padding:12px 14px;min-height:100px;}
+  #pop.weatherpop .wxsummaryrow .wxstaticon{width:24px;height:24px;color:var(--fg);opacity:.78;}
+  #pop.weatherpop .wxsummaryrow .wxsummarylabel{font-size:13px;line-height:1.12;color:var(--dimmer);}
+  #pop.weatherpop .wxsummaryrow .wxsummaryvalue{text-align:left;font-size:25px;line-height:1.05;color:var(--fg);font-weight:900;}
+  #pop.weatherpop .wxsummaryrow .wxsummaryunit{font-size:13px;}
+  #pop.weatherpop .wxdetailstack{display:block;min-width:0;}
+  #pop.weatherpop .wxhourblock{margin-top:0;min-width:0;}
+  #pop.weatherpop .wxhourrows{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #pop.weatherpop #popbody .hourrow{border:1px solid var(--line-soft);border-radius:10px;background:rgba(255,255,255,.025);padding:8px 10px;font-size:16px;}
+  #pop.weatherpop #popbody .hourrow.wxhourrow{grid-template-columns:78px 34px minmax(52px,1fr) 56px;}
+  #pop.weatherpop .wxsources{display:block;margin-top:14px;}
+  #pop.weatherpop .wxsources[open]{padding:0 10px 10px;}
+  #pop.weatherpop .wxsources .wxsourcehead{margin:0 -10px;padding:9px 12px;}
+  #pop.weatherpop .wxsources:not([open]) .wxsourcehead{margin:0;}
+  #pop.weatherpop .wxsourcesgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;align-content:start;}
+  #pop.weatherpop .wxsourcerow{display:block;border:1px solid rgba(255,255,255,0.075);border-radius:10px;background:rgba(255,255,255,0.025);padding:9px 10px;min-height:82px;}
+  #pop.weatherpop .wxsourcerow:last-child{border-bottom:1px solid rgba(255,255,255,0.075);}
+  #pop.weatherpop .wxsourcerow>div:last-child{text-align:left;}
+  #pop.weatherpop .wxsourcecardtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px;}
+  #pop.weatherpop .wxsourcecardtop b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;}
+  #pop.weatherpop .wxsourcecardmeta{display:grid;gap:3px;}
+  #pop.weatherpop .wxsourcecardmeta span{font-size:11px;line-height:1.25;}
+  #pop.weatherpop .wxsourcenotes{grid-column:1/-1;margin-top:0;}
+}
+@media (min-width:1600px) and (min-height:900px){
+  #pop.weatherpop{max-width:min(1320px,90vw);}
+  #pop.weatherpop .wxsummarygrid{grid-template-columns:repeat(5,minmax(0,1fr));}
+  #pop.weatherpop .wxdetailstack{display:block;}
+  #pop.weatherpop .wxhourrows{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #pop.weatherpop .wxsourcesgrid{grid-template-columns:repeat(auto-fill,minmax(245px,1fr));}
+}
+@media (min-width:1200px) and (min-height:760px) and (max-width:1350px){
+  #pop.weatherpop .wxdetailstack{display:block;}
+  #pop.weatherpop .wxsourcenotes{grid-column:auto;}
+}
+
+/* Rotating-message triple-tap popup. Uses the normal themed popup shell but
+   keeps the action area compact so the dashboard stays appliance-like. */
+#pop.messagepop{max-width:min(660px,92vw);width:auto;}
+#pop.messagepop #popwhen{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+#pop.messagepop .msgpopkind{display:inline-flex;align-items:center;border:1px solid var(--line-soft);border-radius:999px;padding:3px 9px;color:var(--dim);}
+#pop.messagepop .msgpopgesture{font-size:12px;color:var(--dimmer);}
+#pop.messagepop #popbody{white-space:normal;display:grid;gap:12px;}
+#pop.messagepop .msgpopquote{
+  color:var(--fg);font-weight:800;font-size:23px;line-height:1.22;
+  background:rgba(255,255,255,0.04);border:1px solid var(--line-soft);
+  border-radius:16px;padding:15px 17px;text-align:left;
+}
+#pop.messagepop .msgpopnote{font-size:15px;font-weight:600;color:var(--dim);line-height:1.36;text-align:left;}
+#pop.messagepop .msgpopactions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+#pop.messagepop .msgpopbtn{
+  min-height:54px;border-radius:14px;border:1px solid var(--line-soft);
+  background:rgba(255,255,255,0.055);color:var(--fg);font-weight:850;
+  font-size:16px;padding:10px 12px;touch-action:manipulation;
+}
+#pop.messagepop .msgpopbtn.primary{border-color:rgba(80,190,255,0.38);background:rgba(80,190,255,0.13);}
+#pop.messagepop .msgpopbtn.warn{border-color:rgba(255,185,87,0.45);background:rgba(255,185,87,0.12);}
+#pop.messagepop .msgpopbtn.ghost{color:var(--dim);}
+#pop.messagepop .msgpopstatus{min-height:1.2em;color:var(--sun);font-family:var(--mono);font-size:13px;}
+@media(max-width:560px){#pop.messagepop .msgpopactions{grid-template-columns:1fr;}}
+html[data-theme="paper"] #pop.messagepop .msgpopquote,
+html[data-theme="softmorning"] #pop.messagepop .msgpopquote,
+html[data-theme="daylight"] #pop.messagepop .msgpopquote,
+html[data-theme="paper"] #pop.messagepop .msgpopbtn,
+html[data-theme="softmorning"] #pop.messagepop .msgpopbtn,
+html[data-theme="daylight"] #pop.messagepop .msgpopbtn{background:rgba(20,28,34,0.045);}
+html[data-theme="paper"] #pop.messagepop .msgpopbtn.primary,
+html[data-theme="softmorning"] #pop.messagepop .msgpopbtn.primary,
+html[data-theme="daylight"] #pop.messagepop .msgpopbtn.primary{background:rgba(33,118,170,0.11);border-color:rgba(33,118,170,0.30);}
+html[data-theme="paper"] #pop.messagepop .msgpopbtn.warn,
+html[data-theme="softmorning"] #pop.messagepop .msgpopbtn.warn,
+html[data-theme="daylight"] #pop.messagepop .msgpopbtn.warn{background:rgba(194,118,24,0.12);border-color:rgba(194,118,24,0.36);}
+#pop.messagepop .msgpindots{
+  min-height:30px;display:flex;align-items:center;justify-content:center;
+  border-radius:12px;background:rgba(255,255,255,0.045);border:1px solid var(--line-soft);
+  color:var(--fg);font-size:22px;font-weight:900;letter-spacing:4px;
+}
+#pop.messagepop .msgpingrid{display:grid;grid-template-columns:repeat(3,minmax(76px,1fr));gap:10px;}
+#pop.messagepop .msgpingrid .msgpopbtn{min-height:54px;font-size:20px;}
+#pop.messagepop .msgpingrid .msgpopbtn.small{font-size:14px;}
+#pop.messagepop .msgpingrid .msgpopbtn.on{border-color:rgba(80,190,255,0.45);background:rgba(80,190,255,0.16);}
+#pop.messagepop .msgpopstatus.warn{color:#ffbd68;}
+#pop.messagepop .msgpopstatus.ok{color:#78d994;}
+html[data-theme="paper"] #pop.messagepop .msgpindots,
+html[data-theme="softmorning"] #pop.messagepop .msgpindots,
+html[data-theme="daylight"] #pop.messagepop .msgpindots{background:rgba(20,28,34,0.045);}
+
+/* 1.4.2-beta.30: temporary footer data-freshness silences. This is a small
+   themed popup, not a new Control surface or a destructive warning dialog. */
+#pop.healthwarningpop{max-width:560px;}
+.healthwarning-popup{display:flex;flex-direction:column;gap:14px;white-space:normal;}
+.healthwarning-copy{color:var(--fg);font-size:17px;line-height:1.38;}
+.healthwarning-prompt{color:var(--dim);font-family:var(--mono);font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;}
+.healthwarning-duration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.healthwarning-btn{display:flex;align-items:center;justify-content:center;min-height:48px;border:1px solid var(--line-soft);border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.055);color:var(--fg);font:inherit;font-weight:800;line-height:1.18;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+.healthwarning-btn.duration{border-color:rgba(127,214,168,.34);background:rgba(127,214,168,.08);}
+.healthwarning-btn.warning-choice{justify-content:flex-start;text-align:left;}
+.healthwarning-btn.ghost{align-self:flex-end;min-width:108px;background:transparent;color:var(--dim);}
+.healthwarning-btn:disabled{opacity:.48;cursor:default;}
+.healthwarning-btn:not(:disabled):active{background:rgba(255,255,255,.16);}
+.healthwarning-status{min-height:1.25em;color:var(--dim);font-size:14px;line-height:1.32;}
+.healthwarning-status.warn{color:#ffd58a;}
+.healthwarning-note,.healthwarning-device-note{border-top:1px solid var(--line-soft);padding-top:11px;color:var(--dimmer);font-size:14px;line-height:1.35;}
+.healthwarning-warning-list{display:grid;gap:9px;}
+@media(max-width:640px){
+  #pop.healthwarningpop{width:min(94vw,560px);}
+  .healthwarning-copy{font-size:16px;}
+  .healthwarning-btn{min-height:48px;}
+}

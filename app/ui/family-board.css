@@ -1,0 +1,26 @@
+/* family-board.css — static opaque local Family Message Board overlay. */
+#familyboard{position:fixed;inset:0;z-index:96;display:none;align-items:center;justify-content:center;padding:clamp(10px,2vw,24px);box-sizing:border-box;background:rgba(0,0,0,.55);color:var(--fg)}
+#familyboard.show{display:flex}
+/* WebKitGTK can composite a native .fb-body scrollbar above the body-mounted
+   OSK. While an input owns the keyboard, keep this scroll surface touch-scrollable
+   but suppress only its visual scrollbar; hideOSK() removes .osk-open and restores
+   the normal indicator. */
+#familyboard.osk-open .fb-body{scrollbar-width:none;}
+#familyboard.osk-open .fb-body::-webkit-scrollbar{display:none;width:0;height:0;}
+.fb-panel{width:min(980px,96vw);height:min(820px,94vh);max-height:94vh;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:linear-gradient(var(--panel),var(--panel)),var(--bg);border:1px solid var(--line);border-radius:24px;box-shadow:0 22px 80px rgba(0,0,0,.45)}
+.fb-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;padding:18px 18px 12px}.fb-head h2{margin:0;font:850 clamp(24px,2.5vw,34px)/1.08 var(--sans)}#familyboard-status{margin:5px 0 0;color:var(--dim);font-size:15px;line-height:1.35}.fb-close{min-width:52px;min-height:52px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);font:800 28px/1 var(--sans)}
+.fb-tabs{display:flex;gap:8px;padding:0 18px 12px;overflow-x:auto}.fb-tab,.fb-action,.fb-choice-button{min-height:48px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);font:800 15px/1.2 var(--sans);padding:0 14px}.fb-tab[aria-pressed="true"],.fb-choice-button.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px rgba(143,196,166,.35)}
+.fb-body{position:relative;min-height:0;overflow:auto;padding:0 18px 18px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}#familyboard.osk-open .fb-body{padding-bottom:calc(var(--osk-h,300px) + 24px)}.fb-view,.fb-form{display:grid;gap:12px}.fb-card,.fb-note-row{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}.fb-card{display:grid;gap:12px}.fb-card-title{font:850 18px/1.2 var(--sans)}.fb-note{margin:0;color:var(--dim);font-size:14px;line-height:1.4}.fb-empty{border:1px dashed var(--line);border-radius:16px;padding:20px;color:var(--dim);text-align:center}.fb-add{width:100%;border-color:var(--accent);color:var(--accent)}
+.fb-note-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.fb-note-main{display:grid;gap:5px;min-width:0}.fb-note-main strong{font-size:17px;line-height:1.35;overflow-wrap:anywhere}.fb-note-main small{color:var(--dim);font-size:14px}.fb-badges{display:flex;gap:6px;flex-wrap:wrap}.fb-badge{display:inline-flex;width:max-content;min-height:22px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:0 8px;color:var(--dim);font-size:12px;font-weight:800}.fb-badge.urgent{border-color:var(--today);color:var(--today)}.fb-row-actions,.fb-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.fb-action.primary{border-color:var(--accent);color:var(--accent)}.fb-action.danger{border-color:var(--today);color:var(--today)}
+.fb-field{display:grid;gap:6px;color:var(--dim);font-size:14px;font-weight:800}.fb-field input{min-height:52px;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);font:700 17px/1.2 var(--sans);padding:0 13px;-webkit-text-fill-color:var(--fg)}.fb-choice{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.fb-choice-label{color:var(--dim);font-size:14px;font-weight:800;margin-right:4px}.fb-check{display:flex;align-items:center;gap:8px;color:var(--fg);font-weight:700}.fb-check input{width:22px;height:22px;accent-color:var(--accent)}.fb-confirm{position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.55)}.fb-confirm .fb-card{width:min(460px,100%);background:linear-gradient(var(--panel),var(--panel)),var(--bg);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.fb-close:focus-visible,.fb-tabs button:focus-visible,.fb-body button:focus-visible,.fb-body input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(max-width:760px){.fb-panel{width:100%;height:98vh;max-height:98vh;border-radius:18px}.fb-head{padding:14px}.fb-tabs{padding:0 14px 10px}.fb-body{padding:0 14px 14px}.fb-note-row{grid-template-columns:1fr}.fb-row-actions{justify-content:flex-start}.fb-row-actions .fb-action{flex:1}}
+/* beta.43 — exact Family Board expiration controls remain compact and touch-safe. */
+.fb-expiration{display:grid;gap:10px;padding-top:2px;border-top:1px solid var(--line-soft)}
+.fb-expiration .fb-choice{padding-top:10px}
+.fb-expiration-presets .fb-choice-button{min-height:42px}
+
+/* beta.79 — private inboxes remain inside the existing Family Message Board. */
+.fb-inbox-card{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.fb-inbox-pin{max-width:560px;margin:0 auto}.fb-private-row{border-left:3px solid var(--line)}
+.fb-private-row .fb-badge.urgent{border-color:var(--today);color:var(--today)}
+@media(max-width:760px){.fb-inbox-card{grid-template-columns:1fr}.fb-inbox-card .fb-action{width:100%}}

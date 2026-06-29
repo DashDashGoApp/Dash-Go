@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dash-Go weather rollover regression</title>
+<div id="wxnow"></div>
+<div id="wx14"></div>
+<span id="sunrise"></span><span id="sunset"></span>
+<div id="sun"><span class="moon"></span></div>
+<pre id="result">running</pre>
+<script>
+  const CONFIG={showUV:false,showAQI:false,weatherDetailMode:"standard",weatherForecastMaxDays:16,weeksBelow:2,windUnit:"mph"};
+  const FMT={wxDay:new Intl.DateTimeFormat(undefined,{weekday:"short"}),hm2:new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit"})};
+  let WX=null,AQI=null;
+  const $=selector=>document.querySelector(selector);
+  const el=(tag,className)=>{ const node=document.createElement(tag); node.className=className||""; return node; };
+  const wmo=()=>["Clear","☀"];
+  const wmoSidebar=wmo;
+  const showWxDayPopup=()=>{};
+</script>
+<script src="../ui/js/weather.js?test=beta-1411-rollover"></script>
+<script>
+  function sampleWeather(times){
+    const n=times.length;
+    return {
+      current:{temperature_2m:72,apparent_temperature:73,weather_code:0,wind_speed_10m:4,relative_humidity_2m:50},
+      daily:{
+        time:times.slice(),weather_code:Array(n).fill(0),
+        temperature_2m_max:times.map((_,i)=>70+i),temperature_2m_min:times.map((_,i)=>50+i),
+        sunrise:times.map(day=>day+"T05:30"),sunset:times.map(day=>day+"T20:30"),uv_index_max:Array(n).fill(4)
+      }
+    };
+  }
+  const now=new Date(2026,5,20,8,0,0);
+  WX=normalizeWeatherDayRollover(sampleWeather(["2026-06-19","2026-06-20","2026-06-21"]),now);
+  renderWeather();
+  const trimmedDates=WX.daily.time.slice(), trimmedHighs=WX.daily.temperature_2m_max.slice();
+  const labels=[...document.querySelectorAll("#wx14 .dd")].map(node=>node.textContent);
+  const empty=normalizeWeatherDayRollover(sampleWeather(["2026-06-18","2026-06-19"]),now);
+  WX=empty;
+  renderWeather(); renderSun();
+  const emptyMessage=document.getElementById("wx14").textContent;
+  const result={
+    passed:trimmedDates[0]==="2026-06-20" && trimmedHighs[0]===71 && labels[0]==="Today" && labels.length===2 && empty.daily.time.length===0 && /catching up/i.test(emptyMessage) && document.getElementById("sunrise").textContent.includes("—"),
+    localDay:"2026-06-20",
+    dates:trimmedDates,
+    highs:trimmedHighs,
+    labels,
+    allPastCount:empty.daily.time.length,
+    emptyMessage
+  };
+  document.documentElement.dataset.weatherRolloverResult=result.passed?"pass":"fail";
+  document.getElementById("result").textContent=JSON.stringify(result,null,2);
+  window.WEATHER_ROLLOVER_RESULT=result;
+</script>

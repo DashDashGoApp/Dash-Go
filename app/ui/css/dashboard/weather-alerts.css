@@ -1,0 +1,64 @@
+/* NWS severe-weather alert banner — slides down over the very top of the
+   screen while any qualifying watch/warning is active. Color = severity;
+   only Extreme (e.g. Tornado Warning) pulses. Tap for the full text. */
+#alertbar{
+  position:fixed;top:0;left:0;right:0;z-index:15;box-sizing:border-box;
+  max-width:100vw;padding:10px 20px;font-family:var(--sans);font-size:23px;font-weight:700;
+  line-height:1.16;letter-spacing:0.04em;color:#fff;cursor:pointer;
+  transform:translateY(-110%);transition:transform .4s ease;
+  box-shadow:0 2px 16px rgba(0,0,0,0.55);
+  white-space:normal;overflow:visible;text-overflow:clip;
+}
+#alertbar.show{transform:translateY(0);}
+#alertbar{display:flex;align-items:flex-start;gap:14px;}
+#alertbar .abtxt{
+  flex:1;min-width:0;overflow:hidden;white-space:normal;overflow-wrap:anywhere;text-overflow:clip;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+}
+#alertbar .abdock{
+  flex:none;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.45);
+  color:inherit;border-radius:7px;padding:5px 14px;font-size:15px;font-weight:700;
+  letter-spacing:0.05em;cursor:pointer;touch-action:manipulation;
+}
+/* Docked state: a small always-visible tab anchored to the top-right
+   screen corner. Keep it tab-like, not button-like, and keep it out of the
+   clock/date area so it cannot collide with seconds or the year. */
+#alerttab{
+  position:fixed;top:0;right:0;z-index:15;display:none;
+  padding:3px 7px 4px 9px;border-radius:0 0 0 9px;cursor:pointer;
+  font-family:var(--sans);font-size:11px;font-weight:800;line-height:1.2;letter-spacing:0.055em;
+  color:#fff;box-shadow:-2px 2px 10px rgba(0,0,0,0.42);touch-action:manipulation;
+  border:1px solid rgba(255,255,255,0.42);border-top:0;border-right:0;
+  max-width:78px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#alerttab.show{display:block;}
+#alerttab.sev-extreme{background:#a3122a;animation:alertpulse 2.2s ease-in-out infinite;}
+#alerttab.sev-severe{background:#b3401f;}
+#alerttab.sev-moderate{background:#9a6b14;}
+#alerttab.sev-minor,#alerttab.sev-unknown{background:#5d5a2a;color:#f4f0d8;}
+#alertbar.sev-extreme{background:#a3122a;animation:alertpulse 2.2s ease-in-out infinite;}
+#alertbar.sev-severe{background:#b3401f;}
+#alertbar.sev-moderate{background:#9a6b14;}
+#alertbar.sev-minor,#alertbar.sev-unknown{background:#5d5a2a;color:#f4f0d8;}
+html.demo-mode #alertbar{top:44px;}
+html.demo-mode #alerttab{top:36px;}
+@media (max-width:760px){
+  #alertbar{font-size:18px;padding:8px 10px;gap:9px;line-height:1.14;}
+  #alertbar .abdock{font-size:12px;padding:5px 9px;}
+}
+@keyframes alertpulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
+
+/* UV / air-quality pills inside the current-conditions block. The colored
+   left edge is the standard category color; text stays theme-colored. */
+.wxpills{display:inline-flex;gap:10px;margin-top:3px;}
+.pill{
+  font-family:var(--mono);font-size:14px;padding:1px 8px;border-radius:9px;
+  border:1px solid var(--line);border-left-width:4px;color:var(--fg);
+  background:rgba(255,255,255,0.04);
+}
+.pill.uv-low{border-left-color:#6fbf6f;}   .pill.uv-mod{border-left-color:#e0c84f;}
+.pill.uv-high{border-left-color:#e0883f;}  .pill.uv-vhigh{border-left-color:#d8503f;}
+.pill.uv-ext{border-left-color:#b06fd8;}
+.pill.aqi-good{border-left-color:#6fbf6f;} .pill.aqi-mod{border-left-color:#e0c84f;}
+.pill.aqi-usg{border-left-color:#e0883f;}  .pill.aqi-unh{border-left-color:#d8503f;}
+.pill.aqi-vunh{border-left-color:#a05fc8;} .pill.aqi-haz{border-left-color:#8f3f4f;}

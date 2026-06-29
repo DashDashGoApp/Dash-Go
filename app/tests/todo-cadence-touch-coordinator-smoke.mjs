@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
+
+const root=resolve(process.argv[2]||".");
+const read=rel=>readFileSync(resolve(root,rel),"utf8");
+const core=read("ui/lists-core.js");
+const actions=read("ui/lists-actions.js");
+const lists=core+"\n"+actions;
+const routes=read("cmd/dashboard-control-server/todo_http_tasks.go");
+const coordinator=read("internal/todo/todo_inbound_coordinator.go");
+const manual=read("internal/todo/todo_manual_sync.go");
+const sync=read("internal/todo/todo_sync.go")+"\n"+read("internal/todo/todo_sync_batch.go");
+const fileio=read("internal/fileio/fileio.go");
+const launcher=read("ui/js/app-launcher.js");
+
+assert.match(routes,/func \(a \*app\) handleTodoTasksGet[\s\S]*?a\.json\(w, a\.readTodoListCache\(parts\[3\]\)\)/,"task GET must return only the cache");
+assert.doesNotMatch(routes.split("func todoTaskIDsFromBody")[0],/todoStartInboundSync/,"cache GET must not start Graph work");
+assert.match(routes,/parts\[4\] == "sync"[\s\S]*?todoStartInboundSyncForList\(listID\)/,"per-list Graph checks must use an explicit POST sync route");
+assert.match(routes,/parts\[4\] == "sync-now"[\s\S]*?todoRequestManualListSync\(listID\)/,"direct app Sync now must be server rate-limited before joining the coordinator");
+assert.match(manual,/todoManualListSyncCooldown\s*=\s*25\s*\*\s*time\.Second/,"direct app Sync now must be limited to one request per list every 25 seconds");
+assert.match(manual,/todoBeginInboundRun/,"direct app Sync now must use the existing coordinator rather than a parallel Graph path");
+assert.match(routes,/parts\[5\] == "batch"[\s\S]*?patchTodoTasksBatch/,"rapid task checks must use one explicit batch mutation route");
+assert.match(coordinator,/todoQueueInboundLocked/,"busy cadence requests must coalesce");
+assert.match(coordinator,/todoTakeQueuedInboundLocked/,"one bounded follow-up must be drained after success");
+assert.match(coordinator,/todoInboundQueuedLists/,"coalescing must union requested list IDs rather than stack jobs");
+assert.match(sync,/func \(a \*Service\) patchTodoTasksBatch/,"server must persist checkbox batches in one local transaction");
+assert.match(actions,/const \{[^}]*queueTaskStatusPatch[^}]*\}=api;/,"Lists actions must import the core status-batch bridge before checkbox taps use it");
+assert.match(sync,/todoListLock\(listID\)/,"same-list cache mutations must serialize");
+assert.match(fileio,/os\.CreateTemp\(filepath\.Dir\(path\), "\."\+filepath\.Base\(path\)\+"\.tmp-\*"\)/,"JSON writes need unique same-directory temporary files");
+assert.match(lists,/setTimeout\([\s\S]*?\},80\)/,"rapid checks must use a short batch window");
+assert.match(lists,/\/tasks\/batch/,"Lists must send rapid checks to the local batch route");
+assert.match(lists,/listsSettlePendingMutations/,"Clear completed must settle local checkbox saves first");
+assert.match(lists,/taskIds:snapshot/,"Clear completed must submit the captured task IDs");
+assert.match(lists,/aria-modal","true"/,"Clear completed must use a real modal confirmation");
+assert.match(lists,/lists-modal-backdrop/,"destructive confirmation must block touches behind it");
+assert.match(lists,/_saving/,"checkboxes must show an immediate saving state");
+assert.match(lists,/openEpoch/,"late responses must be ignored after close/reopen");
+assert.match(launcher,/lists-core\.js[\s\S]*?lists-actions\.js[\s\S]*?lists-grocery\.js/,"split Lists modules must load core, interactions, then Grocery helpers");
+console.log("PASS: To Do cadence coordinator and touch mutation contract");

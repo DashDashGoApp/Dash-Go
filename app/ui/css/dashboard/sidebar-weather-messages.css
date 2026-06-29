@@ -1,0 +1,197 @@
+/* ============ AGENDA (sidebar top) ============ */
+#agenda{
+  background:var(--bg);
+  display:flex;flex-direction:column;overflow:hidden;
+  flex:1 1 55%;min-height:0;          /* shares sidebar height with weather */
+}
+#clock{padding:var(--dash-clock-pad);border-bottom:1px solid var(--line);}  /* generous triple-tap target */
+#cdate{font-family:var(--dash-clock-font);font-size:var(--dash-clock-date-size);font-weight:var(--dash-clock-weight);color:var(--fg);letter-spacing:0.015em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
+#ctime{font-family:var(--dash-clock-font);font-size:var(--dash-clock-time-size);font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
+#ctime sup,#ctime .ap{font-size:var(--dash-clock-suffix-size);color:var(--dim);vertical-align:super;}
+#agendalist{flex:1;overflow-y:auto;scrollbar-width:none;padding:4px 0 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;contain:content;}
+#agendalist::-webkit-scrollbar{display:none;}
+.agday{padding:10px 20px 9px;border-bottom:1px solid var(--line-soft);}
+.agday .lbl{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:0.045em;color:var(--dim);text-transform:uppercase;}
+.agday.today .lbl{color:var(--today);}
+.agday.sat .lbl{color:var(--sat);} .agday.sun .lbl{color:var(--sun);}
+.agev{font-family:var(--dash-calendar-event-font);font-size:calc(var(--agenda-event-size) + var(--dash-calendar-event-size-offset));font-weight:var(--dash-calendar-event-weight);color:var(--fg);margin-top:7px;display:flex;gap:12px;cursor:pointer;line-height:1.22;align-items:flex-start;touch-action:pan-y;content-visibility:auto;contain-intrinsic-size:auto 64px;}
+.agev .at{font-family:var(--mono);font-size:18px;font-weight:600;white-space:nowrap;display:flex;flex-direction:column;flex:0 0 auto;min-width:82px;}
+.agev .at .start{color:var(--accent);}
+.agev .at .end{color:var(--endtime);font-size:16px;}
+.agev .at.allday{color:var(--dimmer);font-size:16px;}
+.agev .agtitle{flex:1;min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
+.agev.empty{color:var(--dimmer);font-style:italic;}
+/* The overscan controller keeps a small directional window painted before it
+   enters view. Distant rows still retain normal browser content culling. */
+#agendalist .agev[data-list-cull-near="1"],#wx14 .wxday[data-list-cull-near="1"]{content-visibility:visible;}
+
+/* ============ WEATHER (sidebar bottom) ============ */
+#weather{
+  background:var(--bg);
+  display:flex;flex-direction:column;overflow:hidden;
+  border-top:1px solid var(--line);
+  flex:1 1 45%;min-height:0;          /* shares sidebar height with agenda */
+}
+#wxnow{
+  padding:13px 20px 11px;display:flex;align-items:center;
+  gap:clamp(14px,1.15vw,22px);border-bottom:1px solid var(--line-soft);
+}
+#wxnow .big{font-family:var(--dash-weather-display-font,var(--dash-weather-font));font-size:var(--dash-weather-big-size);font-weight:var(--dash-weather-primary-weight);line-height:1;letter-spacing:-0.04em;}
+#wxnow .ico{
+  font-size:var(--dash-weather-icon-size);line-height:1;
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+}
+#wxnow .meta{font-family:var(--dash-weather-font);font-size:var(--dash-weather-meta-size);font-weight:var(--dash-weather-meta-weight);color:var(--dim);line-height:1.3;display:flex;flex-direction:column;gap:1px;min-width:0;}
+#wxnow .meta b{color:var(--fg);font-weight:var(--dash-weather-emphasis-weight);white-space:normal;overflow:hidden;text-overflow:clip;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
+#wxnow .meta .sub{font-size:var(--dash-weather-sub-size);font-weight:var(--dash-weather-secondary-weight);white-space:normal;overflow:hidden;text-overflow:clip;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
+/* Current-condition values must wrap only between complete metrics. In
+   particular, a wind number and its configured unit remain one token even
+   when typography or the available sidebar width changes. */
+#wxnow .meta .sub.wx-current-metrics{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.32em;row-gap:0;overflow:visible;-webkit-line-clamp:unset;}
+#wxnow .wx-metric-token{display:inline-flex;flex:0 0 auto;align-items:baseline;white-space:nowrap;}
+#wxnow .wx-wind-token{gap:.32em;}
+#wxnow .wx-metric-sep{color:var(--dimmer);}
+#wx14{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;flex:1;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;contain:content;}
+#wx14::-webkit-scrollbar{display:none;}
+.wxday{
+  flex:0 0 auto;display:grid;grid-template-columns:var(--dash-weather-day-col) var(--dash-weather-icon-col) minmax(0,1fr) minmax(64px,max-content);
+  align-items:center;gap:clamp(6px,.75vw,10px);padding:var(--dash-weather-row-pad);
+  border-bottom:1px solid var(--line-soft);cursor:pointer;touch-action:pan-y;content-visibility:auto;contain-intrinsic-size:auto 64px;
+}
+.wxday:hover{background:rgba(255,255,255,0.03);}
+.wxday .dd{font-family:var(--dash-weather-display-font,var(--dash-weather-font));font-size:var(--dash-weather-day-size);font-weight:var(--dash-weather-secondary-weight);color:var(--dim);}
+.wxday .ic{font-size:var(--dash-weather-row-icon-size);line-height:1;text-align:center;}
+.wxday .desc{font-family:var(--dash-weather-font);font-size:var(--dash-weather-description-size);font-weight:var(--dash-weather-secondary-weight);color:var(--dimmer);line-height:1.12;white-space:normal;overflow-wrap:anywhere;overflow:hidden;max-height:2.35em;}
+.wxday .temps{font-family:var(--dash-weather-display-font,var(--dash-weather-font));font-size:var(--dash-weather-temp-size);font-weight:var(--dash-weather-secondary-weight);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
+.wxday .temps .hi{color:var(--fg);}
+.wxday .temps .lo{color:var(--dimmer);margin-left:6px;}
+
+/* Weather SVGs inherit the responsive tier through their text-size wrappers. */
+#wxnow .wxsvg{width:1em;height:1em;}
+.wxday .wxsvg{width:1.18em;height:1.18em;}
+
+/* ============ COMPLIMENT (bottom bar, under calendar) ============ */
+#compliment{
+  background:var(--bg);
+  border-top:1px solid var(--line);
+  display:flex;align-items:center;
+  /* The message band grows with the real screen height on larger displays,
+     while retaining the established 124px floor on small kiosks.  This gives
+     multi-line messages enough vertical room without stealing excessive
+     calendar space on 800×480 / 1024×600 targets. */
+  height:var(--compliment-height);
+  min-height:var(--compliment-height);
+  max-height:var(--compliment-height);
+  flex:0 0 var(--compliment-height);
+  box-sizing:border-box;
+  padding:12px 36px;
+  position:relative;
+  overflow:hidden;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  touch-action:manipulation;
+}
+#sun{
+  font-family:var(--mono);font-size:22px;color:var(--dim);white-space:nowrap;
+  display:flex;align-items:center;gap:14px;
+}
+#sun .moon{font-size:84px;display:inline-flex;align-items:center;cursor:pointer;touch-action:manipulation;}
+#sun .suntimes{display:flex;flex-direction:column;gap:3px;line-height:1.2;}
+/* Centered in normal flow so long text expands the bar instead of
+   escaping upward into the calendar. The surrounding bottom bar is also the
+   no-clutter triple-tap target for message options, so keep pointer events
+   enabled but suppress browser touch-callout/selection behavior below. */
+#comptext{
+  position:static;
+  transform:none;
+  margin:0 auto;
+  flex:1 1 0;
+  min-width:0;
+  max-width:min(82%,calc(100vw - 360px));
+  max-height:100%;
+  text-align:center;
+  /* Planned semantic breaks use literal text newlines; normal source whitespace
+     still collapses safely, and no markup is introduced for message content. */
+  white-space:pre-line;
+  font-family:var(--dash-message-font);
+  font-weight:var(--dash-message-weight);
+  letter-spacing:-0.012em;
+  line-height:1.08;
+  font-size:var(--message-size);
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:4;
+  overflow:hidden;
+  /* Custom/external messages may contain URLs or long unbroken words. Break
+     them inside the measured text box instead of clipping mid-token. */
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  transition:opacity var(--compfade) ease-in-out;
+  pointer-events:auto;
+  will-change:opacity;
+  backface-visibility:hidden;
+}
+/* A selected semantic two/three-line composition reclaims only unused vertical
+   inset; the footer height, Moon/sun block, and touch target never move. */
+#comptext[data-fit-lines="2"],#comptext[data-fit-lines="3"]{--comptext-pad-y:var(--comptext-planned-pad-y);}
+#sunspacer{display:none;}   /* no longer needed with absolute centering */
+/* Check-soon warning (bottom-right): calendar/weather freshness, eligible
+   external message feeds, or an actionable device health condition. Built-in
+   message content is intentionally not treated as a refresh-dependent feed. */
+#stale{
+  margin-left:auto;font-family:var(--mono);font-size:12px;line-height:1.25;
+  color:var(--sun);white-space:normal;letter-spacing:.02em;display:none;
+  max-width:min(38ch,32vw);text-align:right;word-break:break-word;overflow-wrap:anywhere;
+  appearance:none;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+#stale.show{display:inline-flex;align-items:center;justify-content:flex-end;}
+#stale:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+#stale.severe{color:#ffb1a8;border-color:rgba(255,177,168,.5);}
+@keyframes stale-tap-pulse{0%,100%{transform:scale(1);}45%{transform:scale(.97);}}
+#stale.tap-pulse{animation:stale-tap-pulse .52s ease-out;}
+
+/* 1.2.1-beta.48: make light readability themes keep rows/cards visible. */
+html[data-theme="paper"] .wxday:hover,
+html[data-theme="softmorning"] .wxday:hover,
+html[data-theme="daylight"] .wxday:hover{background:rgba(20,28,34,0.045);}
+html[data-theme="paper"] .pill,
+html[data-theme="softmorning"] .pill,
+html[data-theme="daylight"] .pill{background:rgba(20,28,34,0.045);}
+
+#compliment .cb-launch{
+  position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:2;
+  display:inline-flex;align-items:center;justify-content:center;
+  width:46px;min-width:46px;height:100px;min-height:100px;
+  padding:8px 3px 8px 2px;border-radius:0 18px 18px 0;cursor:pointer;touch-action:manipulation;
+  font-family:var(--sans);font-size:15px;font-weight:900;line-height:1;letter-spacing:0.01em;
+  color:#fff;background:rgba(52,58,64,.96);box-shadow:2px 2px 10px rgba(0,0,0,.38);
+  border:1px solid rgba(255,255,255,0.42);border-left:0;
+  white-space:nowrap;overflow:hidden;
+}
+#compliment .cb-launch-dots{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;}
+#compliment .cb-launch-dots span{
+  display:block;width:8px;height:8px;border-radius:999px;background:currentColor;
+  box-shadow:0 0 0 1px rgba(255,255,255,.16);
+}
+#compliment .cb-launch-stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:.98;}
+#compliment .cb-launch-stack span{display:block;}
+#compliment.has-app-launcher #sun{margin-left:14px;}
+#compliment .cb-launch:active{ transform:translateY(-50%) scale(.97); transform-origin:left center; }
+
+/* Message options gesture: no visible button. Triple-tap the broader bottom
+   message bar to open skip/hide controls. The visual hold/arming outline was
+   removed because long-press is no longer used. */
+#comptext{
+  pointer-events:auto;
+  cursor:pointer;
+  min-height:78px;
+  --comptext-base-pad-y:13px;
+  --comptext-planned-pad-y:6px;
+  padding:var(--comptext-pad-y,var(--comptext-base-pad-y)) 34px;
+  box-sizing:border-box;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  touch-action:manipulation;
+}

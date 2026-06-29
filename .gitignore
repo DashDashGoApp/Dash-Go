@@ -1,0 +1,71 @@
+# Private assistant and maintainer material
+AI.md
+Dash-Go_AI.md
+/private/
+.github-private/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Dash-Go device data and local state
+config/
+calendars/
+cache/
+logs/
+backups/
+exports/
+*.ics
+!app/internal/calendar/events/testdata/*.ics
+.dashboard-*.env
+.dashboard-control.env
+.dashboard-apprise.env
+
+# Generated application assets
+app/bin/dashboard-control-server
+app/bin/dashboard-control-server-linux-*
+app/ui/js/app.bundle.js
+app/ui/js/app.control.bundle.js
+app/ui/dashboard.css
+app/ui/control-layout.css
+
+# Generated release and builder output
+releases/
+github-release-assets/
+dist/
+out/
+build/
+artifacts/
+*.tar.gz
+*.zip
+SHA256SUMS
+*.sha256
+*.sbom.json
+*.spdx.json
+
+# Builder diagnostics and temporary files
+diagnostics/
+reports/
+tmp/
+temp/
+*.log
+*.test
+__pycache__/
+*.py[cod]
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

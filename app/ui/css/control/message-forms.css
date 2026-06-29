@@ -1,0 +1,212 @@
+/* 1.2.1-beta.11: Scheduled messages, friendly priority controls, and scalable OSK. */
+#ctrltempmsg .messageform,
+#ctrlschedmsg .messageform,
+#ctrlcomp .messageform,
+#ctrlcomp .compeditor{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+#ctrlpage-content .msgfield{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  flex:1 1 190px;
+  min-width:0;
+}
+#ctrlpage-content .msgfield-label,
+#ctrlpage-content .msgweight-title{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:var(--dim);
+  font-weight:850;
+}
+#ctrlpage-content .msgfield-detail,
+#ctrlpage-content .msgweight-detail{
+  color:var(--dimmer);
+  font-size:12px;
+  line-height:1.25;
+}
+#ctrlpage-content .msgfieldgrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+}
+#ctrlpage-content input{
+  width:100%;
+  box-sizing:border-box;
+}
+#ctrlpage-content .msgweight{
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  padding:10px;
+  background:rgba(255,255,255,0.028);
+}
+#ctrlpage-content .msgweight-grid{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:8px;
+  margin-top:8px;
+}
+#ctrlpage-content .weightoption{
+  min-height:62px;
+  padding:8px 10px;
+  align-items:flex-start;
+}
+#ctrlpage-content .recurrencebox{
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  padding:10px;
+  background:rgba(255,255,255,0.028);
+}
+#ctrlpage-content .recurrencegrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:8px;
+}
+#ctrlpage-content .daygrid{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:7px;
+  margin-top:8px;
+}
+#ctrlpage-content .monthgrid{grid-template-columns:repeat(6,minmax(0,1fr));}
+#ctrlschedmsg .schedlist,
+#ctrltempmsg .templist{
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  overflow:visible;
+  max-height:none;
+  touch-action:auto;
+}
+#ctrlschedmsg .schedmsgrow .ct:before{
+  content:"Scheduled";
+  display:inline-flex;
+  margin-right:8px;
+  padding:2px 6px;
+  border:1px solid var(--ctrl-accent-border);
+  border-radius:var(--ctrl-radius-pill);
+  background:var(--ctrl-accent-bg);
+  color:var(--fg);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+#osk{
+  width:100vw;
+  max-width:none;
+  box-sizing:border-box;
+}
+#osk .oskrow{
+  gap:clamp(4px,.55vw,8px);
+  margin-bottom:clamp(4px,.55vh,8px);
+}
+#osk .oskkey{
+  min-width:clamp(32px,3.6vw,50px);
+  min-height:clamp(38px,4.8vh,52px);
+  font-size:clamp(14px,1.05vw,18px);
+}
+#osk .oskkey.wide{
+  min-width:clamp(62px,7vw,92px);
+  font-size:clamp(12px,.95vw,15px);
+}
+#osk .oskkey.space{max-width:360px;}
+@media(min-width:1280px){
+  #osk .oskkey{min-width:46px;min-height:48px;font-size:18px;}
+  #osk .oskkey.wide{min-width:88px;}
+}
+@media(max-width:1100px){
+  #ctrlpage-content .msgfieldgrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrlpage-content .msgweight-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+  #ctrlpage-content .recurrencegrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrlpage-content .daygrid{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+@media(max-width:760px){
+  #ctrlpage-content .msgfieldgrid,
+  #ctrlpage-content .msgweight-grid,
+  #ctrlpage-content .recurrencegrid,
+  #ctrlpage-content .daygrid,
+  #ctrlpage-content .monthgrid{grid-template-columns:1fr;}
+}
+#ctrlpage-content .crow{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+}
+#ctrlpage-content .msgfield{
+  flex:0 0 auto;
+}
+#ctrlpage-content .msgfieldgrid .msgfield{
+  flex:1 1 190px;
+}
+
+#ctrlbuiltins .builtinlist{
+  display:grid;
+  gap:8px;
+  max-height:none;
+  overflow:visible;
+  padding-right:0;
+}
+#ctrlbuiltins .builtinrow .ct:before{
+  content:"Default";
+  display:inline-block;
+  margin-right:8px;
+  padding:2px 7px;
+  border-radius:var(--ctrl-radius-pill);
+  border:1px solid var(--ctrl-line);
+  color:var(--dimmer);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+/* 1.2.1-beta.14: Messages tab single-scroll and feed subcards. */
+#ctrlpage-content .messages-subcard{
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  background:rgba(255,255,255,0.025);
+  padding:10px;
+  margin-top:10px;
+}
+#ctrlpage-content .messages-subcard h4{
+  margin:0 0 8px 0;
+  color:var(--fg);
+  font-size:14px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+#ctrlfeeds .feeditemlist{
+  display:grid;
+  gap:8px;
+}
+#ctrlfeeds .feeditemrow .ct:before{
+  content:"Pulled";
+  display:inline-flex;
+  margin-right:8px;
+  padding:2px 6px;
+  border:1px solid var(--ctrl-line);
+  border-radius:var(--ctrl-radius-pill);
+  color:var(--dimmer);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+
+
+/* 1.2.1-beta.16: Messages card spacing and docked OSK reservation. */
+#ctrlpage-content .ctrlsecbody > * + *{margin-top:12px;}
+#ctrlpage-content .messages-subcard{margin-top:12px;padding:12px;}
+#ctrlpage-content .compeditor > * + *{margin-top:12px;}
+#ctrlpage-content .msgweight{margin-top:12px;}
+#ctrlpage-content .ctrlsec[open] > summary{margin-bottom:10px;}
+#ctrlpage-content .sourcegrid,
+#ctrlpage-content .feeditemlist,
+#ctrlpage-content .builtinlist,
+#ctrlpage-content #complist,
+#ctrlpage-content .templist,
+#ctrlpage-content .schedlist{max-height:none;overflow:visible;}

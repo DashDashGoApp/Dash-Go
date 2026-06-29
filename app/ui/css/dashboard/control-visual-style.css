@@ -1,0 +1,63 @@
+/* 1.3.3-beta.3: visual style controls with lite-safe decorative effects. */
+#ctrlvisualstyle{display:flex;flex-direction:column;gap:10px;width:100%;}
+#ctrlvisualstyle .visualstylegroup .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+#ctrlvisualstyle .visualchoice{
+  min-height:74px;padding:10px 11px;align-items:flex-start;justify-content:center;
+  display:flex;flex-direction:column;gap:4px;text-align:left;border-radius:12px;
+}
+#ctrlvisualstyle .visualchoice.on{outline:2px solid var(--accent);outline-offset:1px;background:rgba(127,214,168,.12);}
+#ctrlvisualstyle .visualchoice-title{font-weight:900;color:var(--fg);font-size:14px;line-height:1.08;}
+#ctrlvisualstyle .visualchoice-sub{font-size:12px;line-height:1.22;color:var(--dimmer);font-family:var(--sans);font-weight:600;}
+#ctrlvisualstyle .visualiconpreview{font-size:27px;line-height:1;margin-bottom:2px;color:var(--fg);}
+.seasonal-decor{
+  position:absolute;right:9px;bottom:8px;width:44px;height:44px;
+  color:var(--accent);opacity:.40;pointer-events:none;z-index:0;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.22));
+  transition:none;animation:none;
+}
+.seasonal-decor svg{display:block;width:100%;height:100%;overflow:visible;}
+.seasonal-decor.decor-subtle{width:36px;height:36px;opacity:.24;}
+html[data-profile="lite"] .seasonal-decor,
+html[data-profile="zero2"] .seasonal-decor,
+html[data-profile="low"] .seasonal-decor,
+html[data-profile="low-power"] .seasonal-decor,
+html.profile-lite .seasonal-decor{
+  filter:none!important;transition:none!important;animation:none!important;
+  width:34px;height:34px;opacity:.20;right:6px;bottom:6px;
+}
+html[data-profile="lite"] .seasonal-decor:not(.decor-subtle),
+html[data-profile="zero2"] .seasonal-decor:not(.decor-subtle),
+html[data-profile="low"] .seasonal-decor:not(.decor-subtle),
+html[data-profile="low-power"] .seasonal-decor:not(.decor-subtle),
+html.profile-lite .seasonal-decor:not(.decor-subtle){opacity:.20;}
+
+.daycell .dnum,.daycell .evlist{z-index:1;}
+.decor-halloween{color:#df8a45;}
+.decor-christmas{color:#d8ba5f;}
+.decor-thanksgiving{color:#c38e5d;}
+.decor-autumn{color:#cda76a;}
+.decor-winter{color:#b9d9f7;}
+.decor-spring{color:#8fcf9e;}
+.decor-summer{color:#e3c85f;}
+.decor-valentine{color:#e98ca6;}
+.decor-stpatricks{color:#7fd6a8;}
+.decor-easter{color:#d6b5f2;}
+.decor-newyear{color:#d9c074;}
+.decor-america{color:#8bb4d4;}
+.decor-pride{color:#d99bea;}
+.decor-mardigras{color:#b993e8;}
+.decor-lunar{color:#d89a72;}
+.decor-oktoberfest{color:#d7a25c;}
+.decor-earthday{color:#77c5a1;}
+.decor-cincodemayo{color:#e0b75f;}
+.decor-juneteenth{color:#d69a63;}
+.decor-muertos{color:#e6a241;}
+html[data-font-preset="mono"] .ev .etitle,
+html[data-font-preset="mono"] .spanbar .spantitle{letter-spacing:-.03em;}
+@media(max-width:760px){
+  #ctrlvisualstyle .visualstylegroup .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:6px;}
+  #ctrlvisualstyle .visualchoice{min-height:66px;padding:8px;}
+  #ctrlvisualstyle .visualchoice-title{font-size:13px;}
+  #ctrlvisualstyle .visualchoice-sub{font-size:11.3px;}
+  .seasonal-decor{width:34px;height:34px;right:6px;bottom:6px;}
+}
