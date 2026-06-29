@@ -25,6 +25,25 @@ func TestUpdateStateActive(t *testing.T) {
 	}
 }
 
+func TestCanonicalGitHubInstallerRejectsLegacyScriptAndAcceptsGitHubInstaller(t *testing.T) {
+	dir := t.TempDir()
+	installer := filepath.Join(dir, "install.sh")
+	legacy := "#!/bin/bash\nBASE_URL=${BASE_URL:-}\nDASH_TRACK=beta\n"
+	if err := os.WriteFile(installer, []byte(legacy), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if ready, detail := canonicalGitHubInstaller(installer); ready || !strings.Contains(detail, "legacy update script") {
+		t.Fatalf("legacy installer ready=%v detail=%q", ready, detail)
+	}
+	github := "#!/bin/bash\nREPOSITORY=DashDashGoApp/Dash-Go\nDASH_TRACK=beta\ndownload_release_payload(){ :; }\n"
+	if err := os.WriteFile(installer, []byte(github), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if ready, detail := canonicalGitHubInstaller(installer); !ready || detail != "" {
+		t.Fatalf("GitHub installer ready=%v detail=%q", ready, detail)
+	}
+}
+
 func TestUpdatePreflightDoesNotInventMetadataProblemsWhenCatalogFetchFails(t *testing.T) {
 	a := testProfileApp(t)
 	preflight := a.updatePreflightWithAvailability(map[string]any{

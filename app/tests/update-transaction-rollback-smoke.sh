@@ -40,9 +40,12 @@ atomic_replace_file(){
   cp -p "$src" "$dest"
 }
 restore_personal_settings(){ return 0; }
+RESTORED_CANONICAL_INSTALLER=0
+restore_canonical_installer(){ RESTORED_CANONICAL_INSTALLER=1; return 0; }
 ensure_go_selector_wrapper_installed(){ return 0; }
 release_server_for_host(){ printf '%s\n' "$TMP/verifier"; }
 rollback_update_payload "$STAGE"
+[ "$RESTORED_CANONICAL_INSTALLER" = 1 ] || { echo 'FAIL: rollback did not restore the canonical installer' >&2; exit 1; }
 [ "$(cat "$DASH/managed.txt")" = "old payload" ] || { echo "FAIL: old managed file was not restored" >&2; exit 1; }
 [ ! -e "$DASH/introduced.txt" ] || { echo "FAIL: newly introduced file survived rollback" >&2; exit 1; }
 [ "$(cat "$DASH/ui/js/retired.js")" = "retired source" ] || { echo "FAIL: retired managed source was not restored" >&2; exit 1; }

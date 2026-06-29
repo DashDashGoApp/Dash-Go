@@ -2,11 +2,18 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## Unreleased — 1.5.0-beta.40
+## Unreleased — 1.5.0-beta.41
+
+- Corrects the missed canonical-installer migration exposed by the first Dashboard Control update rehearsal: every verified release bundle now atomically refreshes `~/install.sh` alongside the managed app payload.
+- Records the prior home-directory installer in the same rollback stage and restores it if any later commit or runtime verification step fails.
+- Makes Dashboard Control preflight reject a retained legacy `~/install.sh` rather than reporting a false-ready state and failing only after the safety backup/service launch.
+- Adds regression coverage for installer refresh, rollback restoration, bundle installer discovery, and the legacy-installer preflight block.
+
+## Earlier migration increment — 1.5.0-beta.40
 
 - Release-candidate updater proof only: no new user-facing feature scope.
 - Adds explicit update-availability coverage for a beta-track device advancing from `1.5.0-beta.39` to the matching stable `1.5.0` release.
-- The intended validation is a real Dashboard Control update from beta.39 to beta.40, followed by one separately versioned immutable `1.5.0` stable release from the approved codebase.
+- The first physical Dashboard Control rehearsal exposed a retained pre-GitHub `~/install.sh`; beta.41 corrects that migration gap before stable promotion.
 
 ## Earlier migration increment — 1.5.0-beta.39
 

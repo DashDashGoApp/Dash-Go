@@ -4,7 +4,7 @@
 
 ## Current development release
 
-- **Version:** `1.5.0-beta.40`
+- **Version:** `1.5.0-beta.41`
 - **Track:** beta
 - **Stable promotion target:** `1.5.0`
 - **Minimum upgrade version:** `1.4.0`
@@ -14,12 +14,12 @@
 
 ## This beta
 
-Beta.40 is the release-candidate Dashboard Control update proof for the public GitHub Release channel.
+Beta.41 corrects the canonical-installer migration gap exposed by the first Dashboard Control update rehearsal.
 
-- Deliberately contains no new product feature scope. Its purpose is to exercise the corrected Dashboard Control update transaction from beta.39 to beta.40.
-- Retains the canonical anonymous GitHub Release bundle contract: immutable release bundle, GitHub-reported SHA-256 digests, `SHA256SUMS`, staging, readiness verification, and bounded rollback.
-- Adds explicit regression coverage that a beta-track device sees the matching stable `1.5.0` release as a newer eligible update while the Stable track remains beta-free.
-- After a successful beta.39 → beta.40 touchscreen update, freeze functional code and create one separately versioned immutable `1.5.0` stable release; do not mutate or relabel beta.40.
+- A verified release bundle now atomically refreshes the home-directory `~/install.sh` launcher used by the dedicated Dashboard Control updater, while preserving the prior launcher in the same rollback stage.
+- A later transaction failure restores both the prior managed app payload and the prior canonical installer; no token, alternate host, or legacy credential path is reintroduced.
+- Dashboard Control preflight now detects a retained legacy home installer before it creates a safety backup or launches the updater service, with direct guidance to install one verified GitHub Release bundle.
+- Beta.41 remains release-path-only scope. After a successful Dashboard Control update from beta.39/beta.40 to beta.41, freeze functional code and create one separately versioned immutable `1.5.0` stable release; do not mutate or relabel published betas.
 
 
 ## Recommended operating model

@@ -2188,6 +2188,62 @@ atomic_replace_file(){
   cp -p "$src" "$tmp" && mv -f "$tmp" "$dest"
 }
 
+# The Dashboard Control runner deliberately invokes ~/install.sh rather than
+# an app-tree copy. Every verified release bundle must therefore refresh this
+# canonical launcher as part of the same rollback-capable transaction as the
+# app payload. A bundle installer is covered by the verified release archive;
+# this helper only accepts the installer beside that extracted app payload.
+find_release_bundle_installer(){
+  local extracted="$1" payload_root="$2" candidate
+  for candidate in     "$extracted/install.sh"     "$(dirname "$payload_root")/install.sh"; do
+    [ -f "$candidate" ] || continue
+    validate_download install.sh "$candidate" || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
+}
+
+snapshot_canonical_installer(){
+  local stage="$1" source="$2" backup
+  backup="$stage/canonical-installer"
+  [ -f "$source" ] && validate_download install.sh "$source" || return 1
+  mkdir -p "$backup" || return 1
+  if [ -e "$INSTALLER" ]; then
+    [ -f "$INSTALLER" ] || return 1
+    cp -p "$INSTALLER" "$backup/previous" || return 1
+    printf '%s\n' present > "$backup/state" || return 1
+  else
+    printf '%s\n' absent > "$backup/state" || return 1
+  fi
+}
+
+restore_canonical_installer(){
+  local stage="$1" backup state=""
+  backup="$stage/canonical-installer"
+  [ -f "$backup/state" ] || return 0
+  state="$(tr -d '\r\n[:space:]' < "$backup/state" 2>/dev/null || true)"
+  case "$state" in
+    present)
+      [ -f "$backup/previous" ] && validate_download install.sh "$backup/previous" || return 1
+      atomic_replace_file "$backup/previous" "$INSTALLER" || return 1
+      chmod 700 "$INSTALLER" || return 1
+      ;;
+    absent)
+      rm -f "$INSTALLER" || return 1
+      ;;
+    *) return 1;;
+  esac
+}
+
+install_canonical_installer(){
+  local source="$1"
+  [ -f "$source" ] && validate_download install.sh "$source" || return 1
+  atomic_replace_file "$source" "$INSTALLER" || return 1
+  chmod 700 "$INSTALLER" || return 1
+  cmp -s "$source" "$INSTALLER"
+}
+
 # Personal dashboard state is mutable user data. A release payload must never
 # replace it. Keep a small explicit guard as well as excluding these paths from
 # the tarball/manifest install list.
@@ -2466,7 +2522,7 @@ purge_stale_managed_sources(){
 }
 
 install_release_payload(){
-  local tarball="$1" version="$2" manifest_src="${3:-}" stage extract src backup personal file_list rel failed=0 manifest_file generated_check
+  local tarball="$1" version="$2" manifest_src="${3:-}" installer_src="${4:-}" stage extract src backup personal file_list rel failed=0 manifest_file generated_check canonical_installer=""
   mkdir -p "$DASH" "$BIN_DIR" "$CONFIG_DIR" "$CAL_DIR" "$CACHE_DIR" "$LOG_DIR" "$FONT_DIR" "$RUNTIME_FONT_DIR" "$BASE_DIR" || return 1
   stage="$(mktemp -d "$DASH/.release.XXXXXX")" || return 1
   extract="$stage/extract"; backup="$stage/backup"; personal="$stage/personal"
@@ -2477,6 +2533,13 @@ install_release_payload(){
     warn "release tarball could not be extracted"; rm -rf "$stage"; return 1
   fi
   src="$(find_payload_root "$extract")" || { warn "release tarball does not look like a dashboard payload (index.html missing)"; rm -rf "$stage"; return 1; }
+  canonical_installer="$installer_src"
+  if [ -z "$canonical_installer" ]; then
+    canonical_installer="$(find_release_bundle_installer "$extract" "$src" 2>/dev/null || true)"
+  fi
+  if [ -z "$canonical_installer" ] || ! validate_download install.sh "$canonical_installer"; then
+    warn "verified Dash-Go release bundle is missing its canonical installer"; rm -rf "$stage"; return 1
+  fi
   [ -f "$src/VERSION" ] || printf '%s\n' "$version" > "$src/VERSION"
   if [ -n "$manifest_src" ] && [ -s "$manifest_src" ] && [ ! -f "$src/manifest.json" ]; then cp -p "$manifest_src" "$src/manifest.json" || true; fi
   manifest_file="$src/manifest.json"; file_list="$stage/payload-files.txt"
@@ -2597,6 +2660,9 @@ PYMANLIST
       cp -p "$DASH/$rel" "$backup/$rel" || { warn "could not back up $rel before commit"; rm -rf "$stage"; return 1; }
     fi
   done < "$file_list"
+  if ! snapshot_canonical_installer "$stage" "$canonical_installer"; then
+    warn "could not prepare the canonical installer for rollback"; rm -rf "$stage"; return 1
+  fi
   write_update_phase committing "Installing verified release" "Replacing managed dashboard files from the verified staging area. Personal settings, calendars, cache, logs, and backups stay preserved."
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
@@ -2613,6 +2679,11 @@ PYMANLIST
   chmod +x "$DASH/bin"/*.sh "$DASH/bin"/dashboard-control-server* "$DASH/kiosk.sh" 2>/dev/null || true
   if ! restore_personal_settings "$personal"; then
     rollback_release_transaction "$stage" "Could not restore protected personal settings after update" || true
+    return 1
+  fi
+  write_update_phase committing "Refreshing local updater" "Installing the matching release installer for future Dashboard Control and SSH updates."
+  if ! install_canonical_installer "$canonical_installer"; then
+    rollback_release_transaction "$stage" "Could not install the canonical Dash-Go updater" || true
     return 1
   fi
   local installed_verifier
@@ -2694,6 +2765,7 @@ rollback_update_payload(){
     done < "$stale_list"
   fi
   restore_personal_settings "$stage/personal" || return 1
+  restore_canonical_installer "$stage" || return 1
   ensure_go_selector_wrapper_installed || true
   chmod +x "$BIN_DIR"/*.sh "$BIN_DIR"/dashboard-control-server* "$DASH/kiosk.sh" 2>/dev/null || true
   local rollback_verifier
@@ -2841,7 +2913,7 @@ install_local_release_bundle(){
   payload="$work/Dash-Go_${version}_local_payload.tar.gz"
   if ! tar -C "$INSTALLER_SOURCE_DIR/app" -czf "$payload" .; then rm -rf "$work"; return 1; fi
   write_update_phase validating-payload "Using downloaded release bundle" "Installing the self-contained app payload included with this Dash-Go GitHub Release bundle."
-  if install_release_payload "$payload" "$version"; then rm -rf "$work"; return 0; fi
+  if install_release_payload "$payload" "$version" "" "$INSTALLER_SOURCE_DIR/install.sh"; then rm -rf "$work"; return 0; fi
   rm -rf "$work"; return 1
 }
 

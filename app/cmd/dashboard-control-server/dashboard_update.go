@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/exec"
@@ -43,6 +44,31 @@ func (a *app) updateRunnerPath() string { return filepath.Join(a.binDir, "dashbo
 func executableRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
+}
+
+// canonicalGitHubInstaller prevents Dashboard Control from reporting a false
+// ready state when ~/install.sh is a retained legacy updater. The dedicated
+// runner executes that home-side file, so presence alone is insufficient.
+func canonicalGitHubInstaller(path string) (bool, string) {
+	if !executableRegularFile(path) {
+		return false, "the canonical installer is missing or is not executable"
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false, "the canonical installer could not be read"
+	}
+	defer f.Close()
+	body, err := io.ReadAll(io.LimitReader(f, 1024*1024))
+	if err != nil {
+		return false, "the canonical installer could not be read"
+	}
+	source := string(body)
+	for _, marker := range []string{"DashDashGoApp/Dash-Go", "download_release_payload(){", "DASH_TRACK"} {
+		if !strings.Contains(source, marker) {
+			return false, "the canonical installer is still a legacy update script; install a verified Dash-Go GitHub Release bundle once"
+		}
+	}
+	return true, ""
 }
 
 func updateStateActive(state string) bool {
@@ -215,13 +241,14 @@ func (a *app) updatePreflightWithAvailability(availability map[string]any) map[s
 	problems := []string{}
 	installer := filepath.Join(a.home, "install.sh")
 	installerPresent := fileio.Exists(installer)
+	installerReady, installerDetail := canonicalGitHubInstaller(installer)
 	trackProfilePresent := fileio.Exists(a.updateProfilePath())
 	runnerPresent := executableRegularFile(a.updateRunnerPath())
 	unit := a.updateUnitSnapshot()
 	job := a.readUpdateJob()
 	lockHeld, lockErr := a.updateLockHeld()
-	if !installerPresent {
-		problems = append(problems, "installer is missing from the dashboard account home directory")
+	if !installerReady {
+		problems = append(problems, installerDetail)
 	}
 	// The selected track has a safe installed-version fallback and the installer
 	// recreates its owner-only record on update. Its absence is informative but
@@ -266,7 +293,7 @@ func (a *app) updatePreflightWithAvailability(availability map[string]any) map[s
 	}
 	return map[string]any{
 		"ok": ready, "ready": ready, "catalogReady": catalogReady, "label": label, "detail": detail, "problems": problems,
-		"installerPresent": installerPresent, "updateTrackProfilePresent": trackProfilePresent, "runnerPresent": runnerPresent,
+		"installerPresent": installerPresent, "installerReady": installerReady, "updateTrackProfilePresent": trackProfilePresent, "runnerPresent": runnerPresent,
 		"backupWritable": backupWritable, "availability": availability, "unit": unit, "job": job, "lockHeld": lockHeld,
 		"lockProbeError": lockProbeError,
 	}
