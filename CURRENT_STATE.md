@@ -4,7 +4,7 @@
 
 ## Current development release
 
-- **Version:** `1.5.0-beta.39`
+- **Version:** `1.5.0-beta.40`
 - **Track:** beta
 - **Stable promotion target:** `1.5.0`
 - **Minimum upgrade version:** `1.4.0`
@@ -14,12 +14,12 @@
 
 ## This beta
 
-Beta.39 completes the first Dashboard Control self-update path for the public GitHub Release channel.
+Beta.40 is the release-candidate Dashboard Control update proof for the public GitHub Release channel.
 
-- Replaces the retired nginx catalog preflight with the canonical GitHub Release contract: immutable versioned release bundle, GitHub-reported bundle digest, `SHA256SUMS`, its GitHub-reported digest, and release URL.
-- Removes the stale credential requirement from Dashboard Control. The installed updater remains anonymous and the local Stable/Beta track record is informational; an absent record falls back safely and is recreated by the installer.
-- Keeps the dedicated `dash-go-update.service` transaction model: create a verified local safety backup, stage and validate the selected release, atomically replace managed files, verify local readiness, recycle the kiosk browser, and roll back once on bounded runtime failure.
-- Adds regression coverage so a future source change cannot reintroduce the retired nginx metadata shape or imply that devices need GitHub credentials.
+- Deliberately contains no new product feature scope. Its purpose is to exercise the corrected Dashboard Control update transaction from beta.39 to beta.40.
+- Retains the canonical anonymous GitHub Release bundle contract: immutable release bundle, GitHub-reported SHA-256 digests, `SHA256SUMS`, staging, readiness verification, and bounded rollback.
+- Adds explicit regression coverage that a beta-track device sees the matching stable `1.5.0` release as a newer eligible update while the Stable track remains beta-free.
+- After a successful beta.39 → beta.40 touchscreen update, freeze functional code and create one separately versioned immutable `1.5.0` stable release; do not mutate or relabel beta.40.
 
 
 ## Recommended operating model

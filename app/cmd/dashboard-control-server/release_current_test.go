@@ -79,6 +79,37 @@ func TestCheckUpdateAvailabilityUsesSelectedGitHubBetaRelease(t *testing.T) {
 	}
 }
 
+func TestCheckUpdateAvailabilityBetaCanAdvanceToMatchingStable(t *testing.T) {
+	a := testProfileApp(t)
+	if err := os.WriteFile(filepath.Join(a.dash, "VERSION"), []byte("1.5.0-beta.39\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writeCurrentUpdateProfile(t, a, updateProfileSchema, "beta", nil)
+	a.releaseResolver = func(_ context.Context, track releasepkg.Track) (releasepkg.Resolved, error) {
+		if track != releasepkg.TrackBeta {
+			t.Fatalf("track=%s, want beta", track)
+		}
+		return currentTestResolved(t, "1.5.0", track), nil
+	}
+
+	status := a.checkUpdateAvailability()
+	if got := status["status"]; got != "available" {
+		t.Fatalf("status=%v, want available", got)
+	}
+	if got := status["updateAvailable"]; got != true {
+		t.Fatalf("updateAvailable=%v, want true", got)
+	}
+	if got := status["track"]; got != "beta" {
+		t.Fatalf("track=%v, want beta", got)
+	}
+	if got := status["availableVersion"]; got != "1.5.0" {
+		t.Fatalf("availableVersion=%v, want 1.5.0", got)
+	}
+	if got := status["releaseAsset"]; got != "Dash-Go_1.5.0_release.tar.gz" {
+		t.Fatalf("releaseAsset=%v", got)
+	}
+}
+
 func TestCheckUpdateAvailabilityStableCannotUseBetaResolverResult(t *testing.T) {
 	a := testProfileApp(t)
 	if err := os.WriteFile(filepath.Join(a.dash, "VERSION"), []byte("1.5.0\n"), 0644); err != nil {

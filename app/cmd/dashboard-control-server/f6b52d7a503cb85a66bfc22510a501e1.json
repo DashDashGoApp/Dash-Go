@@ -1,0 +1,17 @@
+{
+ "version": 1,
+ "listId": "local-grocery",
+ "displayName": "",
+ "tasks": [
+  {
+   "id": "milk",
+   "title": "Milk",
+   "status": "notStarted",
+   "dashgoAssignment": {
+    "personId": "alex",
+    "personNameSnapshot": "Alex",
+    "assignedAt": 1782757614321
+   }
+  }
+ ]
+}

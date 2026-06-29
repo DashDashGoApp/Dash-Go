@@ -2,7 +2,13 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## Unreleased — 1.5.0-beta.39
+## Unreleased — 1.5.0-beta.40
+
+- Release-candidate updater proof only: no new user-facing feature scope.
+- Adds explicit update-availability coverage for a beta-track device advancing from `1.5.0-beta.39` to the matching stable `1.5.0` release.
+- The intended validation is a real Dashboard Control update from beta.39 to beta.40, followed by one separately versioned immutable `1.5.0` stable release from the approved codebase.
+
+## Earlier migration increment — 1.5.0-beta.39
 
 - Corrected Dashboard Control’s self-update preflight to consume the canonical immutable GitHub Release bundle and `SHA256SUMS` metadata rather than retired nginx catalog fields.
 - Removed the false update-credential gate from the Dashboard Control status and preflight surfaces; devices remain token-free and use only their local Stable/Beta track preference.
