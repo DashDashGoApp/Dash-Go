@@ -41,7 +41,7 @@ assert.match(liteCompliments,/function complimentLiteScheduleGeometryCapture\(el
 assert.match(liteCompliments,/for\(const node of \[parent,sun,stale\]\)/,"Lite must observe footer geometry sources, not rotating text");
 assert.doesNotMatch(liteCompliments,/observer\.observe\(el\)/,"Lite must not observe #comptext on every message swap");
 assert.doesNotMatch(liteCompliments,/function complimentLiteTextBucket/,"Lite must no longer use broad shape-bucket cache keys");
-const liteFitLogic=(liteCompliments.match(/function complimentLiteFit\(text,metrics\)\{[\s\S]*?\n\}/)?.[0]||"").replace(/\/\/.*$/gm,"");
+const liteFitLogic=(liteCompliments.match(/function complimentLiteFit\(text,metrics,minimumLines\)\{[\s\S]*?\n\}/)?.[0]||"").replace(/\/\/.*$/gm,"");
 assert.ok(liteFitLogic,"Lite message fit function must be present");
 assert.doesNotMatch(liteFitLogic,/getComputedStyle|clientWidth|clientHeight|getBoundingClientRect|scrollWidth|scrollHeight/,"Lite message rotation must not force layout reads");
 assert.match(liteCss,/@supports \(content-visibility:auto\)\{[\s\S]*?html\.profile-lite #calscroll\[data-week-cull-ready="1"\] \.weekrow\{[\s\S]*?content-visibility:auto;[\s\S]*?contain-intrinsic-size:auto var\(--rowheight\);/,

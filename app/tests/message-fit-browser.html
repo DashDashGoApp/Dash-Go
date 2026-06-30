@@ -36,6 +36,7 @@
       fitLines:+el.dataset.fitLines||0,
       fitClipped:el.dataset.fitClipped||"missing",
       fitLayout:el.dataset.fitLayout||"missing",
+      fitCorrected:+el.dataset.fitCorrected||0,
       displayText:el.textContent,
       clamp:+el.style.webkitLineClamp||0,
       width:Math.round(box.width),
@@ -52,6 +53,24 @@
     fitCompliment(text);
     await nextFrame();await nextFrame();
     return messageFitSnapshot("fit");
+  }
+  async function forceLitePredictionMiss(){
+    if(profile!=="lite")return {skipped:true};
+    const originalFit=window.complimentLiteFit,originalChoose=window.complimentLayoutChoose;
+    let calls=0;
+    try{
+      window.complimentLayoutChoose=(text,assess)=>({candidate:{displayText:text,kind:"single",lines:1},fit:assess(text,{lines:1})});
+      window.complimentLiteFit=(text,metrics,minimumLines)=>{
+        calls++;
+        if(calls<=2)return {size:72,lines:1,maxLines:3,fits:true,preferredFloor:24,targetLines:1,box:metrics,lite:true};
+        return originalFit(text,metrics,minimumLines);
+      };
+      COMP_FIT_CACHE.clear();
+      return await fitAndSettle("Kindred — similar in character or related.");
+    }finally{
+      window.complimentLiteFit=originalFit;
+      window.complimentLayoutChoose=originalChoose;
+    }
   }
   async function runMessageFitRegression(){
     try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(_){}
@@ -73,10 +92,13 @@
     COMP_FIT_CACHE.clear();
     const exceptional=await fitAndSettle(exceptionalText);
     const short=await fitAndSettle(shortText);
+    const corrected=await forceLitePredictionMiss();
     const maxLines=profile==="lite"?3:COMP_FIT.maxLines;
+    const exactClamp=snapshot=>snapshot.clamp===snapshot.fitLines;
     const jokePlanned=joke.fitLines===2 && joke.fitLayout==="question-answer" && joke.displayText==="Where do fish keep their money?\nIn the riverbank" && joke.fitSize>=shortBaseline.fitSize*.5;
-    const passed=jokePlanned && long.fitLines<=maxLines && long.contentFits && long.contained && descender.contentFits && descender.contained && unbroken.horizontalFits && short.fitSize===shortBaseline.fitSize && short.contentFits && (profile!=="lite" || (exceptional.clamp===3 && exceptional.fitClipped==="true"));
-    const result={passed,profile,viewport:[innerWidth,innerHeight],shortBaseline,joke,long,descender,unbroken,exceptional,short};
+    const correctedSafe=profile!=="lite" || (corrected.fitCorrected===1 && corrected.fitLines>=2 && exactClamp(corrected) && corrected.contentFits && corrected.contained);
+    const passed=jokePlanned && exactClamp(shortBaseline) && exactClamp(joke) && exactClamp(long) && exactClamp(descender) && exactClamp(unbroken) && long.fitLines<=maxLines && long.contentFits && long.contained && descender.contentFits && descender.contained && unbroken.horizontalFits && short.fitSize===shortBaseline.fitSize && short.contentFits && correctedSafe && (profile!=="lite" || (exceptional.clamp===3 && exceptional.fitClipped==="true"));
+    const result={passed,profile,viewport:[innerWidth,innerHeight],shortBaseline,joke,long,descender,unbroken,exceptional,short,corrected};
     document.documentElement.dataset.messageFitResult=passed?"pass":"fail";
     document.getElementById("result").textContent=JSON.stringify(result,null,2);
     window.MESSAGE_FIT_RESULT=result;

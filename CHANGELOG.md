@@ -2,6 +2,16 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.2-beta.1] — Active development
+
+### Rotating-message safety
+
+- Fixed a Lite-profile footer-edge clipping path where Canvas width prediction could choose too few lines for WebKit’s final wrapping.
+- Clamp the message to its selected fitted-line count, so a prediction miss truncates safely inside the fixed footer rather than rendering below the viewport.
+- Add one bounded animation-frame verification for each newly generated fit cache entry; an observed wrap mismatch is corrected once, then the repaired result is cached.
+- Add a conservative Canvas width allowance, explicit pre-font fallback guard, and a larger multi-line WebKit line-box budget for vertical headroom.
+- Extend source and browser message-fit regressions to cover fitted-line clamping and a deliberately induced Lite prediction miss.
+
 ## [1.5.1] — 2026-06-29
 
 ### Documentation and showcase assets

@@ -11,9 +11,13 @@
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
 
-## This release
+## Active development beta
 
-`1.5.1` is a documentation and showcase-asset maintenance release built from the `1.5.0` functional baseline. It adds repository-owned, metadata-sanitized screenshots and streamlines the README’s Raspberry Pi Imager imagery. There are no intentional application, installer, updater, UI, or runtime behavior changes beyond the normal release identity, cache-buster, and map user-agent version references.
+- **Version:** `1.5.2-beta.1`
+- **Track:** beta
+- **Focus:** make rotating-message fitting fail safely when Lite Canvas prediction and WebKit’s final wrap disagree.
+
+`1.5.2-beta.1` clamps each message to the fitted line count, uses one bounded rendered verification before a new fit becomes trusted in cache, biases Lite Canvas width prediction conservatively, and reserves additional line-box headroom. The fixed bottom band can therefore ellipsize safely within its own bounds rather than letting a late wrapped line fall below the viewport.
 
 ## Recommended operating model
 

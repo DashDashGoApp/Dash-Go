@@ -31,6 +31,8 @@ assert.match(lite,/function complimentLiteReadGeometry\(el\)/,"Lite must capture
 assert.match(lite,/fontFamily:elStyle\.fontFamily[\s\S]*?fontWeight:elStyle\.fontWeight/,"Lite snapshot must retain effective font family and weight for Canvas measurement");
 assert.match(lite,/function complimentLiteLineCount\(text,size,metrics,limit\)/,"Lite must use word-aware Canvas line measurement");
 assert.match(lite,/function complimentLiteMetricsForLines\(metrics,lines\)/,"Lite must derive selected multi-line capacity from cached geometry");
+assert.match(lite,/fontsReady/,"Lite geometry must distinguish settled fonts from the emergency fallback");
+assert.match(lite,/raw\*\(ready\?1\.03:1\.045\)/,"Lite Canvas width must include a conservative WebKit wrap allowance");
 assert.match(lite,/--comptext-base-pad-y/,"Lite geometry snapshots must remain anchored to the normal message inset");
 assert.match(layout,/function complimentLayoutCandidates\(text\)/,"message layout must enumerate bounded display candidates");
 assert.match(layout,/question-answer/,"question-and-answer punctuation must receive a semantic candidate");
@@ -38,10 +40,16 @@ assert.match(layout,/function complimentLayoutChoose\(text,assess\)/,"message la
 assert.match(fit,/__dashComplimentRawText/,"display-only line planning must preserve raw rotation text outside the rendered composition");
 assert.match(lite,/function complimentLiteReadingFloors\(metrics\)/,"Lite must define tier-and-line reading floors");
 assert.match(fit,/function complimentVerticalFitReserve\(size,lines,lite\)/,"message fitting must reserve a small vertical WebKit safety margin");
+assert.match(fit,/function complimentFitLineHeight\(lines\)\{return Number\(lines\)<=1\?1\.06:1\.13;\}/,"fitting must budget more height than the applied WebKit line-height");
 assert.match(lite,/metrics\.contentHeight-complimentVerticalFitReserve/,"Lite Canvas fitting must apply the vertical safety reserve");
+assert.match(lite,/complimentFitLineHeight\(lines\)/,"Lite height fitting must use the conservative line-box budget");
 assert.match(lite,/maxLines:3/,"Lite exceptional content must clamp at three lines");
+assert.match(fit,/el\.style\.webkitLineClamp=String\(lines\)/,"the applied WebKit clamp must equal the selected fit line count");
+assert.match(fit,/function complimentScheduleRenderedVerification\(el,key,fit,metrics,lite\)/,"new fit cache entries must receive one bounded rendered verification");
+assert.match(fit,/function complimentRenderedOverflow\(el,fit\)/,"the rendered verification must detect actual line/box overflow");
+assert.match(fit,/el\.style\.webkitLineClamp="unset"/,"rendered verification must inspect unclamped WebKit wrapping before restoring the safe clamp");
 assert.doesNotMatch(lite,/function complimentLiteTextBucket/,"Lite may not reuse broad text-shape cache buckets");
-const liteFitSource=lite.match(/function complimentLiteFit\(text,metrics\)\{[\s\S]*?\n\}/)?.[0]||"";
+const liteFitSource=lite.match(/function complimentLiteFit\(text,metrics,minimumLines\)\{[\s\S]*?\n\}/)?.[0]||"";
 assert.ok(liteFitSource,"Lite fit function must be present");
 assert.doesNotMatch(liteFitSource,/getComputedStyle|clientWidth|clientHeight|getBoundingClientRect|scrollWidth|scrollHeight/,"ordinary Lite fitting must not read layout during rotation");
 assert.match(lite,/for\(const node of \[parent,sun,stale\]\)/,"Lite observers must watch layout siblings rather than the rotating text element itself");
@@ -72,14 +80,19 @@ function makeContext(multiplier=1){
   return context;
 }
 function metrics(tier,width,height){
-  return {outerWidth:width,outerHeight:height,contentWidth:width,contentHeight:height,elPadV:0,elPadH:0,fontFamily:"Arial",fontWeight:"800",fontStyle:"normal",letterSpacing:0,tier,revision:7,cacheKey:`${tier}:${width}x${height}@7`};
+  return {outerWidth:width,outerHeight:height,contentWidth:width,contentHeight:height,elPadV:0,elPadH:0,fontFamily:"Arial",fontWeight:"800",fontStyle:"normal",letterSpacing:0,fontsReady:true,tier,revision:7,cacheKey:`${tier}:${width}x${height}@7`};
 }
 const context=makeContext(1);
 vm.createContext(context);
-vm.runInContext(`${fit}\n${lite}\n${layout}\nglobalThis.__fit={liteFit:complimentLiteFit,key:complimentFitKey,candidates:complimentLayoutCandidates,choose:complimentLayoutChoose,metricsForLines:complimentLiteMetricsForLines,reserve:complimentVerticalFitReserve};`,context);
+vm.runInContext(`${fit}\n${lite}\n${layout}\nglobalThis.__fit={liteFit:complimentLiteFit,key:complimentFitKey,candidates:complimentLayoutCandidates,choose:complimentLayoutChoose,metricsForLines:complimentLiteMetricsForLines,reserve:complimentVerticalFitReserve,liteWidth:complimentLiteWidth};`,context);
+const rawWidth=40*20*.52;
+const conservativeWidth=context.__fit.liteWidth({measureText(){return {width:rawWidth};}},"a".repeat(40),20,{letterSpacing:0,fontsReady:true});
+const fallbackWidth=context.__fit.liteWidth({measureText(){return {width:rawWidth};}},"a".repeat(40),20,{letterSpacing:0,fontsReady:false});
+assert.ok(conservativeWidth>rawWidth*1.02,"settled-font Lite Canvas measurement must include a 2–4% wrap guard");
+assert.ok(fallbackWidth>conservativeWidth,"pre-font emergency Lite measurement must be still more conservative");
 const prose="The family can see today’s plans, meals, chores, and reminders at a glance without needing to open another screen.";
 const cases=[
-  ["min",420,60,16],
+  ["min",420,60,14],
   ["compact",620,88,20],
   ["base",900,100,24],
   ["base",1400,100,24],
@@ -101,7 +114,7 @@ assert.equal(joke,jokeBefore,"raw message content must remain unchanged when a d
 assert.equal(jokeChoice.candidate.kind,"question-answer","a balanced question-and-answer joke should use its semantic split");
 assert.equal(jokeChoice.candidate.displayText,"Where do fish keep their money?\nIn the riverbank","question punctuation must become the display-only break");
 assert.equal(jokeChoice.fit.lines,2,"the question-and-answer composition must reserve two deliberate lines");
-assert.ok(jokeChoice.fit.size>jokeBaseline.size,"the selected question-and-answer composition must be larger than the cramped natural composition");
+assert.ok(jokeChoice.fit.size>=jokeBaseline.size,"the selected question-and-answer composition must not lose readable size to the conservative wrap budget");
 const shortPunctuation="Today is bright, and you are ready.";
 const shortChoice=context.__fit.choose(shortPunctuation,(displayText,candidate)=>context.__fit.liteFit(displayText,context.__fit.metricsForLines(plannerMetrics,candidate.lines)));
 assert.equal(shortChoice.candidate.kind,"single","a short comma phrase must not be split merely because punctuation exists");
@@ -136,4 +149,42 @@ assert.ok(largeHeadline.size>defaultHeadline.size,"Large / Extra large typograph
 const keyA=context.__fit.key("A calm family note",40,24,true,baseMetrics);
 const keyB=context.__fit.key("A bright family note",40,24,true,baseMetrics);
 assert.notEqual(keyA,keyB,"same-length Lite messages must not share an imprecise shape-bucket cache key");
-console.log("PASS: responsive message band, bounded semantic layout planning, exact-cache Lite geometry, Canvas fitting, typography scaling, tier reading floors, and WebKit-safe vertical headroom");
+
+const correctionContext={
+  CONFIG:{profile:"lite",fontPreset:"default"},SETTINGS:{},
+  window:{devicePixelRatio:1},
+  document:{
+    documentElement:{getAttribute(){return "default";}},
+    fonts:{status:"loaded"},
+    createRange(){throw new Error("use synthetic metrics");},
+  },
+  getComputedStyle(el){
+    const size=parseFloat(el.style.fontSize)||20,ratio=parseFloat(el.style.lineHeight)||1.08;
+    return {fontSize:size+"px",lineHeight:(size*ratio)+"px"};
+  },
+  complimentLiteFit(_text,_metrics,minimumLines){
+    return {size:20,lines:Math.max(2,minimumLines||1),maxLines:3,fits:true,preferredFloor:18,targetLines:Math.max(2,minimumLines||1)};
+  },
+  complimentLiteMetricsForLines(metrics){return metrics;},
+  Math,Number,String,Map,Array,Object,Set,console,setTimeout,clearTimeout,
+  requestAnimationFrame(fn){fn();}
+};
+correctionContext.globalThis=correctionContext;
+vm.createContext(correctionContext);
+vm.runInContext(`${fit}
+globalThis.__guard={apply:complimentApplyFitAndVerify,cache:COMP_FIT_CACHE};`,correctionContext);
+const guardElement={
+  style:{},dataset:{},textContent:"Kindred — similar in character or related.",
+  clientWidth:620,clientHeight:60,scrollWidth:620,
+  get scrollHeight(){
+    const size=parseFloat(this.style.fontSize)||20;
+    return this.style.webkitLineClamp==="unset"?(size>=30?61:40):(size>=30?60:40);
+  }
+};
+const initialFit={size:30,lines:1,maxLines:3,fits:true,displayText:guardElement.textContent,layout:"single"};
+correctionContext.__guard.apply(guardElement,"synthetic-overflow",initialFit,{contentWidth:620,contentHeight:60},true);
+assert.equal(guardElement.style.webkitLineClamp,"2","rendered correction must reapply the corrected fitted-line clamp");
+assert.equal(guardElement.dataset.fitCorrected,"1","rendered correction must record exactly one bounded correction");
+assert.equal(correctionContext.__guard.cache.get("synthetic-overflow").lines,2,"corrected Lite fit must replace the original cache entry");
+
+console.log("PASS: responsive message band, bounded semantic layout planning, exact-cache Lite geometry, conservative Canvas fitting, fitted-line clamping, one-frame correction, typography scaling, tier reading floors, and WebKit-safe vertical headroom");

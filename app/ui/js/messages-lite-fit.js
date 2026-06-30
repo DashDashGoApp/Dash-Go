@@ -1,6 +1,7 @@
 // 07-compliments-00b-lite-fit.js — cached-geometry Canvas fitting for Lite.
-// This path reads layout only after browser-reported geometry changes. Rotating a
-// message uses an in-memory snapshot plus Canvas text metrics, never a DOM probe.
+// This path reads layout only after browser-reported geometry changes. Ordinary
+// cached rotations use an in-memory snapshot plus Canvas metrics; messages-fit
+// owns the single bounded rAF verification before a new fit is cached as trusted.
 const COMP_LITE_GEOMETRY={metrics:null,revision:0,cacheKey:"",captureTimer:0,observer:null,target:null,parent:null,sun:null,stale:null,resizeBound:false,fontBound:false,observed:[]};
 let COMP_LITE_CANVAS=null;
 function complimentLiteTier(){return (document.documentElement&&document.documentElement.dataset&&document.documentElement.dataset.fit)||"base";}
@@ -12,12 +13,12 @@ function complimentLiteViewportMetrics(){
   const tier=complimentLiteTier();let band=tier==="min"?84:tier==="dense"?96:tier==="compact"?112:124;
   if(tier==="xl")band=Math.max(124,Math.min(200,Math.round(height*.12)));
   const outerWidth=Math.max(150,Math.min(Math.round(width*.82),width-360)),contentWidth=Math.max(120,outerWidth-48),contentHeight=Math.max(42,band-24);
-  return {outerWidth,outerHeight:contentHeight,contentWidth,contentHeight,elPadV:0,elPadH:48,fontFamily:"sans-serif",fontWeight:"800",fontStyle:"normal",letterSpacing:0,tier,revision:0,cacheKey:"viewport:"+tier+":"+width+"x"+height};
+  return {outerWidth,outerHeight:contentHeight,contentWidth,contentHeight,elPadV:0,elPadH:48,fontFamily:"sans-serif",fontWeight:"800",fontStyle:"normal",letterSpacing:0,fontsReady:false,tier,revision:0,cacheKey:"viewport:"+tier+":"+width+"x"+height};
 }
 function complimentLiteStyleNumber(style,property){return parseFloat(style&&style[property])||0;}
 function complimentLiteCustomNumber(style,property){return parseFloat(style&&style.getPropertyValue&&style.getPropertyValue(property))||0;}
 function complimentLiteSnapshotKey(metrics){
-  return [Math.round(metrics.contentWidth),Math.round(metrics.contentHeight),metrics.fontFamily||"",metrics.fontWeight||"",metrics.fontStyle||"",Math.round((metrics.letterSpacing||0)*100)/100,metrics.tier||""].join("|");
+  return [Math.round(metrics.contentWidth),Math.round(metrics.contentHeight),metrics.fontFamily||"",metrics.fontWeight||"",metrics.fontStyle||"",Math.round((metrics.letterSpacing||0)*100)/100,metrics.fontsReady===false?"pending":"ready",metrics.tier||""].join("|");
 }
 function complimentLiteReadGeometry(el){
   const parent=el&&el.parentElement;
@@ -33,7 +34,8 @@ function complimentLiteReadGeometry(el){
   const elPadH=complimentLiteStyleNumber(elStyle,"paddingLeft")+complimentLiteStyleNumber(elStyle,"paddingRight");
   const outerWidth=Math.max(1,el.clientWidth||Math.round(el.getBoundingClientRect().width)||320);
   const outerHeight=Math.max(42,(parent.clientHeight||124)-parentPad);
-  const metrics={outerWidth,outerHeight,contentWidth:Math.max(1,outerWidth-elPadH),contentHeight:Math.max(18,outerHeight-elPadV),elPadV,elPadH,fontFamily:elStyle.fontFamily||"sans-serif",fontWeight:elStyle.fontWeight||"800",fontStyle:elStyle.fontStyle||"normal",letterSpacing:complimentLiteStyleNumber(elStyle,"letterSpacing"),tier:complimentLiteTier()};
+  const fontsReady=!(document.fonts&&document.fonts.status&&document.fonts.status!=="loaded");
+  const metrics={outerWidth,outerHeight,contentWidth:Math.max(1,outerWidth-elPadH),contentHeight:Math.max(18,outerHeight-elPadV),elPadV,elPadH,fontFamily:elStyle.fontFamily||"sans-serif",fontWeight:elStyle.fontWeight||"800",fontStyle:elStyle.fontStyle||"normal",letterSpacing:complimentLiteStyleNumber(elStyle,"letterSpacing"),fontsReady,tier:complimentLiteTier()};
   metrics.cacheKey=complimentLiteSnapshotKey(metrics);
   return metrics;
 }
@@ -111,7 +113,12 @@ function complimentLiteFont(metrics,size){return String(metrics.fontStyle||"norm
 function complimentLiteWidth(context,text,size,metrics){
   const chars=Array.from(String(text||"")).length;
   const measured=context?context.measureText(String(text||"")).width:chars*size*.52;
-  return measured+Math.max(0,chars-1)*(metrics.letterSpacing||0);
+  const raw=measured+Math.max(0,chars-1)*(metrics.letterSpacing||0);
+  // Canvas does not reproduce WebKit wrapping, bold glyph advance, or
+  // overflow-wrap:anywhere exactly. Bias toward an extra line rather than a
+  // footer-edge clip; emergency pre-font metrics receive the larger guard.
+  const ready=!metrics||metrics.fontsReady!==false;
+  return raw*(ready?1.03:1.045);
 }
 function complimentLiteTokenChunks(context,token,size,metrics,maxWidth){
   if(complimentLiteWidth(context,token,size,metrics)<=maxWidth)return [token];
@@ -153,7 +160,7 @@ function complimentLiteVisualCaps(metrics){
   const base={xl:92,base:72,compact:58,dense:48,min:40}[metrics.tier]||72;
   const multiplier=complimentTypographyMultiplier();
   return [base,base*.84,base*.70].map((value,index)=>{
-    const lines=index+1,ratio=lines<=1?1.03:1.08;
+    const lines=index+1,ratio=complimentFitLineHeight(lines);
     const reserve=complimentVerticalFitReserve(value*multiplier,lines,true);
     return Math.max(COMP_FIT.hardFloor,Math.floor(Math.min(value*multiplier,Math.max(18,metrics.contentHeight-reserve)/(lines*ratio))));
   });
@@ -169,7 +176,7 @@ function complimentLiteLargestForLines(text,metrics,target,floor,cap){
   let low=floor,high=Math.max(floor,cap),best=0;
   const fits=size=>{
     const lines=complimentLiteLineCount(text,size,metrics,target);
-    const ratio=lines<=1?1.03:1.08;
+    const ratio=complimentFitLineHeight(lines);
     const available=Math.max(18,metrics.contentHeight-complimentVerticalFitReserve(size,lines,true));
     return lines<=target&&lines*size*ratio<=available;
   };
@@ -177,15 +184,16 @@ function complimentLiteLargestForLines(text,metrics,target,floor,cap){
   while(low<=high){const mid=Math.floor((low+high)/2);if(fits(mid)){best=mid;low=mid+1;}else high=mid-1;}
   return best;
 }
-function complimentLiteFit(text,metrics){
+function complimentLiteFit(text,metrics,minimumLines){
   const floors=complimentLiteReadingFloors(metrics),caps=complimentLiteVisualCaps(metrics);
-  for(let target=1;target<=3;target++){
+  const firstTarget=Math.max(1,Math.min(3,Number(minimumLines)||1));
+  for(let target=firstTarget;target<=3;target++){
     const floor=floors[target-1],size=complimentLiteLargestForLines(text,metrics,target,floor,caps[target-1]);
     if(size)return {size,lines:target,maxLines:3,fits:true,preferredFloor:floor,targetLines:target,box:metrics,lite:true};
   }
   // Exceptional content (very long pasted material or a hostile token) keeps
   // the tier's three-line reading floor where possible, then uses the existing
   // WebKit line clamp/ellipsis rather than silently shrinking ordinary prose.
-  const preferredFloor=floors[2],reserve=complimentVerticalFitReserve(preferredFloor,3,true),emergency=Math.max(COMP_FIT.hardFloor,Math.min(preferredFloor,Math.floor(Math.max(18,metrics.contentHeight-reserve)/(3*1.08))));
+  const preferredFloor=floors[2],reserve=complimentVerticalFitReserve(preferredFloor,3,true),emergency=Math.max(COMP_FIT.hardFloor,Math.min(preferredFloor,Math.floor(Math.max(18,metrics.contentHeight-reserve)/(3*complimentFitLineHeight(3)))));
   return {size:emergency,lines:3,maxLines:3,fits:false,preferredFloor,targetLines:3,box:metrics,lite:true};
 }

@@ -1,6 +1,7 @@
 // 07-compliments-00a-fit.js — shared/fully measured rotating-message fitting.
-// Lite-specific cached geometry and Canvas fitting live in 00b so message rotation
-// can stay layout-read-free on Pi Zero class devices.
+// Lite-specific cached geometry and Canvas fitting live in 00b so ordinary
+// cached rotations stay layout-read-free on Pi Zero class devices. A new cache
+// entry receives one bounded rAF verification before it is trusted thereafter.
 const COMP_FIT={hardFloor:12,maxLines:4,maxTargetLines:3,minVisualSize:42,maxVisualSize:72};
 const COMP_FIT_CACHE_LIMIT=120;
 const COMP_FIT_CACHE=new Map();
@@ -25,33 +26,34 @@ function complimentVisualCap(metrics){
   const scale=Math.max(.58,Math.min(1,widthScale,heightScale));
   return Math.round(Math.max(COMP_FIT.minVisualSize,Math.min(COMP_FIT.maxVisualSize,COMP_FIT.maxVisualSize*scale)));
 }
-function complimentLineTarget(text,metrics){
+function complimentLineTarget(text,metrics,minimumLines){
   const display=typeof complimentDisplayText==="function"?complimentDisplayText(text):String(text||"");
   const clean=complimentCleanText(display);if(!clean)return 1;
   const forced=Math.max(1,display.split("\n").filter(Boolean).length),cap=complimentVisualCap(metrics);
+  const minimum=Math.max(1,Math.min(COMP_FIT.maxTargetLines,Number(minimumLines)||1));
   const charsPerLine=Math.max(8,Math.floor(metrics.contentWidth/Math.max(1,cap*.52)));
-  return Math.max(forced,Math.min(COMP_FIT.maxTargetLines,Math.ceil(clean.length/charsPerLine)));
+  return Math.max(forced,Math.min(COMP_FIT.maxTargetLines,Math.max(minimum,Math.ceil(clean.length/charsPerLine))));
 }
 function complimentTypographyMultiplier(){
   const raw=typeof messageTypographySizeMultiplier==="function"?messageTypographySizeMultiplier():1;
   return Number.isFinite(+raw)?Math.max(.60,Math.min(1.50,+raw)):1;
 }
+function complimentRenderedLineHeight(lines){return Number(lines)<=1?1.03:1.08;}
+function complimentFitLineHeight(lines){return Number(lines)<=1?1.06:1.13;}
 function complimentVerticalFitReserve(size,lines,lite){
-  // WebKit line boxes can extend a few CSS pixels beyond Canvas/ratio estimates,
-  // especially with bold glyph descenders and semantic two-line breaks. Reserve
-  // only the small edge margin needed to prevent footer clipping.
-  const count=Math.max(1,Math.min(3,Number(lines)||1));
+  // Budget a little more than the applied line-height. WebKit's final line box,
+  // bold descenders, and semantic breaks can exceed Canvas' optimistic estimate.
+  const count=Math.max(1,Math.min(COMP_FIT.maxLines,Number(lines)||1));
   const px=Math.max(1,Number(size)||0);
-  const base=count<=1?4:count===2?6:8;
+  const base=count<=1?5:count===2?8:count===3?11:13;
   const scale=Math.max(0,Math.min(3,Math.ceil(px/40)-1));
-  // Tiny constrained layouts already have a much smaller glyph box. Keep the
-  // three-line reading floor viable there; apply Lite's extra WebKit margin
-  // once ordinary footer text reaches a visually meaningful size.
-  return base+scale+(lite&&px>=28?1:0);
+  // The Lite path deliberately keeps a touch more headroom because Canvas is a
+  // predictor, not WebKit's final wrapping engine.
+  return base+scale+(lite&&px>=28?2:0);
 }
-function complimentStartSizeFor(text,metrics){
-  const lines=complimentLineTarget(text,metrics),clean=complimentCleanText(text);
-  const ratio=lines<=1?1.03:1.08;
+function complimentStartSizeFor(text,metrics,minimumLines){
+  const lines=complimentLineTarget(text,metrics,minimumLines),clean=complimentCleanText(text);
+  const ratio=complimentFitLineHeight(lines);
   const visualCap=complimentVisualCap(metrics)*complimentTypographyMultiplier();
   const expectedChars=Math.max(1,Math.ceil(clean.length/lines));
   const widthCap=metrics.contentWidth/Math.max(1,expectedChars*.52);
@@ -87,7 +89,7 @@ function cacheComplimentFit(key,fit){
 }
 function resetComplimentFit(el){
   for(const prop of ["font-size","line-height","letter-spacing","-webkit-line-clamp"])el.style.removeProperty(prop);
-  delete el.dataset.fitLines;delete el.dataset.fitSize;delete el.dataset.fitClipped;delete el.dataset.fitLayout;
+  delete el.dataset.fitLines;delete el.dataset.fitSize;delete el.dataset.fitClipped;delete el.dataset.fitLayout;delete el.dataset.fitCorrected;
 }
 function complimentBoxBucket(metrics){return Math.round(metrics.contentWidth/2)*2+"x"+Math.round(metrics.contentHeight/2)*2;}
 function complimentFitKey(text,start,floor,lite,metrics){
@@ -98,14 +100,18 @@ function complimentFitKey(text,start,floor,lite,metrics){
 }
 function applyComplimentFit(el,fit,metrics){
   const size=Math.max(COMP_FIT.hardFloor,Math.round((fit&&fit.size)||complimentFloorSize(metrics||complimentBoxMetrics(el))));
+  const lines=Math.max(1,Math.round(Number(fit&&fit.lines)||1));
   el.style.fontSize=size+"px";
-  el.style.lineHeight=(fit&&fit.lines<=1)?"1.03":"1.08";
-  el.style.letterSpacing=(fit&&fit.lines<=1)?"-0.025em":"-0.014em";
-  el.dataset.fitLines=String((fit&&fit.lines)||1);
+  el.style.lineHeight=String(complimentRenderedLineHeight(lines));
+  el.style.letterSpacing=lines<=1?"-0.025em":"-0.014em";
+  el.dataset.fitLines=String(lines);
   el.dataset.fitSize=String(size);
   el.dataset.fitClipped=(fit&&fit.fits===false)?"true":"false";
   el.dataset.fitLayout=String((fit&&fit.layout)||"single");
-  el.style.webkitLineClamp=String((fit&&fit.maxLines)||COMP_FIT.maxLines);
+  el.dataset.fitCorrected=String(Math.max(0,Number(fit&&fit.correctionAttempts)||0));
+  // Clamp to the fit that was actually selected. A conservative fallback is
+  // ellipsis inside the footer, never text escaping below the viewport.
+  el.style.webkitLineClamp=String(lines);
 }
 function complimentRenderedLineCount(el){
   try{
@@ -117,13 +123,20 @@ function complimentRenderedLineCount(el){
   const lh=parseFloat(getComputedStyle(el).lineHeight)||sz*1.08;
   return Math.max(1,Math.ceil((el.scrollHeight-1)/lh));
 }
-function measureComplimentFit(el,text,start,floor,metrics){
+function measureComplimentFit(el,text,start,floor,metrics,minimumLines){
   const box=metrics||complimentBoxMetrics(el),maxH=Math.max(42,box.outerHeight),maxW=Math.max(1,box.outerWidth);
-  const targetLines=complimentLineTarget(text,box);
+  const targetLines=complimentLineTarget(text,box,minimumLines);
   const preferredFloor=Math.max(COMP_FIT.hardFloor,Math.min(Math.max(COMP_FIT.hardFloor,start-1),floor));
   const old={fontSize:el.style.fontSize,lineHeight:el.style.lineHeight,webkitLineClamp:el.style.webkitLineClamp,letterSpacing:el.style.letterSpacing,visibility:el.style.visibility};
-  el.style.visibility="hidden";el.style.webkitLineClamp="unset";el.style.lineHeight=targetLines<=1?"1.03":"1.08";el.style.letterSpacing=targetLines<=1?"-0.025em":"-0.014em";
-  const measureAt=sz=>{el.style.fontSize=sz+"px";let lines=complimentRenderedLineCount(el);const ratio=lines<=1?1.03:1.08;el.style.lineHeight=String(ratio);lines=complimentRenderedLineCount(el);return {lines,requiredH:lines*sz*ratio+box.elPadV};};
+  el.style.visibility="hidden";el.style.webkitLineClamp="unset";el.style.lineHeight=String(complimentRenderedLineHeight(targetLines));el.style.letterSpacing=targetLines<=1?"-0.025em":"-0.014em";
+  const measureAt=sz=>{
+    el.style.fontSize=sz+"px";
+    let lines=complimentRenderedLineCount(el);
+    el.style.lineHeight=String(complimentRenderedLineHeight(lines));
+    lines=complimentRenderedLineCount(el);
+    const budget=complimentFitLineHeight(lines)*lines*sz+box.elPadV;
+    return {lines,requiredH:Math.max(el.scrollHeight,budget)};
+  };
   const fits=sz=>{
     const measured=measureAt(sz);
     const availableH=Math.max(18,maxH-complimentVerticalFitReserve(sz,measured.lines,false));
@@ -138,6 +151,52 @@ function measureComplimentFit(el,text,start,floor,metrics){
   el.style.fontSize=old.fontSize;el.style.lineHeight=old.lineHeight;el.style.webkitLineClamp=old.webkitLineClamp;el.style.letterSpacing=old.letterSpacing;el.style.visibility=old.visibility;
   return {size:best,lines,maxH,maxW,fits:finalFits,preferredFloor,targetLines,box};
 }
+function complimentRenderedOverflow(el,fit){
+  const planned=Math.max(1,Number(fit&&fit.lines)||1);
+  if(!el||el.clientWidth<1||el.clientHeight<1)return {overflow:false,lines:planned};
+  const clamp=el.style.webkitLineClamp;
+  try{
+    // Measure unclamped inside one animation frame, then restore synchronously
+    // before paint. This exposes a Canvas/WebKit wrapping disagreement without
+    // letting that disagreement become visible at the screen edge.
+    el.style.webkitLineClamp="unset";
+    const lines=complimentRenderedLineCount(el);
+    const vertical=el.scrollHeight>el.clientHeight+1;
+    const horizontal=el.scrollWidth>el.clientWidth+1;
+    return {overflow:lines>planned||vertical||horizontal,lines:Math.max(planned,lines)};
+  }finally{el.style.webkitLineClamp=clamp;}
+}
+function complimentCorrectRenderedFit(el,key,fit,metrics,lite,observedLines){
+  const minimum=Math.max(1,Math.min(lite?3:COMP_FIT.maxLines,Number(observedLines)||1));
+  let next;
+  if(lite){
+    const candidateMetrics=typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,minimum):metrics;
+    next=complimentLiteFit(fit.displayText,candidateMetrics,minimum);
+  }else{
+    const candidateMetrics=complimentBoxMetrics(el);
+    const start=complimentStartSizeFor(fit.displayText,candidateMetrics,minimum);
+    next=measureComplimentFit(el,fit.displayText,start,complimentFloorSize(candidateMetrics),candidateMetrics,minimum);
+  }
+  next={...next,displayText:fit.displayText,layout:fit.layout||"single",correctionAttempts:Math.max(0,Number(fit.correctionAttempts)||0)+1};
+  cacheComplimentFit(key,next);el.textContent=next.displayText;complimentApplyFitAndVerify(el,key,next,metrics,lite);
+}
+function complimentScheduleRenderedVerification(el,key,fit,metrics,lite){
+  if(!el||!key||fit.renderVerified||fit.renderVerifyPending)return;
+  fit.renderVerifyPending=true;
+  const verify=()=>{
+    fit.renderVerifyPending=false;
+    if(el.__dashComplimentFitKey!==key||el.__dashComplimentFit!==fit)return;
+    const observed=complimentRenderedOverflow(el,fit);
+    if(!observed.overflow){fit.renderVerified=true;cacheComplimentFit(key,fit);return;}
+    if(Number(fit.correctionAttempts)||0){fit.renderVerified=true;fit.fits=false;cacheComplimentFit(key,fit);return;}
+    complimentCorrectRenderedFit(el,key,fit,metrics,lite,observed.lines);
+  };
+  if(typeof requestAnimationFrame==="function")requestAnimationFrame(verify);else setTimeout(verify,0);
+}
+function complimentApplyFitAndVerify(el,key,fit,metrics,lite){
+  el.__dashComplimentFitKey=key;el.__dashComplimentFit=fit;
+  applyComplimentFit(el,fit,metrics);complimentScheduleRenderedVerification(el,key,fit,metrics,lite);
+}
 function fitCompliment(rawText){
   const el=document.getElementById("comptext");if(!el)return;
   const text=complimentCleanText(rawText===undefined?(el.__dashComplimentRawText||el.textContent||""):rawText);
@@ -149,17 +208,17 @@ function fitCompliment(rawText){
   const start=lite?baseline.size:complimentStartSizeFor(text,metrics);
   const floor=lite?baseline.preferredFloor:complimentFloorSize(metrics);
   const key=complimentFitKey(text,start,floor,lite,metrics),cached=COMP_FIT_CACHE.get(key);
-  if(cached){el.textContent=cached.displayText||text;applyComplimentFit(el,cached,metrics);return;}
+  if(cached){el.textContent=cached.displayText||text;complimentApplyFitAndVerify(el,key,cached,metrics,lite);return;}
   const assess=(displayText,candidate)=>{
     const plannedLines=Math.max(1,Number(candidate&&candidate.lines)||1);
-    if(lite)return complimentLiteFit(displayText,typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,plannedLines):metrics);
+    if(lite)return complimentLiteFit(displayText,typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,plannedLines):metrics,plannedLines);
     if(plannedLines>1)el.dataset.fitLines=String(plannedLines);else delete el.dataset.fitLines;
-    const candidateMetrics=complimentBoxMetrics(el),candidateStart=complimentStartSizeFor(displayText,candidateMetrics),candidateFloor=complimentFloorSize(candidateMetrics);
-    el.textContent=displayText;return measureComplimentFit(el,displayText,candidateStart,candidateFloor,candidateMetrics);
+    const candidateMetrics=complimentBoxMetrics(el),candidateStart=complimentStartSizeFor(displayText,candidateMetrics,plannedLines),candidateFloor=complimentFloorSize(candidateMetrics);
+    el.textContent=displayText;return measureComplimentFit(el,displayText,candidateStart,candidateFloor,candidateMetrics,plannedLines);
   };
   const decision=typeof complimentLayoutChoose==="function"?complimentLayoutChoose(text,assess):{candidate:{displayText:text,kind:"single"},fit:assess(text)};
   const fit={...(decision.fit||baseline||{}),displayText:(decision.candidate&&decision.candidate.displayText)||text,layout:(decision.candidate&&decision.candidate.kind)||"single"};
-  el.textContent=fit.displayText;applyComplimentFit(el,fit,metrics);cacheComplimentFit(key,fit);
+  el.textContent=fit.displayText;cacheComplimentFit(key,fit);complimentApplyFitAndVerify(el,key,fit,metrics,lite);
 }
 function complimentFadeValueMs(value){const raw=Number(value);return Number.isFinite(raw)?Math.max(0,Math.min(5000,Math.round(raw))):750;}
 function complimentFadeLabel(value){const ms=complimentFadeValueMs(value);if(ms===0)return "Instant";if(ms<=150)return "Very fast";if(ms<=350)return "Fast";if(ms<=800)return "Normal";if(ms<=1500)return "Slow";return "Very slow";}
