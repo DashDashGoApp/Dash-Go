@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.1"
+VERSION="1.5.2"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -134,7 +134,7 @@ sha256sum --ignore-missing --check SHA256SUMS
 A successful check reports:
 
 ```text
-Dash-Go_1.5.1_release.tar.gz: OK
+Dash-Go_1.5.2_release.tar.gz: OK
 ```
 
 Do not continue if checksum verification fails.
@@ -158,21 +158,11 @@ Dash-Go releases are published as immutable GitHub Releases. The downloaded bund
 
 During installation and normal updates, Dash-Go also validates the staged release contents, selected architecture binary, generated browser assets, and managed-file replacement process before replacing the running dashboard.
 
-### Public release transition
+### Maintainer release process
 
-Dash-Go uses the official GitHub Releases page for release bundles, source
-archives, SPDX SBOMs, and checksum manifests. The installed updater is
-intentionally anonymous: do not put a GitHub token on a Dash-Go VM or Pi.
+Dash-Go is distributed publicly through the official GitHub repository and GitHub Releases. The installed updater remains anonymous: do not put a GitHub token on a Dash-Go VM or Pi.
 
-Before publishing a release, maintainers must complete the local builder,
-verify `SHA256SUMS`, compare GitHub-reported asset digests with local files,
-and review the source and release history for privacy-sensitive material. The
-full maintainer workflow is in [`RELEASING.md`](RELEASING.md).
-
-A private repository can be used to rehearse source push, tags, draft releases,
-and authenticated maintainer downloads. Before changing repository visibility,
-replace any private rehearsal history or assets that contain material not meant
-for public release.
+Maintainers build release assets locally, verify `SHA256SUMS` and GitHub-reported asset digests, create a draft release for review, then publish and run the public-release probe. The concise current workflow is in [`RELEASING.md`](RELEASING.md).
 
 ## First dashboard setup
 

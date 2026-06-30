@@ -29,8 +29,8 @@ done
 
 grep -Fq 'Report a vulnerability' "$root/SECURITY.md" || \
   fail 'SECURITY.md must describe the GitHub private-reporting boundary'
-grep -Fq 'Public release transition' "$root/README.md" || \
-  fail 'README.md must document the public release transition'
+grep -Fq 'Maintainer release process' "$root/README.md" || \
+  fail 'README.md must document the public release process'
 grep -Fq 'DashDashGoApp/Dash-Go' "$root/RELEASING.md" || \
   fail 'RELEASING.md must name the canonical repository'
 

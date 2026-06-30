@@ -38,7 +38,7 @@ The project uses:
 
 The local builder is the authority for generated browser assets, compiled binaries, package validation, checksums, release metadata, and release archives.
 
-Maintainers use [`RELEASING.md`](RELEASING.md) for the privacy-reviewed source push, exact tag, private rehearsal, draft-release, and public-release process. Release assets are never committed to the source repository.
+Maintainers use [`RELEASING.md`](RELEASING.md) for the privacy-reviewed source push, local Builder validation, exact tag, draft-release review, publication, and public-release probe. Release assets are never committed to the source repository.
 
 ## Source layout
 

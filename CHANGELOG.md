@@ -2,63 +2,29 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.2-beta.5] — Active development
+## [1.5.2] — 2026-06-30
 
-### CodeQL hardening with bounded on-demand work
+### Household experience
 
-- Replaced direct weather-secret hashing with a keyed HMAC cache-namespace marker; existing provider cache entries refresh once naturally after the upgrade, without new providers, polling, or key storage.
-- Hardened Dashboard Control backup selection around server-discovered regular-file records and reject symlinked backup ZIPs before restore or removal.
-- Replaced raw calendar-link backup metadata with trusted-root records: direct `.ics` links may resolve under the Dash-Go user home or the supported system `/Calendars` root, while outside-root, nested, special-file, and unsafe symlink-chain targets fail before a live restore swap. Broken direct calendar links remain supported when their lexical target is within a trusted root.
-- Moved runtime font serving to immutable font metadata, verified regular file handles, and `ServeContent`; unchanged downloaded fonts reuse an in-memory size/mtime validation result instead of re-hashing on every font request.
-- Removed interpolated calendar-color and theme-preview style attributes in favor of DOM-created nodes and CSS property assignment.
-- Replaced dynamic document fallback paths and fragile test-only HTML/URL matching with fixed local assets, literal script extraction, and exact parsed-host checks.
-- Added focused source contracts for the addressed CodeQL paths. No dashboard refresh timer, network poll, startup scan, or render-hot-path measurement was added.
-- Corrected the config-backup record sort to compare `time.Time` values directly and added a regression test for descending backup ordering with distinct timestamps.
+- Improved Lite message fitting and footer safety, refreshed the built-in household message catalog, and added calendar-aware observance wording that respects configured holiday sources.
+- Added editable local Household Schedules for Payday, Trash Pickup, and Recycling Pickup, including safe one-time day-popup corrections for Dash-Go-owned occurrences.
+- Made Dash-Go-owned Chore Wheel, Maintenance, and Routine completion controls reversible when the durable household record can safely return to its prior state.
 
-### Reversible day-popup completion
+### Themes and calendar clarity
 
-- Made Dash-Go-owned Chore Wheel day-popup checkboxes reversible for current and past assignments: checked means completed and unchecked restores assigned without changing person, date, identity, or fairness planning.
-- Replaced the one-way chore completion control with a bounded assigned/completed status mutation while keeping skipped and future assignments read-only.
-- Made Maintenance completion state durable in the requested day projection. A mistaken completion can restore its original due date and prior completion value only while it remains the task’s latest safe action.
-- Added linked Maintenance undo history, server-side verification, and read-only explanatory rows when a later edit, reschedule, archive, restore, person correction, or newer completion makes restoration unsafe.
-- Kept Routine checklist steps reversible after whole-routine completion, and explicitly reject skipped or future routine-session checkbox mutations.
-- Updated actionable popup controls to use native checkboxes, server-authoritative rerenders, saving guards, error rollback, touch/keyboard labels, and no browser-memory-only Maintenance completion list.
+- Curated the theme picker into purposeful groups, retired the More catchall, intentionally excluded Back to School and Game Day, and retained touch-safe four-to-six-column preview grids with Seasons fixed at four columns.
+- Added event-backed Holidays & Observances themes, including gated Hanukkah and Kwanzaa availability, and improved calendar-legibility tokens across selected existing palettes.
 
+### Reliability, privacy, and maintenance
 
-### Rotating-message safety
+- Hardened weather cache identity, backup selection, trusted calendar-link backup/restore, runtime font delivery, control previews, and fixed local fallbacks without adding background dashboard work.
+- Preserved trusted calendar-link targets under the Dash-Go user home and `/Calendars`; unsafe paths, special files, and unsafe link chains fail before live restore replacement.
+- Corrected backup ordering to compare full timestamps directly and extended focused source coverage around the new behavior.
 
-- Fixed a Lite-profile footer-edge clipping path where Canvas width prediction could choose too few lines for WebKit’s final wrapping.
-- Clamp the message to its selected fitted-line count, so a prediction miss truncates safely inside the fixed footer rather than rendering below the viewport.
-- Add one bounded animation-frame verification for each newly generated fit cache entry; an observed wrap mismatch is corrected once, then the repaired result is cached.
-- Add a conservative Canvas width allowance, explicit pre-font fallback guard, and a larger multi-line WebKit line-box budget for vertical headroom.
-- Extend source and browser message-fit regressions to cover fitted-line clamping and a deliberately induced Lite prediction miss.
+### Documentation and release workflow
 
-### Message catalog and calendar-aware observances
-
-- Reworked the built-in rotating-message catalog around household-safe encouragement, with the requested removals, revisions, and additions.
-- Preserve a user’s hidden/default-edit state when a revised built-in message receives new wording; custom messages remain untouched.
-- Add event-derived holiday contexts for enabled civil and installer-selected Jewish, Islamic, Christian, Orthodox Christian, and Hindu calendar layers.
-- Add neutral acknowledgement, direct celebration greetings, solemn-observance wording, and inclusive overlapping-occasion messages. Direct greetings require both the matching loaded calendar layer and an exact known celebration title; unknown or manually tagged holiday sources receive neutral acknowledgement only.
-- Keep holiday-aware rotations mixed with normal household messages: 40% on ordinary observances and 60% on curated major celebrations.
-
-### Household schedules and date corrections
-
-- Added a versioned, local-only Household Schedules model that migrates existing installer-created Payday, Trash Pickup, and Recycling Pickup settings without requiring setup to run again.
-- Added multiple named Payday rules with every-N-week, multiple monthly-date, and nth-weekday schedules; monthly dates support 1–31 and use the last day when a requested date does not exist in a month.
-- Added per-rule business-day or holiday-shift policies, with weekends and only the user-selected installed holiday layers counted for each rule.
-- Added Dashboard Control → Calendars → Household Schedules for recurring edits, pauses, previews, deletion of Payday rules, and restoration of one-time adjustments.
-- Added trusted generated-event metadata and a day-popup Manage schedule flow for Dash-Go-owned Paydays, Trash Pickup, and Recycling Pickup only: quick ±1/2/3/7-day moves, a chosen date, skip, and restore normal date.
-- Kept imported, subscribed, public holiday, astronomy, and other external calendars read-only; visible titles never determine editability.
-
-### Theme catalog and calendar-aware observance themes
-
-- Expanded the shared theme catalog to 100 curated themes and retired the former More catchall by moving its palettes into Color, Nature & Elements, and Aesthetic groups.
-- Added Nature & Elements, Aesthetic, Materials, Practical, and event-backed Holidays & Observances groups while preserving every existing theme ID and saved selection.
-- Intentionally excluded Back to School and Game Day.
-- Added Memorial Day, Labor Day, Veterans Day, Mother’s Day, Father’s Day, Hanukkah, and Kwanzaa palettes. Hanukkah only appears from a loaded Jewish holiday source with a recognized observance; Kwanzaa requires a recognized event from an enabled holiday-tagged source.
-- Kept the theme preview-card presentation, with Seasons fixed to four columns and other groups using responsive four-to-six-column layouts.
-- Applied the review’s calendar-legibility corrections to Sunset, Desert, Jade, Firefly, Olive, Cherry, Winter, Independence Day, Thanksgiving, Cinco de Mayo, and Daylight.
-- Let the seasonal helper consult the local event cache for exact supported observances before using its existing fixed-date schedule; no new network work or date guessing is introduced.
+- Updated installation examples and current-release documentation for the public GitHub Releases workflow.
+- Consolidated the 1.5.2 beta development record into this stable release entry.
 
 ## [1.5.1] — 2026-06-29
 

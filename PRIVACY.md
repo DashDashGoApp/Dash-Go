@@ -1,6 +1,6 @@
 # Dash-Go Privacy
 
-**Applies to:** Dash-Go 1.5.0
+**Applies to:** Dash-Go 1.5.2
 **License:** MIT
 
 Dash-Go is designed as a local household dashboard. Its core features work on the device itself and do not require a Dash-Go account, a centralized Dash-Go cloud service, or an advertising service.
