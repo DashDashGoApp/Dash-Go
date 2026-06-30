@@ -29,12 +29,21 @@ function renderCtrlThemeData(row,t){
     const ti=themeInfo(name), tv=themeVars(name);
     const b=el("button","themebtn preview"+(name===t.current?" cur sel":""),"");
     b.setAttribute("aria-label","Choose theme "+ti.label+" — "+ti.summary);
-    b.innerHTML=`
-      <span class="themepreview" style="--pbg:${escapeHTML(tv["--bg"]||"#0a0a0d")};--ppanel:${escapeHTML(tv["--panel"]||"rgba(255,255,255,.04)")};--pfg:${escapeHTML(tv["--fg"]||"#e8e8ea")};--paccent:${escapeHTML(tv["--accent"]||"#8fc4a6")};--ptoday:${escapeHTML(tv["--today"]||"#d9c074")};--psat:${escapeHTML(tv["--sat"]||"#8bb4d4")};--psun:${escapeHTML(tv["--sun"]||"#d99a9a")};">
-        <span class="tpbar"></span><span class="tpgrid"><i></i><i></i><i></i></span><span class="tpchip"></span>
-      </span>
-      <span class="themename">${escapeHTML(ti.label)}</span>
-      <span class="themesummary">${escapeHTML(ti.summary)}</span>`;
+    const preview=el("span","themepreview","");
+    const previewVars={
+      "--pbg":tv["--bg"]||"#0a0a0d", "--ppanel":tv["--panel"]||"rgba(255,255,255,.04)",
+      "--pfg":tv["--fg"]||"#e8e8ea", "--paccent":tv["--accent"]||"#8fc4a6",
+      "--ptoday":tv["--today"]||"#d9c074", "--psat":tv["--sat"]||"#8bb4d4", "--psun":tv["--sun"]||"#d99a9a"
+    };
+    for(const [property,value] of Object.entries(previewVars)) preview.style.setProperty(property,String(value));
+    preview.appendChild(el("span","tpbar", ""));
+    const previewGrid=el("span","tpgrid","");
+    for(let i=0;i<3;i++) previewGrid.appendChild(el("i","", ""));
+    preview.appendChild(previewGrid);
+    preview.appendChild(el("span","tpchip", ""));
+    b.appendChild(preview);
+    b.appendChild(el("span","themename",ti.label));
+    b.appendChild(el("span","themesummary",ti.summary));
     btns[name]=b;
     b.addEventListener("click",()=>{
       if(btns[chosen]) btns[chosen].classList.remove("sel");

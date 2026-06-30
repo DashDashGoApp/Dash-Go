@@ -30,7 +30,7 @@ type configRestoreEntry struct {
 // configBackupCalendarLinks reads optional link metadata from modern backups.
 // Older archives did not record links, so a missing metadata entry remains a
 // valid empty-link restore path.
-func configBackupCalendarLinks(zr *zip.ReadCloser) ([]calendarBackupLink, error) {
+func (a *app) configBackupCalendarLinks(zr *zip.ReadCloser) ([]calendarBackupLink, error) {
 	var meta *zip.File
 	for _, f := range zr.File {
 		if f.Name != "backup-meta.json" {
@@ -78,7 +78,7 @@ func configBackupCalendarLinks(zr *zip.ReadCloser) ([]calendarBackupLink, error)
 	if err := json.Unmarshal(value, &links); err != nil {
 		return nil, errors.New("backup calendar link metadata is malformed")
 	}
-	return normalizeCalendarBackupLinks(links)
+	return normalizeCalendarBackupLinks(links, a.calendarBackupLinkPolicy())
 }
 
 func validateConfigBackupRestoreLinks(entries []configRestoreEntry, links []calendarBackupLink) error {
@@ -212,6 +212,7 @@ func (a *app) stageConfigBackup(entries []configRestoreEntry, calendarLinks []ca
 			return cleanup(errors.New("backup too large"))
 		}
 	}
+	policy := a.calendarBackupLinkPolicy()
 	for _, link := range calendarLinks {
 		dest := filepath.Join(stage, "calendars", filepath.FromSlash(link.Path))
 		root := filepath.Join(stage, "calendars")
@@ -223,7 +224,18 @@ func (a *app) stageConfigBackup(entries []configRestoreEntry, calendarLinks []ca
 		} else if !os.IsNotExist(err) {
 			return cleanup(err)
 		}
-		if err := os.Symlink(link.Target, dest); err != nil {
+		target, err := policy.restoreTarget(link)
+		if err != nil {
+			return cleanup(err)
+		}
+		// Build the relative text for the final live calendar directory, not
+		// the temporary stage directory. The stage tree is later atomically
+		// swapped into a.calDir, so the link stays correct after that move.
+		relativeTarget, err := filepath.Rel(a.calDir, target)
+		if err != nil || relativeTarget == "" || filepath.IsAbs(relativeTarget) {
+			return cleanup(errors.New("backup calendar link target cannot be restored"))
+		}
+		if err := os.Symlink(relativeTarget, dest); err != nil {
 			return cleanup(err)
 		}
 	}
@@ -340,7 +352,7 @@ func (a *app) restoreConfigBackup(name string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	zr, err := zip.OpenReader(filepath.Join(a.backupDir(), chosen))
+	zr, err := zip.OpenReader(chosen.FullPath)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +361,7 @@ func (a *app) restoreConfigBackup(name string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	calendarLinks, err := configBackupCalendarLinks(zr)
+	calendarLinks, err := a.configBackupCalendarLinks(zr)
 	if err != nil {
 		return nil, err
 	}
@@ -383,5 +395,5 @@ func (a *app) restoreConfigBackup(name string) (map[string]any, error) {
 	a.invalidateSettingsCache()
 	_, _ = a.refreshEventCache(true, 90, 365)
 	pruned := a.pruneConfigBackups(a.configBackupKeepLimit())
-	return map[string]any{"ok": true, "name": chosen, "restored": restored, "preBackup": pre["name"], "pruned": pruned["removedCount"], "backups": a.listConfigBackups()}, nil
+	return map[string]any{"ok": true, "name": chosen.Name, "restored": restored, "preBackup": pre["name"], "pruned": pruned["removedCount"], "backups": a.listConfigBackups()}, nil
 }

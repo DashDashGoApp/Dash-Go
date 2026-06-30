@@ -74,18 +74,42 @@ function renderCtrlCalendarHealth(st,wrap,withSummary){
     wrap.appendChild(actions);
   }
   const tbl=document.createElement("table"); tbl.className="ctrltable calhealthtable";
-  tbl.innerHTML="<thead><tr><th>Calendar</th><th>Health</th><th>Events</th><th>Source</th></tr></thead><tbody></tbody>";
-  const tb=tbl.querySelector("tbody");
+  const thead=document.createElement("thead"), headRow=document.createElement("tr");
+  for(const label of ["Calendar","Health","Events","Source"]) headRow.appendChild(el("th","",label));
+  thead.appendChild(headRow); tbl.appendChild(thead);
+  const tb=document.createElement("tbody"); tbl.appendChild(tb);
   for(const c of rows){
     const tr=document.createElement("tr");
     const lvl=calendarHealthLevelClass(c.level);
     const problems=(c.problems&&c.problems.length)?c.problems.join(" · "):calendarSourceDetail(c);
     const name=(c.name||c.url||"");
-    const color=c.color?`<span class="caldot" style="background:${escapeHTML(c.color)}"></span>`:"";
     tr.className="calrow "+lvl;
     const srcMain=c.mtimeMs?fmtDateTime(c.mtimeMs):"missing";
     const srcMeta=c.isSymlink&&c.realPath?("symlink → "+c.realPath):(c.source&&c.source.sha256?("content hash " + String(c.source.sha256).slice(0,12)):"");
-    tr.innerHTML=`<td><div class="calname">${color}<span>${escapeHTML(name)}</span></div><div class="calmeta">${escapeHTML(c.tag||c.url||"")}</div></td><td><span class="calbadge ${lvl}">${escapeHTML(calendarHealthLabel(c.level,c.label))}</span><div class="calissue">${escapeHTML(problems||"—")}</div></td><td>${escapeHTML(String(c.events||0))}</td><td><div>${escapeHTML(srcMain)}</div><div class="calmeta">${escapeHTML(srcMeta)}</div></td>`;
+
+    const nameCell=el("td","","");
+    const nameLine=el("div","calname","");
+    const color=String(c.color||"").trim();
+    if(color && color.length<=80){
+      const dot=el("span","caldot","");
+      dot.style.backgroundColor=color;
+      nameLine.appendChild(dot);
+    }
+    nameLine.appendChild(el("span","",name));
+    nameCell.appendChild(nameLine);
+    nameCell.appendChild(el("div","calmeta",c.tag||c.url||""));
+    tr.appendChild(nameCell);
+
+    const healthCell=el("td","","");
+    healthCell.appendChild(el("span","calbadge "+lvl,calendarHealthLabel(c.level,c.label)));
+    healthCell.appendChild(el("div","calissue",problems||"—"));
+    tr.appendChild(healthCell);
+    tr.appendChild(el("td","",String(c.events||0)));
+
+    const sourceCell=el("td","","");
+    sourceCell.appendChild(el("div","",srcMain));
+    sourceCell.appendChild(el("div","calmeta",srcMeta));
+    tr.appendChild(sourceCell);
     tb.appendChild(tr);
   }
   const tableWrap=el("div","ctrltable-scroll");

@@ -46,12 +46,14 @@ type Service struct {
 	bundledFontsDir string
 	validateRadar   RadarValidator
 
-	mu        sync.Mutex
-	writeMu   sync.Mutex
-	cache     map[string]any
-	cacheMod  time.Time
-	cacheSize int64
-	cacheOK   bool
+	mu         sync.Mutex
+	writeMu    sync.Mutex
+	fontMu     sync.Mutex
+	fontChecks map[string]runtimeFontVerification
+	cache      map[string]any
+	cacheMod   time.Time
+	cacheSize  int64
+	cacheOK    bool
 }
 
 func New(cfg Config) *Service {

@@ -244,7 +244,7 @@ function appendLauncherScript(src,dataName){
 function loadChalkboardAssets(){
   if(window.openChalkboardImpl) return Promise.resolve();
   if(_chalkboardLoading) return _chalkboardLoading;
-  const version=CONFIG.version||"1.5.2-beta.4";
+  const version=CONFIG.version||"1.5.2-beta.5";
   _chalkboardLoading=appendLauncherStyle("ui/chalkboard.css?v="+version,"chalkboard").then(()=>appendLauncherScript("ui/chalkboard.js?v="+version,"chalkboard-script"));
   _chalkboardLoading.catch(()=>{_chalkboardLoading=null;});return _chalkboardLoading;
 }
@@ -269,7 +269,7 @@ function appendListsScript(src,dataName){
 function loadListsAssets(){
   if(window.openListsImpl&&window.DashGoGroceryQuickAdd&&window.DashGoListsPeople) return Promise.resolve();
   if(_listsLoading) return _listsLoading;
-  const version=CONFIG.version||"1.5.2-beta.4";
+  const version=CONFIG.version||"1.5.2-beta.5";
   _listsLoading=appendLauncherStyle("ui/lists.css?v="+version,"listsapp").then(()=>appendListsScript("ui/lists-core.js?v="+version,"listsapp-core-script")).then(()=>appendListsScript("ui/lists-actions.js?v="+version,"listsapp-actions-script")).then(()=>appendListsScript("ui/lists-people.js?v="+version,"lists-people-script")).then(()=>appendListsScript("ui/lists-grocery.js?v="+version,"lists-grocery-script"));
   _listsLoading.catch(()=>{_listsLoading=null;});return _listsLoading;
 }

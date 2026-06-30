@@ -18,6 +18,11 @@ import (
 // RuntimeFontSourceCommit is an immutable Google Fonts repository revision.
 const RuntimeFontSourceCommit = "de88e79a24337aa0209f3abcc044d2500ca07021"
 
+const (
+	minRuntimeFontBytes = int64(4096)
+	maxRuntimeFontBytes = int64(2 * 1024 * 1024)
+)
+
 type RuntimeFontAsset struct {
 	File, Family, Weight, URL, SHA256 string
 }
@@ -25,6 +30,12 @@ type RuntimeFontAsset struct {
 type RuntimeFontSpec struct {
 	Key, Family, Fallback string
 	Assets                []RuntimeFontAsset
+}
+
+type runtimeFontVerification struct {
+	Size     int64
+	Modified time.Time
+	Valid    bool
 }
 
 var runtimeFontSpecs = map[string]RuntimeFontSpec{
@@ -57,6 +68,31 @@ func RuntimeFontSpecs() map[string]RuntimeFontSpec {
 	return out
 }
 
+func runtimeFontAssetNameSafe(name string) bool {
+	return name != "" && filepath.Base(name) == name && !strings.Contains(name, "\\") && strings.EqualFold(filepath.Ext(name), ".ttf")
+}
+
+func runtimeFontAssetByFile(name string) (RuntimeFontAsset, bool) {
+	if !runtimeFontAssetNameSafe(name) {
+		return RuntimeFontAsset{}, false
+	}
+	for _, spec := range runtimeFontSpecs {
+		for _, asset := range spec.Assets {
+			if asset.File == name {
+				return asset, true
+			}
+		}
+	}
+	return RuntimeFontAsset{}, false
+}
+
+func (s *Service) runtimeFontAssetPath(asset RuntimeFontAsset) string {
+	// asset.File comes from the immutable runtimeFontSpecs catalog (or has been
+	// validated as a single .ttf leaf before a staged download). A request URL is
+	// never used as a filesystem path.
+	return filepath.Join(s.fontsDir, asset.File)
+}
+
 func (s *Service) FontStatus() map[string]any {
 	required := []string{"LibreFranklin-400.ttf", "LibreFranklin-600.ttf", "LibreFranklin-700.ttf", "LibreFranklin-800.ttf", "DMMono-500.ttf"}
 	missing := []string{}
@@ -83,7 +119,7 @@ func (s *Service) RuntimeFontState(key string) string {
 		return "missing"
 	}
 	for _, asset := range spec.Assets {
-		if !RuntimeFontAssetValid(filepath.Join(s.fontsDir, asset.File), asset) {
+		if !s.runtimeFontAssetValid(asset) {
 			return "missing"
 		}
 	}
@@ -113,21 +149,30 @@ func (s *Service) FontFaceCSS() string {
 	return b.String()
 }
 
-// RuntimeFontPath validates a public font leaf name and returns a verified file
-// path only when it is one of the pinned runtime assets.
+// RuntimeFontPath remains a narrow diagnostics/test helper. It first maps the
+// public leaf to a pinned asset, then derives the path only from that asset.
 func (s *Service) RuntimeFontPath(name string) (string, bool) {
-	if filepath.Base(name) != name || name == "." || name == "" {
+	asset, ok := runtimeFontAssetByFile(name)
+	if !ok || !s.runtimeFontAssetValid(asset) {
 		return "", false
 	}
-	for _, spec := range runtimeFontSpecs {
-		for _, asset := range spec.Assets {
-			if asset.File == name {
-				path := filepath.Join(s.fontsDir, name)
-				return path, RuntimeFontAssetValid(path, asset)
-			}
-		}
+	return s.runtimeFontAssetPath(asset), true
+}
+
+// OpenRuntimeFont opens only a verified, pinned runtime asset. The public URL
+// leaf selects metadata; it cannot become a filesystem path or a ServeFile
+// target. Callers own the returned file and must close it.
+func (s *Service) OpenRuntimeFont(name string) (*os.File, os.FileInfo, string, bool) {
+	asset, ok := runtimeFontAssetByFile(name)
+	if !ok || !s.runtimeFontAssetValid(asset) {
+		return nil, nil, "", false
 	}
-	return "", false
+	path := s.runtimeFontAssetPath(asset)
+	file, info, err := openRegularRuntimeFont(path)
+	if err != nil {
+		return nil, nil, "", false
+	}
+	return file, info, asset.File, true
 }
 
 // DownloadRuntimeFontWithClient stages every asset and verifies full SHA-256
@@ -145,7 +190,7 @@ func (s *Service) DownloadRuntimeFontWithClient(spec RuntimeFontSpec, client *ht
 	}
 	defer os.RemoveAll(stage)
 	for _, asset := range spec.Assets {
-		if !ValidRuntimeFontSHA256(asset.SHA256) {
+		if !runtimeFontAssetNameSafe(asset.File) || !ValidRuntimeFontSHA256(asset.SHA256) {
 			return fmt.Errorf("font source integrity metadata is invalid")
 		}
 		req, err := http.NewRequest(http.MethodGet, asset.URL, nil)
@@ -164,7 +209,7 @@ func (s *Service) DownloadRuntimeFontWithClient(spec RuntimeFontSpec, client *ht
 		destination := filepath.Join(stage, asset.File)
 		f, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err == nil {
-			_, err = io.Copy(f, io.LimitReader(res.Body, 2*1024*1024+1))
+			_, err = io.Copy(f, io.LimitReader(res.Body, maxRuntimeFontBytes+1))
 			closeErr := f.Close()
 			if err == nil {
 				err = closeErr
@@ -177,10 +222,11 @@ func (s *Service) DownloadRuntimeFontWithClient(spec RuntimeFontSpec, client *ht
 	}
 	files := []map[string]any{}
 	for _, asset := range spec.Assets {
-		from, to := filepath.Join(stage, asset.File), filepath.Join(s.fontsDir, asset.File)
+		from, to := filepath.Join(stage, asset.File), s.runtimeFontAssetPath(asset)
 		if err := os.Rename(from, to); err != nil {
 			return err
 		}
+		s.invalidateRuntimeFontAsset(asset.File)
 		files = append(files, map[string]any{"file": asset.File, "family": asset.Family, "weight": asset.Weight, "sha256": asset.SHA256})
 	}
 	manifest, ok := readJSONMap(filepath.Join(s.fontsDir, "installed.json"))
@@ -203,16 +249,57 @@ func readJSONMap(path string) (map[string]any, bool) {
 	return value, true
 }
 
+func openRegularRuntimeFont(path string) (*os.File, os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() < minRuntimeFontBytes || info.Size() > maxRuntimeFontBytes {
+		return nil, nil, fmt.Errorf("runtime font is not a regular bounded file")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, info, nil
+}
+
+func fontFileLooksValid(file *os.File, info os.FileInfo) bool {
+	if file == nil || info == nil || !info.Mode().IsRegular() || info.Size() < minRuntimeFontBytes || info.Size() > maxRuntimeFontBytes {
+		return false
+	}
+	probeLen := min(int(info.Size()), 160)
+	probe := make([]byte, probeLen)
+	n, err := file.ReadAt(probe, 0)
+	if err != nil && err != io.EOF {
+		return false
+	}
+	probe = probe[:n]
+	if len(probe) < 4 || strings.Contains(strings.ToLower(string(probe)), "<html") {
+		return false
+	}
+	magic := string(probe[:4])
+	return magic == "OTTO" || magic == "true" || magic == "ttcf" || (probe[0] == 0 && probe[1] == 1 && probe[2] == 0 && probe[3] == 0)
+}
+
+func runtimeFontSHA256File(file *os.File) (string, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func FontLooksValid(path string) bool {
-	b, err := os.ReadFile(path)
-	if err != nil || len(b) < 4096 || len(b) > 2*1024*1024 {
+	file, info, err := openRegularRuntimeFont(path)
+	if err != nil {
 		return false
 	}
-	if strings.Contains(strings.ToLower(string(b[:min(len(b), 160)])), "<html") || len(b) < 4 {
-		return false
-	}
-	magic := string(b[:4])
-	return magic == "OTTO" || magic == "true" || magic == "ttcf" || (b[0] == 0 && b[1] == 1 && b[2] == 0 && b[3] == 0)
+	defer file.Close()
+	return fontFileLooksValid(file, info)
 }
 
 func ValidRuntimeFontSHA256(value string) bool {
@@ -224,22 +311,63 @@ func ValidRuntimeFontSHA256(value string) bool {
 }
 
 func RuntimeFontSHA256(path string) (string, error) {
-	f, err := os.Open(path)
+	file, _, err := openRegularRuntimeFont(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	defer file.Close()
+	return runtimeFontSHA256File(file)
 }
 
 func RuntimeFontAssetValid(path string, asset RuntimeFontAsset) bool {
-	if !ValidRuntimeFontSHA256(asset.SHA256) || !FontLooksValid(path) {
+	if !runtimeFontAssetNameSafe(asset.File) || !ValidRuntimeFontSHA256(asset.SHA256) {
 		return false
 	}
-	sum, err := RuntimeFontSHA256(path)
+	file, info, err := openRegularRuntimeFont(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	if !fontFileLooksValid(file, info) {
+		return false
+	}
+	sum, err := runtimeFontSHA256File(file)
 	return err == nil && strings.EqualFold(sum, asset.SHA256)
+}
+
+func (s *Service) runtimeFontAssetValid(asset RuntimeFontAsset) bool {
+	if !runtimeFontAssetNameSafe(asset.File) || !ValidRuntimeFontSHA256(asset.SHA256) {
+		return false
+	}
+	path := s.runtimeFontAssetPath(asset)
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() < minRuntimeFontBytes || info.Size() > maxRuntimeFontBytes {
+		return false
+	}
+	key := asset.File + "\x00" + asset.SHA256
+	s.fontMu.Lock()
+	if prior, ok := s.fontChecks[key]; ok && prior.Size == info.Size() && prior.Modified.Equal(info.ModTime()) {
+		valid := prior.Valid
+		s.fontMu.Unlock()
+		return valid
+	}
+	s.fontMu.Unlock()
+	valid := RuntimeFontAssetValid(path, asset)
+	s.fontMu.Lock()
+	if s.fontChecks == nil {
+		s.fontChecks = map[string]runtimeFontVerification{}
+	}
+	s.fontChecks[key] = runtimeFontVerification{Size: info.Size(), Modified: info.ModTime(), Valid: valid}
+	s.fontMu.Unlock()
+	return valid
+}
+
+func (s *Service) invalidateRuntimeFontAsset(name string) {
+	s.fontMu.Lock()
+	defer s.fontMu.Unlock()
+	for key := range s.fontChecks {
+		if strings.HasPrefix(key, name+"\x00") {
+			delete(s.fontChecks, key)
+		}
+	}
 }

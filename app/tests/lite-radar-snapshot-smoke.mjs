@@ -86,7 +86,10 @@ for (const id of [
 nodes.get("radarstage").clientWidth = 1024;
 nodes.get("radarstage").clientHeight = 600;
 
-function imageKind(url) { return String(url).includes("tile.openstreetmap.org") ? "base" : "radar"; }
+function imageKind(url) {
+  try { return new URL(String(url)).hostname === "tile.openstreetmap.org" ? "base" : "radar"; }
+  catch (_) { return "radar"; }
+}
 function imageDelay(url) {
   const value = String(url);
   if (slowAllTiles) return 60;

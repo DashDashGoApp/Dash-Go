@@ -42,10 +42,13 @@ func readBackupZipEntry(t *testing.T, path, name string) []byte {
 	return nil
 }
 
-func TestConfigBackupPreservesDirectCalendarSymlinkAsMetadata(t *testing.T) {
+func TestConfigBackupPreservesHomeCalendarSymlinkAsMetadata(t *testing.T) {
 	a := testApp(t)
-	outside := filepath.Join(t.TempDir(), "external.ics")
+	outside := filepath.Join(a.home, ".dashboard-vdirsyncer", "export", "family.ics")
 	original := []byte("BEGIN:VCALENDAR\nSUMMARY:external-only-marker\nEND:VCALENDAR\n")
+	if err := os.MkdirAll(filepath.Dir(outside), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(outside, original, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +76,8 @@ func TestConfigBackupPreservesDirectCalendarSymlinkAsMetadata(t *testing.T) {
 	if err := json.Unmarshal(meta["calendarLinks"], &links); err != nil {
 		t.Fatal(err)
 	}
-	if len(links) != 1 || links[0].Path != "family.ics" || links[0].Target != target {
-		t.Fatalf("calendar link metadata = %#v, want literal path and target", links)
+	if len(links) != 1 || links[0].Path != "family.ics" || links[0].Root != calendarBackupLinkRootHome || links[0].Target != ".dashboard-vdirsyncer/export/family.ics" {
+		t.Fatalf("calendar link metadata = %#v, want structured home-root link", links)
 	}
 	zr, err := zip.OpenReader(archive)
 	if err != nil {
@@ -111,9 +114,9 @@ func TestConfigBackupPreservesDirectCalendarSymlinkAsMetadata(t *testing.T) {
 	if err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("calendar link was not restored: info=%#v err=%v", info, err)
 	}
-	gotTarget, err := os.Readlink(link)
-	if err != nil || gotTarget != target {
-		t.Fatalf("restored target = %q / %v, want %q", gotTarget, err, target)
+	resolved, err := filepath.EvalSymlinks(link)
+	if err != nil || filepath.Clean(resolved) != filepath.Clean(outside) {
+		t.Fatalf("restored target = %q / %v, want %q", resolved, err, outside)
 	}
 	if body, err := os.ReadFile(outside); err != nil || !bytes.Equal(body, original) {
 		t.Fatalf("restore touched external target: %v / %q", err, body)
@@ -123,10 +126,14 @@ func TestConfigBackupPreservesDirectCalendarSymlinkAsMetadata(t *testing.T) {
 	}
 }
 
-func TestConfigBackupPreservesBrokenCalendarSymlink(t *testing.T) {
+func TestConfigBackupPreservesBrokenHomeCalendarSymlink(t *testing.T) {
 	a := testApp(t)
 	link := filepath.Join(a.calDir, "offline.ics")
-	const target = "../../not-mounted/family.ics"
+	expected := filepath.Join(a.home, "not-mounted", "family.ics")
+	target, err := filepath.Rel(a.calDir, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(target, link); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
@@ -141,14 +148,69 @@ func TestConfigBackupPreservesBrokenCalendarSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := os.Readlink(link)
-	if err != nil || got != target {
-		t.Fatalf("broken link was not restored literally: %q / %v", got, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual := filepath.Clean(filepath.Join(a.calDir, got)); actual != filepath.Clean(expected) {
+		t.Fatalf("broken link target = %q, resolves to %q, want %q", got, actual, expected)
+	}
+}
+
+func TestDefaultCalendarBackupLinkPolicySupportsRootCalendars(t *testing.T) {
+	a := testApp(t)
+	policy := a.calendarBackupLinkPolicy()
+	if policy.SystemCalendarsRoot != calendarBackupSystemCalendarsRoot || calendarBackupSystemCalendarsRoot != "/Calendars" {
+		t.Fatalf("system calendar root = %q, want /Calendars", policy.SystemCalendarsRoot)
+	}
+	link, err := policy.normalizeLink(calendarBackupLink{Path: "family.ics", Root: calendarBackupLinkRootSystem, Target: "family.ics"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := policy.restoreTarget(link)
+	if err != nil || filepath.Clean(restored) != "/Calendars/family.ics" {
+		t.Fatalf("restored /Calendars target = %q / %v", restored, err)
+	}
+}
+
+func TestCalendarBackupLinkPolicyRejectsExistingNonRegularTarget(t *testing.T) {
+	root := t.TempDir()
+	policy := calendarBackupLinkPolicy{
+		HomeRoot:            filepath.Join(root, "home"),
+		SystemCalendarsRoot: filepath.Join(root, "Calendars"),
+		CalendarDir:         filepath.Join(root, "home", "dashboard", "calendars"),
+	}
+	if err := os.MkdirAll(filepath.Join(policy.HomeRoot, "not-a-calendar.ics"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := policy.normalizeLink(calendarBackupLink{Path: "family.ics", Root: calendarBackupLinkRootHome, Target: "not-a-calendar.ics"}); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("existing non-regular target must fail closed, got %v", err)
+	}
+}
+
+func TestCalendarBackupLinkPolicySupportsSystemCalendarsRoot(t *testing.T) {
+	root := t.TempDir()
+	policy := calendarBackupLinkPolicy{
+		HomeRoot:            filepath.Join(root, "home"),
+		SystemCalendarsRoot: filepath.Join(root, "Calendars"),
+		CalendarDir:         filepath.Join(root, "home", "dashboard", "calendars"),
+	}
+	target := filepath.Join(policy.SystemCalendarsRoot, "household", "family.ics")
+	link, err := policy.normalizeLink(calendarBackupLink{Path: "family.ics", Root: calendarBackupLinkRootSystem, Target: "household/family.ics"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.Root != calendarBackupLinkRootSystem || link.Target != "household/family.ics" {
+		t.Fatalf("normalized system calendar link = %#v", link)
+	}
+	restored, err := policy.restoreTarget(link)
+	if err != nil || filepath.Clean(restored) != filepath.Clean(target) {
+		t.Fatalf("restored system calendar target = %q / %v, want %q", restored, err, target)
 	}
 }
 
 func TestConfigBackupRejectsUnsupportedSymlinks(t *testing.T) {
 	a := testApp(t)
-	target := filepath.Join(t.TempDir(), "target.ics")
+	target := filepath.Join(a.home, "target.ics")
 	if err := os.WriteFile(target, calendarBody("target"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +232,19 @@ func TestConfigBackupRejectsUnsupportedSymlinks(t *testing.T) {
 	}
 	if _, err := a.createConfigBackup("manual", "nested calendar link rejection", "", false); err == nil || !strings.Contains(err.Error(), "unsupported calendar symlink") {
 		t.Fatalf("nested calendar link must stay fail-closed, got %v", err)
+	}
+	if err := os.Remove(filepath.Join(a.calDir, "nested", "linked.ics")); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.ics")
+	if err := os.WriteFile(outside, calendarBody("outside"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(a.calDir, "outside.ics")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.createConfigBackup("manual", "outside calendar link rejection", "", false); err == nil || !strings.Contains(err.Error(), "outside trusted roots") {
+		t.Fatalf("outside-root calendar link must stay fail-closed, got %v", err)
 	}
 }
 
@@ -195,6 +270,30 @@ func TestRestoreConfigBackupWithoutCalendarLinkMetadataRemainsSupported(t *testi
 	}
 }
 
+func TestRestoreConfigBackupMigratesSafeLegacyHomeCalendarLink(t *testing.T) {
+	a := testApp(t)
+	target := filepath.Join(a.home, "legacy", "family.ics")
+	legacyTarget, err := filepath.Rel(a.calDir, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta := `{"calendarLinks":[{"path":"family.ics","target":"` + filepath.ToSlash(legacyTarget) + `"}]}`
+	name := writeConfigBackupFixture(t, a, "legacy-calendar-link.zip", map[string][]byte{
+		"backup-meta.json":     []byte(meta),
+		"config/settings.json": []byte(`{"theme":"backup"}`),
+	})
+	if _, err := a.restoreConfigBackup(name); err != nil {
+		t.Fatalf("safe legacy calendar link must migrate: %v", err)
+	}
+	got, err := os.Readlink(filepath.Join(a.calDir, "family.ics"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual := filepath.Clean(filepath.Join(a.calDir, got)); actual != filepath.Clean(target) {
+		t.Fatalf("legacy calendar link resolves to %q, want %q", actual, target)
+	}
+}
+
 func TestRestoreConfigBackupRejectsUnsafeOrConflictingCalendarLinkMetadata(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -204,13 +303,25 @@ func TestRestoreConfigBackupRejectsUnsafeOrConflictingCalendarLinkMetadata(t *te
 	}{
 		{
 			name:  "unsafe path",
-			meta:  `{"calendarLinks":[{"path":"../outside.ics","target":"/tmp/outside.ics"}]}`,
+			meta:  `{"calendarLinks":[{"path":"../outside.ics","root":"home","target":"safe.ics"}]}`,
 			files: map[string][]byte{"config/settings.json": []byte(`{"theme":"backup"}`)},
 			want:  "unsafe calendar link path",
 		},
 		{
-			name:  "duplicate calendar file",
+			name:  "unknown root",
+			meta:  `{"calendarLinks":[{"path":"shared.ics","root":"other","target":"shared.ics"}]}`,
+			files: map[string][]byte{"config/settings.json": []byte(`{"theme":"backup"}`)},
+			want:  "invalid calendar link target",
+		},
+		{
+			name:  "outside legacy target",
 			meta:  `{"calendarLinks":[{"path":"shared.ics","target":"/tmp/shared.ics"}]}`,
+			files: map[string][]byte{"config/settings.json": []byte(`{"theme":"backup"}`)},
+			want:  "unsupported legacy calendar link target",
+		},
+		{
+			name:  "duplicate calendar file",
+			meta:  `{"calendarLinks":[{"path":"shared.ics","root":"home","target":"shared.ics"}]}`,
 			files: map[string][]byte{"calendars/shared.ics": calendarBody("regular")},
 			want:  "conflicts with archived file",
 		},

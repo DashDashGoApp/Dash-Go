@@ -309,7 +309,7 @@ func fetchMapURL(rawURL string, timeout time.Duration, maxBytes int64) ([]byte, 
 	if err != nil {
 		return nil, "", err
 	}
-	req.Header.Set("User-Agent", "Dash-Go/1.5.2-beta.4 local-kiosk map preview (+local cache)")
+	req.Header.Set("User-Agent", "Dash-Go/1.5.2-beta.5 local-kiosk map preview (+local cache)")
 	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
 		return nil, "", err

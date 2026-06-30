@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -104,5 +106,44 @@ func TestFontDownloadRejectsBadDigestWithoutReplacingLiveFile(t *testing.T) {
 	got, err := os.ReadFile(live)
 	if err != nil || string(got) != "known good" {
 		t.Fatalf("failed download replaced live font: %q err=%v", got, err)
+	}
+}
+
+func TestOpenRuntimeFontUsesPinnedAssetAndRejectsSymlinks(t *testing.T) {
+	originalSpecs := runtimeFontSpecs
+	payload := make([]byte, 4096)
+	payload[0], payload[1], payload[2], payload[3] = 0, 1, 0, 0
+	for i := 4; i < len(payload); i++ {
+		payload[i] = byte(i % 251)
+	}
+	sum := sha256.Sum256(payload)
+	asset := RuntimeFontAsset{File: "Fixture.ttf", Family: "Fixture", Weight: "400", SHA256: hex.EncodeToString(sum[:])}
+	runtimeFontSpecs = map[string]RuntimeFontSpec{"fixture": {Key: "fixture", Family: "Fixture", Assets: []RuntimeFontAsset{asset}}}
+	t.Cleanup(func() { runtimeFontSpecs = originalSpecs })
+
+	service := testService(t)
+	if err := os.MkdirAll(service.FontsDir(), 0755); err != nil {
+		t.Fatal(err)
+	}
+	live := filepath.Join(service.FontsDir(), asset.File)
+	if err := os.WriteFile(live, payload, 0644); err != nil {
+		t.Fatal(err)
+	}
+	font, info, publicName, ok := service.OpenRuntimeFont(asset.File)
+	if !ok || font == nil || info == nil || publicName != asset.File {
+		t.Fatalf("pinned runtime font did not open: ok=%v name=%q info=%#v", ok, publicName, info)
+	}
+	_ = font.Close()
+	if _, _, _, ok := service.OpenRuntimeFont("../Fixture.ttf"); ok {
+		t.Fatal("traversal leaf unexpectedly opened")
+	}
+	if err := os.Remove(live); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "outside.ttf"), live); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, _, _, ok := service.OpenRuntimeFont(asset.File); ok {
+		t.Fatal("symlinked runtime font unexpectedly opened")
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -39,18 +38,24 @@ func (a *app) handleFontGet(w http.ResponseWriter, r *http.Request, path string)
 }
 
 func (a *app) handleRuntimeFont(w http.ResponseWriter, r *http.Request, path string) bool {
-	name := filepath.Base(strings.TrimPrefix(path, "/fonts/"))
-	if name == "." || name == "" || name != strings.TrimPrefix(path, "/fonts/") {
+	const prefix = "/fonts/"
+	if !strings.HasPrefix(path, prefix) {
 		http.NotFound(w, r)
 		return true
 	}
-	full, ok := a.settingsService().RuntimeFontPath(name)
+	name := strings.TrimPrefix(path, prefix)
+	if name == "" || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		http.NotFound(w, r)
+		return true
+	}
+	font, info, publicName, ok := a.settingsService().OpenRuntimeFont(name)
 	if !ok {
 		http.NotFound(w, r)
 		return true
 	}
+	defer font.Close()
 	w.Header().Set("Cache-Control", "no-store")
-	http.ServeFile(w, r, full)
+	http.ServeContent(w, r, publicName, info.ModTime(), font)
 	return true
 }
 

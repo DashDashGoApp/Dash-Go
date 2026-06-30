@@ -7,19 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 )
-
-const maxConfigBackupCalendarLinks = 512
-
-// calendarBackupLink records only a direct calendar-directory symlink. It does
-// not copy, resolve, validate, or otherwise touch the linked target; the link
-// itself is the user-owned calendar configuration that Dash-Go must preserve.
-type calendarBackupLink struct {
-	Path   string `json:"path"`
-	Target string `json:"target"`
-}
 
 func safeBackupEntry(name string) bool {
 	name = filepath.ToSlash(strings.TrimSpace(name))
@@ -32,67 +21,6 @@ func safeBackupEntry(name string) bool {
 		}
 	}
 	return true
-}
-
-// safeCalendarBackupLinkPath admits only direct calendar .ics link names. The
-// target remains literal (and may be relative or broken), but no archive or
-// restore action may create nested or traversal-controlled destination paths.
-func safeCalendarBackupLinkPath(path string) bool {
-	if path == "" || strings.TrimSpace(path) != path || strings.ContainsRune(path, 0) || strings.Contains(path, "/") || strings.Contains(path, "\\") {
-		return false
-	}
-	if !strings.EqualFold(filepath.Ext(path), ".ics") {
-		return false
-	}
-	return safeBackupEntry("calendars/" + path)
-}
-
-func safeCalendarBackupLinkTarget(target string) bool {
-	return target != "" && !strings.ContainsRune(target, 0)
-}
-
-func normalizeCalendarBackupLinks(links []calendarBackupLink) ([]calendarBackupLink, error) {
-	if len(links) > maxConfigBackupCalendarLinks {
-		return nil, errors.New("backup contains too many calendar links")
-	}
-	seen := make(map[string]bool, len(links))
-	out := make([]calendarBackupLink, 0, len(links))
-	for _, link := range links {
-		if !safeCalendarBackupLinkPath(link.Path) {
-			return nil, fmt.Errorf("backup contains an unsafe calendar link path: %s", link.Path)
-		}
-		if !safeCalendarBackupLinkTarget(link.Target) {
-			return nil, fmt.Errorf("backup contains an invalid calendar link target: %s", link.Path)
-		}
-		if seen[link.Path] {
-			return nil, fmt.Errorf("backup contains duplicate calendar link metadata: %s", link.Path)
-		}
-		seen[link.Path] = true
-		out = append(out, link)
-	}
-	slices.SortFunc(out, func(left, right calendarBackupLink) int { return compareText(left.Path, right.Path) })
-	return out, nil
-}
-
-func calendarBackupLinkFromFilesystem(root, path string) (calendarBackupLink, error) {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return calendarBackupLink{}, err
-	}
-	name := filepath.ToSlash(rel)
-	if !safeCalendarBackupLinkPath(name) {
-		return calendarBackupLink{}, fmt.Errorf("backup refuses unsupported calendar symlink: %s", path)
-	}
-	target, err := os.Readlink(path)
-	if err != nil {
-		return calendarBackupLink{}, err
-	}
-	link := calendarBackupLink{Path: name, Target: target}
-	links, err := normalizeCalendarBackupLinks([]calendarBackupLink{link})
-	if err != nil {
-		return calendarBackupLink{}, err
-	}
-	return links[0], nil
 }
 
 func addZipFile(z *zip.Writer, source, name string, mode os.FileMode) error {
@@ -144,6 +72,7 @@ func (a *app) addZipTree(z *zip.Writer, root, prefix string, calendarLinks *[]ca
 	if !st.IsDir() {
 		return 0, fmt.Errorf("backup refuses non-directory tree: %s", root)
 	}
+	policy := a.calendarBackupLinkPolicy()
 	err = filepath.WalkDir(root, func(p string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -162,7 +91,7 @@ func (a *app) addZipTree(z *zip.Writer, root, prefix string, calendarLinks *[]ca
 			if calendarLinks == nil {
 				return fmt.Errorf("backup refuses non-regular file: %s", p)
 			}
-			link, err := calendarBackupLinkFromFilesystem(root, p)
+			link, err := policy.linkFromFilesystem(root, p)
 			if err != nil {
 				return err
 			}
@@ -218,7 +147,7 @@ func validateCalendarBackupLinksAgainstArchive(links []calendarBackupLink, seen 
 	return nil
 }
 
-func validateConfigBackupArchive(path string) (int, error) {
+func (a *app) validateConfigBackupArchive(path string) (int, error) {
 	zr, err := zip.OpenReader(path)
 	if err != nil {
 		return 0, err
@@ -252,7 +181,7 @@ func validateConfigBackupArchive(path string) (int, error) {
 	if !metaFound {
 		return 0, errors.New("backup archive metadata is missing")
 	}
-	links, err := configBackupCalendarLinks(zr)
+	links, err := a.configBackupCalendarLinks(zr)
 	if err != nil {
 		return 0, err
 	}

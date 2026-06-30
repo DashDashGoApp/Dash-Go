@@ -21,27 +21,14 @@
     return "min";
   };
   try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
-  window.dashboardAssetFallback=function(node){
-    try{
-      var fb=node.getAttribute('data-fallback');
-      if(!fb || node.getAttribute('data-fallback-used')==='1') return;
-      node.setAttribute('data-fallback-used','1');
-      if(node.tagName==='LINK') node.href=fb; else node.src=fb;
-    }catch(e){}
-  };
 }());
 </script>
-<link rel="stylesheet" href="ui/dashboard.css?v=1.5.2-beta.4" data-fallback="/ui/dashboard.css" onerror="dashboardAssetFallback(this)">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.2-beta.4">
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.2-beta.5">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.2-beta.5">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
      birthdays:[...] }. Missing file is harmless (404 ignored). -->
-<script>
-(function(){
-  var q="?t="+Date.now();
-  document.write('<script src="config/config.local.js'+q+'" data-fallback="/config/config.local.js'+q+'" onerror="dashboardAssetFallback(this)"><\/script>');
-}());
-</script>
+<script src="/config/config.local.js"></script>
 </head>
 <body>
 <div id="nightdim" aria-hidden="true"></div>
@@ -264,6 +251,6 @@
   </section>
 </div>
 
-<script src="ui/js/app.bundle.js?v=1.5.2-beta.4" defer data-fallback="/ui/js/app.bundle.js" onerror="dashboardAssetFallback(this)"></script>
+<script src="/ui/js/app.bundle.js?v=1.5.2-beta.5" defer></script>
 </body>
 </html>

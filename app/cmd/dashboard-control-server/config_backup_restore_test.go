@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeConfigBackupFixture(t *testing.T, a *app, name string, files map[string][]byte) string {
@@ -91,5 +92,54 @@ func TestRestoreConfigBackupRejectsOversizedEntryWithoutTouchingLiveState(t *tes
 	got, err := os.ReadFile(live)
 	if err != nil || !bytes.Contains(got, []byte("live")) {
 		t.Fatalf("live settings changed after rejected archive: %q / %v", got, err)
+	}
+}
+
+func TestConfigBackupRecordsSortsModifiedTimesDescending(t *testing.T) {
+	a := testApp(t)
+	older := writeConfigBackupFixture(t, a, "older.zip", map[string][]byte{
+		"config/settings.json": []byte(`{"theme":"older"}`),
+	})
+	newer := writeConfigBackupFixture(t, a, "newer.zip", map[string][]byte{
+		"config/settings.json": []byte(`{"theme":"newer"}`),
+	})
+	base := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(filepath.Join(a.backupDir(), older), base, base); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(a.backupDir(), newer), base.Add(time.Second), base.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	records := a.configBackupRecords()
+	if len(records) != 2 {
+		t.Fatalf("record count = %d, want 2", len(records))
+	}
+	if records[0].Name != newer || records[1].Name != older {
+		t.Fatalf("records sort = %#v, want %q before %q", records, newer, older)
+	}
+}
+
+func TestConfigBackupSelectionIgnoresSymlinkedArchives(t *testing.T) {
+	a := testApp(t)
+	name := writeConfigBackupFixture(t, a, "safe.zip", map[string][]byte{
+		"config/settings.json": []byte(`{"theme":"safe"}`),
+	})
+	linkName := filepath.Join(a.backupDir(), "linked.zip")
+	if err := os.Symlink(filepath.Join(a.backupDir(), name), linkName); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	for _, backup := range a.listConfigBackups() {
+		if backup["name"] == "linked.zip" {
+			t.Fatalf("symlinked archive appeared in backup list: %#v", backup)
+		}
+	}
+	if _, err := a.restoreConfigBackup("linked.zip"); err == nil || !strings.Contains(err.Error(), "backup not found") {
+		t.Fatalf("symlinked backup restore error = %v, want not found", err)
+	}
+	if _, err := a.deleteConfigBackup("linked.zip"); err == nil || !strings.Contains(err.Error(), "backup not found") {
+		t.Fatalf("symlinked backup delete error = %v, want not found", err)
+	}
+	if _, err := os.Stat(filepath.Join(a.backupDir(), name)); err != nil {
+		t.Fatalf("trusted backup changed after linked selection rejection: %v", err)
 	}
 }

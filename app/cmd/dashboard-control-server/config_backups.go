@@ -47,38 +47,65 @@ func (a *app) safeZipMeta(path string) map[string]any {
 	}
 	return map[string]any{}
 }
-func (a *app) listConfigBackups() []map[string]any {
+
+type configBackupRecord struct {
+	Name     string
+	FullPath string
+	Size     int64
+	Modified time.Time
+	Meta     map[string]any
+}
+
+// configBackupRecords discovers regular archive files inside Dash-Go's private
+// backup directory. HTTP-provided names only select an existing record later;
+// they never become a filesystem path. Symlinked/device backup entries are
+// deliberately ignored so restore/delete cannot follow a swapped-in object.
+func (a *app) configBackupRecords() []configBackupRecord {
 	if a.ensureBackupDir() != nil {
-		return []map[string]any{}
+		return []configBackupRecord{}
 	}
 	ents, err := os.ReadDir(a.backupDir())
 	if err != nil {
-		return []map[string]any{}
+		return []configBackupRecord{}
 	}
-	out := []map[string]any{}
+	out := []configBackupRecord{}
 	for _, e := range ents {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".zip") {
+		name := e.Name()
+		if e.IsDir() || filepath.Base(name) != name || !strings.HasSuffix(name, ".zip") {
 			continue
 		}
-		p := filepath.Join(a.backupDir(), e.Name())
-		st, err := os.Stat(p)
-		if err != nil {
+		full := filepath.Join(a.backupDir(), name)
+		st, err := os.Lstat(full)
+		if err != nil || !st.Mode().IsRegular() {
 			continue
 		}
-		meta := a.safeZipMeta(p)
-		kind := jsonutil.TextValue(meta["kind"])
-		if kind == "" {
-			kind = "manual"
-		}
-		reason := jsonutil.TextValue(meta["reason"])
-		if reason == "" {
-			reason = "Manual backup"
-		}
-		out = append(out, map[string]any{"name": e.Name(), "size": st.Size(), "mtime": st.ModTime().Unix(), "version": strOr(meta["version"], ""), "createdAt": jsonutil.Int(meta["createdAt"], 0), "kind": kind, "reason": reason, "preAction": strOr(meta["preAction"], "")})
+		out = append(out, configBackupRecord{Name: name, FullPath: full, Size: st.Size(), Modified: st.ModTime(), Meta: a.safeZipMeta(full)})
 	}
-	slices.SortFunc(out, func(left, right map[string]any) int {
-		return compareIntsDescending(jsonutil.Int(left["mtime"], 0), jsonutil.Int(right["mtime"], 0))
+	slices.SortFunc(out, func(left, right configBackupRecord) int {
+		return right.Modified.Compare(left.Modified)
 	})
+	return out
+}
+
+func configBackupRecordPayload(record configBackupRecord) map[string]any {
+	meta := record.Meta
+	kind := jsonutil.TextValue(meta["kind"])
+	if kind == "" {
+		kind = "manual"
+	}
+	reason := jsonutil.TextValue(meta["reason"])
+	if reason == "" {
+		reason = "Manual backup"
+	}
+	return map[string]any{"name": record.Name, "size": record.Size, "mtime": record.Modified.Unix(), "version": strOr(meta["version"], ""), "createdAt": jsonutil.Int(meta["createdAt"], 0), "kind": kind, "reason": reason, "preAction": strOr(meta["preAction"], "")}
+}
+
+func (a *app) listConfigBackups() []map[string]any {
+	records := a.configBackupRecords()
+	out := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		out = append(out, configBackupRecordPayload(record))
+	}
 	return out
 }
 func strOr(v any, def string) string {
@@ -149,7 +176,7 @@ func (a *app) createConfigBackup(kind, reason, preAction string, prune bool) (ma
 		return abort(err)
 	}
 	count += n
-	calendarLinks, err = normalizeCalendarBackupLinks(calendarLinks)
+	calendarLinks, err = normalizeCalendarBackupLinks(calendarLinks, a.calendarBackupLinkPolicy())
 	if err != nil {
 		return abort(err)
 	}
@@ -217,7 +244,7 @@ func (a *app) createConfigBackup(kind, reason, preAction string, prune bool) (ma
 		_ = os.Remove(path)
 		return nil, err
 	}
-	validated, err := validateConfigBackupArchive(path)
+	validated, err := a.validateConfigBackupArchive(path)
 	if err != nil {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("backup validation failed: %w", err)
@@ -234,53 +261,46 @@ func (a *app) createConfigBackup(kind, reason, preAction string, prune bool) (ma
 }
 func (a *app) pruneConfigBackups(keep int) map[string]any {
 	keep = clamp(keep, 5, 200)
-	backups := a.listConfigBackups()
+	backups := a.configBackupRecords()
 	removed := []string{}
-	for i, b := range backups {
+	for i, record := range backups {
 		if i < keep {
 			continue
 		}
-		name := filepath.Base(jsonutil.StringValue(b["name"]))
-		if name == "" || !strings.HasSuffix(name, ".zip") {
-			continue
-		}
-		if os.Remove(filepath.Join(a.backupDir(), name)) == nil {
-			removed = append(removed, name)
+		if os.Remove(record.FullPath) == nil {
+			removed = append(removed, record.Name)
 		}
 	}
 	return map[string]any{"ok": true, "keep": keep, "removed": removed, "removedCount": len(removed), "backups": a.listConfigBackups()}
 }
-func (a *app) chooseBackup(name string) (string, error) {
+
+func (a *app) chooseBackup(name string) (configBackupRecord, error) {
 	name = strings.TrimSpace(name)
-	backups := a.listConfigBackups()
-	if len(backups) == 0 {
-		return "", errors.New("no local config backups found")
+	records := a.configBackupRecords()
+	if len(records) == 0 {
+		return configBackupRecord{}, errors.New("no local config backups found")
 	}
 	if name == "" {
-		return jsonutil.StringValue(backups[0]["name"]), nil
+		return records[0], nil
 	}
 	if filepath.Base(name) != name || !strings.HasSuffix(name, ".zip") {
-		return "", errors.New("invalid backup name")
+		return configBackupRecord{}, errors.New("invalid backup name")
 	}
-	for _, b := range backups {
-		if jsonutil.StringValue(b["name"]) == name {
-			return name, nil
+	for _, record := range records {
+		if record.Name == name {
+			return record, nil
 		}
 	}
-	return "", errors.New("backup not found")
+	return configBackupRecord{}, errors.New("backup not found")
 }
 
 func (a *app) deleteConfigBackup(name string) (map[string]any, error) {
-	name = strings.TrimSpace(name)
-	if filepath.Base(name) != name || !strings.HasSuffix(name, ".zip") {
-		return nil, errors.New("invalid backup name")
-	}
 	chosen, err := a.chooseBackup(name)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Remove(filepath.Join(a.backupDir(), chosen)); err != nil {
+	if err := os.Remove(chosen.FullPath); err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "deleted": chosen, "backups": a.listConfigBackups()}, nil
+	return map[string]any{"ok": true, "deleted": chosen.Name, "backups": a.listConfigBackups()}, nil
 }

@@ -120,3 +120,27 @@ func TestTolerantWeatherBlendKeepsNumericCodesWithoutNilCategory(t *testing.T) {
 		t.Fatalf("blended weather code = %#v, want numeric code 2", got)
 	}
 }
+
+func TestWeatherProviderCacheFingerprintUsesKeyedNamespace(t *testing.T) {
+	one := weatherProviderKeyFingerprintGo("first-key")
+	two := weatherProviderKeyFingerprintGo("second-key")
+	if len(one) != 12 || len(two) != 12 || one == two {
+		t.Fatalf("fingerprints must be distinct fixed-width opaque values: %q / %q", one, two)
+	}
+	if weatherProviderKeyFingerprintGo("") != "" {
+		t.Fatal("empty key must not create a fingerprint")
+	}
+}
+
+func TestWeatherCacheKeyUsesOpaqueProviderMarkers(t *testing.T) {
+	one := Config{Lat: 41.8781, Lon: -87.6298, Days: 10, ProviderKeys: map[string]string{"weatherbit": "first-secret"}}
+	two := Config{Lat: 41.8781, Lon: -87.6298, Days: 10, ProviderKeys: map[string]string{"weatherbit": "second-secret"}}
+	first := weatherCacheKeyGo(one)
+	second := weatherCacheKeyGo(two)
+	if first == second {
+		t.Fatalf("provider-key changes must invalidate aggregate cache identity: %q", first)
+	}
+	if strings.Contains(first, "first-secret") || strings.Contains(second, "second-secret") {
+		t.Fatalf("provider key leaked into aggregate cache identity: %q / %q", first, second)
+	}
+}

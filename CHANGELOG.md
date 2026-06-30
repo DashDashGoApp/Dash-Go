@@ -2,7 +2,18 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.2-beta.4] — Active development
+## [1.5.2-beta.5] — Active development
+
+### CodeQL hardening with bounded on-demand work
+
+- Replaced direct weather-secret hashing with a keyed HMAC cache-namespace marker; existing provider cache entries refresh once naturally after the upgrade, without new providers, polling, or key storage.
+- Hardened Dashboard Control backup selection around server-discovered regular-file records and reject symlinked backup ZIPs before restore or removal.
+- Replaced raw calendar-link backup metadata with trusted-root records: direct `.ics` links may resolve under the Dash-Go user home or the supported system `/Calendars` root, while outside-root, nested, special-file, and unsafe symlink-chain targets fail before a live restore swap. Broken direct calendar links remain supported when their lexical target is within a trusted root.
+- Moved runtime font serving to immutable font metadata, verified regular file handles, and `ServeContent`; unchanged downloaded fonts reuse an in-memory size/mtime validation result instead of re-hashing on every font request.
+- Removed interpolated calendar-color and theme-preview style attributes in favor of DOM-created nodes and CSS property assignment.
+- Replaced dynamic document fallback paths and fragile test-only HTML/URL matching with fixed local assets, literal script extraction, and exact parsed-host checks.
+- Added focused source contracts for the addressed CodeQL paths. No dashboard refresh timer, network poll, startup scan, or render-hot-path measurement was added.
+- Corrected the config-backup record sort to compare `time.Time` values directly and added a regression test for descending backup ordering with distinct timestamps.
 
 ### Reversible day-popup completion
 

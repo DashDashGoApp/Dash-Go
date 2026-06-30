@@ -1,6 +1,7 @@
 package weather
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,17 +14,34 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
+const weatherProviderCacheFingerprintLabel = "dash-go weather provider cache fingerprint v1"
+
+// weatherProviderKeyFingerprintGo deliberately uses HMAC-SHA-256 rather than
+// hashing the provider secret directly. This is only a cache-namespace marker:
+// it never stores or authenticates the key. A changed key still changes the
+// cache identity, while the key itself never becomes a plain hash value.
+func weatherProviderKeyFingerprintGo(key string) string {
+	if key == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	_, _ = mac.Write([]byte(weatherProviderCacheFingerprintLabel))
+	return hex.EncodeToString(mac.Sum(nil))[:12]
+}
+
 func weatherProviderCacheKeyGo(id string, cfg Config) string {
 	key := weatherProviderKeyGo(id, cfg)
-	fp := ""
-	if key != "" {
-		sum := sha256.Sum256([]byte(key))
-		fp = hex.EncodeToString(sum[:])[:12]
-	}
-	parts := map[string]any{"provider": weatherNormalizeProviderIDGo(id), "lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI, "keyFingerprint": fp}
+	// Keep the ordinary configuration digest completely independent from the
+	// provider secret. The opaque HMAC marker is appended afterward, so the
+	// secret never flows through a second plain-SHA256 operation.
+	parts := map[string]any{"provider": weatherNormalizeProviderIDGo(id), "lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI}
 	b, _ := json.Marshal(parts)
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	base := hex.EncodeToString(sum[:])
+	if fingerprint := weatherProviderKeyFingerprintGo(key); fingerprint != "" {
+		return base + "-" + fingerprint
+	}
+	return base
 }
 
 func (s *Service) weatherProviderCachePathGo(id string) string {

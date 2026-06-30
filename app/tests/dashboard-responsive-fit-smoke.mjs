@@ -53,7 +53,7 @@ assert.match(listsDock,/#app\.fit-stack\.lists-dock-visible/,"stacked fit mode m
 for(const id of ["fitdocktabs","fitdock-agenda-tab","fitdock-weather-tab","fitdock-weather-toggle","fitdock-weather-compact","fitdocksheet","fitdockclose","fitdockbody"]){
   assert.ok(index.includes(`id="${id}"`),`responsive dock shell missing ${id}`);
 }
-const firstStylesheet=index.indexOf('<link rel="stylesheet" href="ui/dashboard.css');
+const firstStylesheet=index.indexOf('<link rel="stylesheet" href="/ui/dashboard.css');
 const earlyTier=index.indexOf('document.documentElement.dataset.fit=window.dashboardFitTierFromViewport');
 assert.ok(earlyTier>=0&&earlyTier<firstStylesheet,"initial fit tier must be applied before dashboard CSS parses");
 assert.match(index,/window\.dashboardFitTierFromViewport=function\(width,height\)/,"head bootstrap must expose the shared early tier selector");
@@ -99,7 +99,12 @@ assert.equal(context.__tier({width:1024,height:599,dpr:1}),"dense","1024×599 mu
 assert.equal(context.__tier({width:1280,height:719,dpr:1}),"compact","1280×719 must remain below the base boundary");
 assert.equal(context.__tier({width:2400,height:720,dpr:1}),"xl","2400px wide must enter the XL tier");
 
-const firstScript=[...index.matchAll(/<script>([\s\S]*?)<\/script>/g)][0]?.[1]||"";
+const firstScriptOpen="<script>", firstScriptClose="</script>";
+const firstScriptStart=index.indexOf(firstScriptOpen);
+assert.notEqual(firstScriptStart,-1,"head bootstrap inline script missing");
+const firstScriptEnd=index.indexOf(firstScriptClose,firstScriptStart+firstScriptOpen.length);
+assert.notEqual(firstScriptEnd,-1,"head bootstrap inline script must close");
+const firstScript=index.slice(firstScriptStart+firstScriptOpen.length,firstScriptEnd);
 const earlyContext={window:{innerWidth:800,innerHeight:480},document:{documentElement:{dataset:{}}},Math,Number};
 earlyContext.window.window=earlyContext.window;
 vm.createContext(earlyContext);

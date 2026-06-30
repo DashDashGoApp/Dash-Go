@@ -182,17 +182,23 @@ func weatherMarkCacheGo(payload map[string]any, cfg Config, hit bool, reason str
 
 func weatherCacheKeyGo(cfg Config) string {
 	keys := slices.Sorted(maps.Keys(cfg.ProviderKeys))
-	fps := []string{}
-	for _, k := range keys {
-		v := strings.TrimSpace(cfg.ProviderKeys[k])
-		if v == "" {
+	fingerprints := []string{}
+	for _, key := range keys {
+		value := strings.TrimSpace(cfg.ProviderKeys[key])
+		if value == "" {
 			continue
 		}
-		sum := sha256.Sum256([]byte(v))
-		fps = append(fps, k+":"+hex.EncodeToString(sum[:])[:12])
+		// Keep provider secrets exclusively inside the keyed HMAC helper. The
+		// ordinary dashboard-cache digest below contains only non-secret
+		// configuration, and HMAC markers are appended afterward.
+		fingerprints = append(fingerprints, key+":"+weatherProviderKeyFingerprintGo(value))
 	}
-	parts := map[string]any{"lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI, "providers": cfg.Providers, "keyFingerprints": fps}
+	parts := map[string]any{"lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI, "providers": cfg.Providers}
 	b, _ := json.Marshal(parts)
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	base := hex.EncodeToString(sum[:])
+	if len(fingerprints) == 0 {
+		return base
+	}
+	return base + "-" + strings.Join(fingerprints, ".")
 }

@@ -28,7 +28,11 @@ assert.match(layout,/\.comprow \.cbtn\{padding:var\(--ctrl-space-2\) var\(--ctrl
 assert.match(layout,/:is\(\.cbtn,\.themebtn,\.pinbtn,\.oskkey,[\s\S]*?min-height:var\(--ctrl-tap-min\)/,"all shared interactive controls need the 44px floor");
 assert.match(layout,/\.ctrltabs \.cbtn\.on:after/,"active Control tabs need a persistent orientation indicator");
 assert.ok((allCss.match(/!important/g)||[]).length<30,"Control CSS must retain fewer than 30 !important declarations");
-for(const match of allCss.matchAll(/@media\s*\(([^)]*)\)/g))assert.ok(["min-width:1280px","max-width:1100px","max-width:760px"].includes(match[1].replaceAll(" ","")),`unexpected Control breakpoint: ${match[1]}`);
+// Core Control tiers stay centralized. A small 700px component breakpoint is
+// permitted for the dense Household Schedules editor, where two-column touch
+// actions otherwise become too narrow before the shared 760px shell tier.
+const allowedControlBreakpoints=new Set(["min-width:1280px","max-width:1100px","max-width:760px","max-width:700px"]);
+for(const match of allCss.matchAll(/@media\s*\(([^)]*)\)/g))assert.ok(allowedControlBreakpoints.has(match[1].replaceAll(" ","")),`unexpected Control breakpoint: ${match[1]}`);
 assert.match(base,/\.comprow \.cbtn\{min-height:var\(--ctrl-tap-min\)/,"legacy compact row button must no longer fall below touch minimum");
 
 assert.match(core,/function ctrlUpdateSettingCard\(key,opts\)/,"Control needs a common in-place setting patch helper");
