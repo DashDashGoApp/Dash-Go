@@ -10,7 +10,11 @@
 .themegrouphead:after{content:"▸";float:right;color:var(--accent);}
 .themegroup[open]>.themegrouphead{border-bottom:1px solid var(--line-soft);}
 .themegroup[open]>.themegrouphead:after{content:"▾";}
-.themegroupcards{display:grid;grid-template-columns:repeat(var(--theme-cols,8),minmax(0,1fr));gap:6px;padding:7px;align-items:stretch;}
+.themegroupcards{display:grid;grid-template-columns:repeat(var(--theme-cols-wide,4),minmax(0,1fr));gap:6px;padding:7px;align-items:stretch;}
+/* Curated groups use their natural 4–6-card width. Larger screens may show six
+   cards, while a normal 1080p Control panel stays at five or four roomy cards. */
+@media(max-width:1500px){.themegroupcards{grid-template-columns:repeat(var(--theme-cols-medium,var(--theme-cols-wide,4)),minmax(0,1fr));}}
+@media(max-width:1120px){.themegroupcards{grid-template-columns:repeat(var(--theme-cols-compact,var(--theme-cols-medium,4)),minmax(0,1fr));}}
 .themebtn.preview{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:4px;min-height:62px;padding:6px;border-radius:10px;background:rgba(255,255,255,0.045);border:1px solid var(--line-soft);color:var(--fg);font-family:var(--sans);box-sizing:border-box;min-width:0;}
 .themebtn.preview:active{background:rgba(255,255,255,0.12);}
 .themebtn.preview.sel{outline:2px solid var(--accent);outline-offset:1px;background:rgba(127,214,168,0.11);}
@@ -25,7 +29,7 @@
 .themesummary{display:none;}
 .themeactions{width:100%;gap:8px;margin-top:0;}
 .themeactions .cbtn{min-height:40px;padding:8px 12px;}
-@media(max-width:760px){.themegroupcards{grid-template-columns:repeat(var(--theme-cols-small,var(--theme-cols,8)),minmax(0,1fr));gap:5px;padding:6px;}.themepreview{height:27px;}.themebtn.preview{min-height:62px;padding:5px;}.themename{font-size:11.5px;}}
+@media(max-width:760px){.themegroupcards{grid-template-columns:repeat(var(--theme-cols-narrow,var(--theme-cols-compact,3)),minmax(0,1fr));gap:5px;padding:6px;}.themepreview{height:27px;}.themebtn.preview{min-height:62px;padding:5px;}.themename{font-size:11.5px;}}
 
 
 /* Keep long maintenance/history content from making the Control tab feel endless. */

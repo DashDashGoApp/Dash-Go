@@ -9,7 +9,7 @@ const LOCALE = "en-US";
    Edit these and nothing else for normal tweaks.
    ===================================================================== */
 const CONFIG = {
-  version: "1.5.2-beta.2",
+  version: "1.5.2-beta.3",
   // ICS files served from the same origin (you SFTP them next to this file).
   // Give each a color + optional name. Add as many as you like.
   calendars: [

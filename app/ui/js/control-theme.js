@@ -10,15 +10,16 @@ function renderCtrlThemeData(row,t){
   const currentInfo=themeInfo(t.current);
   const baseInfo=themeInfo(t.base||"basic");
   const info=el("div","themeintro","");
+  const optionalHint="Optional observance themes appear only when their matching enabled holiday calendar reports the occasion today.";
   info.innerHTML=`<div class="themeintrotitle">Active: ${escapeHTML(currentInfo.label)} · Selected: ${escapeHTML(currentInfo.label)} · Seasonal base: ${escapeHTML(baseInfo.label)}</div>
-    <div class="themeintrosub">Choose a preview, then apply it. Readability themes are tuned for distance, glare, or low-light use.</div>`;
+    <div class="themeintrosub">Choose a preview, then apply it. Readability themes are tuned for distance, glare, or low-light use. ${escapeHTML(optionalHint)}</div>`;
   row.appendChild(info);
 
   const valid=new Set((t.themes||[]).filter(name=>name && name!=="dark" && name!=="default"));
   const groups={};
   for(const name of valid){
     const gi=themeInfo(name);
-    const g=gi.group||"More";
+    const g=gi.group||"Other";
     (groups[g]||(groups[g]=[])).push(name);
   }
   const order=[...THEME_GROUP_ORDER, ...Object.keys(groups).filter(g=>!THEME_GROUP_ORDER.includes(g)).sort()];
@@ -53,10 +54,15 @@ function renderCtrlThemeData(row,t){
     const sum=el("summary","themegrouphead",group+" · "+names.length);
     sec.appendChild(sum);
     const cards=el("div","themegroupcards","");
-    const cols=String(Math.min(8,Math.max(1,names.length)));
-    const smallCols=String(Math.min(4,Math.max(1,names.length)));
-    cards.style.setProperty("--theme-cols",cols);
-    cards.style.setProperty("--theme-cols-small",smallCols);
+    const wideCols=Math.max(1,themeGroupColumns(group,names.length));
+    const mediumCols=Math.min(wideCols,5);
+    const compactCols=Math.min(wideCols,4);
+    const narrowCols=Math.min(compactCols,3);
+    cards.dataset.themeGroup=group;
+    cards.style.setProperty("--theme-cols-wide",String(wideCols));
+    cards.style.setProperty("--theme-cols-medium",String(mediumCols));
+    cards.style.setProperty("--theme-cols-compact",String(compactCols));
+    cards.style.setProperty("--theme-cols-narrow",String(narrowCols));
     for(const name of names) cards.appendChild(makeThemeCard(name));
     sec.appendChild(cards);
     grid.appendChild(sec);

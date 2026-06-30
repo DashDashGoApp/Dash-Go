@@ -2,7 +2,7 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.2-beta.2] — Active development
+## [1.5.2-beta.3] — Active development
 
 ### Rotating-message safety
 
@@ -28,6 +28,16 @@ This changelog records stable Dash-Go milestones. Detailed development increment
 - Added Dashboard Control → Calendars → Household Schedules for recurring edits, pauses, previews, deletion of Payday rules, and restoration of one-time adjustments.
 - Added trusted generated-event metadata and a day-popup Manage schedule flow for Dash-Go-owned Paydays, Trash Pickup, and Recycling Pickup only: quick ±1/2/3/7-day moves, a chosen date, skip, and restore normal date.
 - Kept imported, subscribed, public holiday, astronomy, and other external calendars read-only; visible titles never determine editability.
+
+### Theme catalog and calendar-aware observance themes
+
+- Expanded the shared theme catalog to 100 curated themes and retired the former More catchall by moving its palettes into Color, Nature & Elements, and Aesthetic groups.
+- Added Nature & Elements, Aesthetic, Materials, Practical, and event-backed Holidays & Observances groups while preserving every existing theme ID and saved selection.
+- Intentionally excluded Back to School and Game Day.
+- Added Memorial Day, Labor Day, Veterans Day, Mother’s Day, Father’s Day, Hanukkah, and Kwanzaa palettes. Hanukkah only appears from a loaded Jewish holiday source with a recognized observance; Kwanzaa requires a recognized event from an enabled holiday-tagged source.
+- Kept the theme preview-card presentation, with Seasons fixed to four columns and other groups using responsive four-to-six-column layouts.
+- Applied the review’s calendar-legibility corrections to Sunset, Desert, Jade, Firefly, Olive, Cherry, Winter, Independence Day, Thanksgiving, Cinco de Mayo, and Daylight.
+- Let the seasonal helper consult the local event cache for exact supported observances before using its existing fixed-date schedule; no new network work or date guessing is introduced.
 
 ## [1.5.1] — 2026-06-29
 

@@ -312,8 +312,8 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 			a.err(w, "theme name required", 400)
 			return
 		}
-		if !a.validTheme(theme) {
-			a.err(w, "unknown theme: "+theme, 400)
+		if ok, reason := a.themeIsAvailable(theme); !ok {
+			a.err(w, reason, 400)
 			return
 		}
 		if err := a.writeTheme(theme); err != nil {
@@ -323,17 +323,19 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 		a.json(w, map[string]any{"ok": true, "theme": theme})
 	case "/api/seasonal":
 		enabled := jsonutil.Truthy(body["enabled"])
-		flag := filepath.Join(a.home, ".dashboard-seasonal-themes")
-		if enabled {
-			_ = os.WriteFile(flag, []byte("1\n"), 0644)
-		} else {
-			_ = os.Remove(flag)
+		if err := a.setSeasonalThemesEnabled(enabled); err != nil {
+			a.err(w, "could not update seasonal rotation: "+err.Error(), 500)
+			return
 		}
 		a.json(w, map[string]any{"ok": true, "seasonal": enabled})
 	case "/api/theme/base":
 		name := jsonutil.BodyString(body, "name")
 		if name == "" {
 			a.err(w, "theme name required", 400)
+			return
+		}
+		if ok, reason := a.themeIsAvailable(name); !ok {
+			a.err(w, reason, 400)
 			return
 		}
 		if err := os.WriteFile(filepath.Join(a.home, ".dashboard-base-theme"), []byte(name+"\n"), 0644); err != nil {

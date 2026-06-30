@@ -1,15 +1,14 @@
 // 01-config-08-theme-meta.js — theme labels, groups, and defaults.
 "use strict";
-// Theme picker metadata: grouped, friendly labels for the Dashboard Control theme cards.
-// Keep this intentionally lightweight — themes remain CSS-variable sets, not a new app system.
-const THEME_META = {
+// Theme picker metadata stays declarative: the server decides whether calendar-aware optional themes are currently available.
+const THEME_META={
   basic:{label:"Basic",group:"Core",summary:"Original balanced dark theme."},
-  slate:{label:"Slate",group:"Core",summary:"Neutral, clean, low-clutter."},
-  midnight:{label:"Midnight",group:"Core",summary:"Cool dark blue for evening use."},
   meadow:{label:"Meadow",group:"Core",summary:"Fresh green and warm daylight."},
   ocean:{label:"Ocean",group:"Core",summary:"Aqua, blue, and clean contrast."},
   forest:{label:"Forest",group:"Core",summary:"Deep pine and soft teal."},
   sunset:{label:"Sunset",group:"Core",summary:"Warm orange and coral."},
+  midnight:{label:"Midnight",group:"Core",summary:"Cool dark blue for evening use."},
+  slate:{label:"Slate",group:"Core",summary:"Neutral, clean, low-clutter."},
   coffee:{label:"Coffee",group:"Core",summary:"Warm brown, calm, readable."},
   highcontrast:{label:"High Contrast",group:"Readability",summary:"Maximum contrast for distance viewing."},
   paper:{label:"Paper",group:"Readability",summary:"Light, soft, bright-room display."},
@@ -17,13 +16,72 @@ const THEME_META = {
   warmwall:{label:"Warm Wall",group:"Readability",summary:"Cozy warm display with less blue."},
   softmorning:{label:"Soft Morning",group:"Readability",summary:"Gentle daytime light palette."},
   daylight:{label:"Daylight",group:"Readability",summary:"Neutral light palette with crisp ink."},
+  rose:{label:"Rose",group:"Color",summary:"Warm rosy red and coral."},
+  jade:{label:"Jade",group:"Color",summary:"Cool green gemstone palette."},
+  ruby:{label:"Ruby",group:"Color",summary:"Deep red gemstone palette."},
+  sapphire:{label:"Sapphire",group:"Color",summary:"Rich blue gemstone palette."},
+  denim:{label:"Denim",group:"Color",summary:"Soft blue everyday display."},
+  plum:{label:"Plum",group:"Color",summary:"Deep wine gemstone palette."},
+  desert:{label:"Desert",group:"Nature & Elements",summary:"Muted sand and clay."},
+  moss:{label:"Moss",group:"Nature & Elements",summary:"Earthy green and brown."},
+  firefly:{label:"Firefly",group:"Nature & Elements",summary:"Dark green with warm glows."},
+  canyon:{label:"Canyon",group:"Nature & Elements",summary:"Red rock and warm dusk."},
+  harbor:{label:"Harbor",group:"Nature & Elements",summary:"Steel blue-gray nautical palette."},
+  olive:{label:"Olive",group:"Nature & Elements",summary:"Warm khaki, olive, and brass."},
+  glacier:{label:"Glacier",group:"Nature & Elements",summary:"Pale ice-cyan on navy."},
+  ember:{label:"Ember",group:"Nature & Elements",summary:"Smoldering charcoal and ember red."},
+  tundra:{label:"Tundra",group:"Nature & Elements",summary:"Pale glacial blue and lichen gray-green."},
+  volcano:{label:"Volcano",group:"Nature & Elements",summary:"Black basalt and molten lava."},
+  redwood:{label:"Redwood",group:"Nature & Elements",summary:"Deep bark red-brown and fern green."},
+  reef:{label:"Reef",group:"Nature & Elements",summary:"Coral pinks and clear aqua."},
+  savanna:{label:"Savanna",group:"Nature & Elements",summary:"Golden grass, acacia, and dusk."},
+  monsoon:{label:"Monsoon",group:"Nature & Elements",summary:"Storm slate, rain teal, and wet green."},
+  wildflower:{label:"Wildflower",group:"Nature & Elements",summary:"Meadow scattered with mixed blooms."},
+  fjord:{label:"Fjord",group:"Nature & Elements",summary:"Cold deep blue-green and granite."},
+  prairie:{label:"Prairie",group:"Nature & Elements",summary:"Wheat gold and wide sky."},
+  noir:{label:"Noir",group:"Aesthetic",summary:"Dramatic dark monochrome."},
+  terminal:{label:"Terminal",group:"Aesthetic",summary:"Green-on-dark console feel."},
+  cyberpunk:{label:"Cyberpunk",group:"Aesthetic",summary:"Acid yellow and cyan on hard black."},
+  vaporwave:{label:"Vaporwave",group:"Aesthetic",summary:"Pastel teal, pink, and twilight purple."},
+  sakura:{label:"Sakura",group:"Aesthetic",summary:"Cherry blossom pink and bark brown."},
+  matcha:{label:"Matcha",group:"Aesthetic",summary:"Stone-ground green tea and cream."},
+  espresso:{label:"Espresso",group:"Aesthetic",summary:"Near-black roast and crema."},
+  bordeaux:{label:"Bordeaux",group:"Aesthetic",summary:"Deep burgundy wine and gold."},
+  blueprint:{label:"Blueprint",group:"Aesthetic",summary:"Drafting cyan lines on deep navy."},
+  sepia:{label:"Sepia",group:"Aesthetic",summary:"Faded vintage photograph."},
+  artdeco:{label:"Art Deco",group:"Aesthetic",summary:"Black lacquer and gold leaf."},
+  periwinkle:{label:"Periwinkle",group:"Aesthetic",summary:"Soft blue-violet and powder blue."},
+  unicorn:{label:"Unicorn",group:"Fun",summary:"Pastel candy and lavender."},
+  galaxy:{label:"Galaxy",group:"Fun",summary:"Violet, magenta, and electric cyan."},
+  lavender:{label:"Lavender",group:"Fun",summary:"Soft violet and calm contrast."},
+  mint:{label:"Mint",group:"Fun",summary:"Fresh mint and cool green."},
+  flamingo:{label:"Flamingo",group:"Fun",summary:"Pink, coral, and warm accents."},
+  aurora:{label:"Aurora",group:"Fun",summary:"Northern-light greens and blues."},
+  cherry:{label:"Cherry",group:"Fun",summary:"Red fruit and soft contrast."},
+  honey:{label:"Honey",group:"Fun",summary:"Gold, amber, and soft warmth."},
+  storm:{label:"Storm",group:"Fun",summary:"Cloudy gray with blue accents."},
+  tropics:{label:"Tropics",group:"Fun",summary:"Bright green and ocean color."},
+  synthwave:{label:"Synthwave",group:"Fun",summary:"Retro neon night palette."},
+  neapolitan:{label:"Neapolitan",group:"Fun",summary:"Vanilla, strawberry, chocolate."},
+  citrus:{label:"Citrus",group:"Fun",summary:"Lime, lemon, and orange splash."},
+  cosmos:{label:"Cosmos",group:"Fun",summary:"Deep indigo and periwinkle."},
+  lagoon:{label:"Lagoon",group:"Fun",summary:"Turquoise and clean tropical water."},
+  orchid:{label:"Orchid",group:"Fun",summary:"Plum and orchid magenta."},
+  linen:{label:"Linen",group:"Materials",summary:"Warm woven off-white (light)."},
+  copper:{label:"Copper",group:"Materials",summary:"Patina teal and burnished copper."},
+  concrete:{label:"Concrete",group:"Materials",summary:"Raw industrial gray with steel accent."},
+  parchment:{label:"Parchment",group:"Materials",summary:"Aged manuscript paper (light)."},
+  eink:{label:"E-Ink",group:"Practical",summary:"Grayscale e-reader, glare-free (light)."},
+  nightshift:{label:"Night Shift",group:"Practical",summary:"Deep red-shifted, blue-free night."},
+  brightday:{label:"Bright Day",group:"Practical",summary:"Maximum-brightness light for sunny rooms (light)."},
+  amber:{label:"Amber Mono",group:"Practical",summary:"Amber monochrome, retro CRT, easy on the eyes."},
+  spring:{label:"Spring",group:"Seasons",summary:"Fresh bloom colors."},
+  summer:{label:"Summer",group:"Seasons",summary:"Sky blue, sun gold, and grass green."},
+  autumn:{label:"Autumn",group:"Seasons",summary:"Rust, amber, and dark gold."},
+  winter:{label:"Winter",group:"Seasons",summary:"Frosty blue and soft white."},
   christmas:{label:"Christmas",group:"Seasonal",summary:"Pine, red, and gold."},
   halloween:{label:"Halloween",group:"Seasonal",summary:"Orange and purple night palette."},
   thanksgiving:{label:"Thanksgiving",group:"Seasonal",summary:"Harvest gold and cranberry."},
-  winter:{label:"Winter",group:"Seasons",summary:"Frosty blue and soft white."},
-  spring:{label:"Spring",group:"Seasons",summary:"Fresh bloom colors."},
-  autumn:{label:"Autumn",group:"Seasons",summary:"Rust, amber, and dark gold."},
-  summer:{label:"Summer",group:"Seasons",summary:"Sky blue, sun gold, and grass green."},
   valentine:{label:"Valentine",group:"Seasonal",summary:"Deep red and rose."},
   stpatricks:{label:"St. Patrick's",group:"Seasonal",summary:"Emerald and gold."},
   easter:{label:"Easter",group:"Seasonal",summary:"Soft pastel celebration."},
@@ -37,40 +95,23 @@ const THEME_META = {
   cincodemayo:{label:"Cinco de Mayo",group:"Seasonal",summary:"Festive papel-picado color."},
   juneteenth:{label:"Juneteenth",group:"Seasonal",summary:"Red, green, black, and gold."},
   muertos:{label:"Día de los Muertos",group:"Seasonal",summary:"Marigold and magenta night."},
-  unicorn:{label:"Unicorn",group:"Fun",summary:"Pastel candy and lavender."},
-  galaxy:{label:"Galaxy",group:"Fun",summary:"Violet, magenta, and electric cyan."},
-  lavender:{label:"Lavender",group:"Fun",summary:"Soft violet and calm contrast."},
-  mint:{label:"Mint",group:"Fun",summary:"Fresh mint and cool green."},
-  flamingo:{label:"Flamingo",group:"Fun",summary:"Pink, coral, and warm accents."},
-  aurora:{label:"Aurora",group:"Fun",summary:"Northern-light greens and blues."},
-  synthwave:{label:"Synthwave",group:"Fun",summary:"Retro neon night palette."},
-  neapolitan:{label:"Neapolitan",group:"Fun",summary:"Vanilla, strawberry, chocolate."},
-  honey:{label:"Honey",group:"Fun",summary:"Gold, amber, and soft warmth."},
-  storm:{label:"Storm",group:"Fun",summary:"Cloudy gray with blue accents."},
-  tropics:{label:"Tropics",group:"Fun",summary:"Bright green and ocean color."},
-  cherry:{label:"Cherry",group:"Fun",summary:"Red fruit and soft contrast."},
-  citrus:{label:"Citrus",group:"Fun",summary:"Lime, lemon, and orange splash."},
-  cosmos:{label:"Cosmos",group:"Fun",summary:"Deep indigo and periwinkle."},
-  lagoon:{label:"Lagoon",group:"Fun",summary:"Turquoise and clean tropical water."},
-  orchid:{label:"Orchid",group:"Fun",summary:"Plum and orchid magenta."},
-  desert:{label:"Desert",group:"More",summary:"Muted sand and clay."},
-  rose:{label:"Rose",group:"More",summary:"Warm rosy red and coral."},
-  jade:{label:"Jade",group:"More",summary:"Cool green gemstone palette."},
-  ruby:{label:"Ruby",group:"More",summary:"Deep red gemstone palette."},
-  sapphire:{label:"Sapphire",group:"More",summary:"Rich blue gemstone palette."},
-  noir:{label:"Noir",group:"More",summary:"Dramatic dark monochrome."},
-  terminal:{label:"Terminal",group:"More",summary:"Green-on-dark console feel."},
-  denim:{label:"Denim",group:"More",summary:"Soft blue everyday display."},
-  moss:{label:"Moss",group:"More",summary:"Earthy green and brown."},
-  firefly:{label:"Firefly",group:"More",summary:"Dark green with warm glows."},
-  canyon:{label:"Canyon",group:"More",summary:"Red rock and warm dusk."},
-  harbor:{label:"Harbor",group:"More",summary:"Steel blue-gray nautical palette."},
-  olive:{label:"Olive",group:"More",summary:"Warm khaki, olive, and brass."},
-  plum:{label:"Plum",group:"More",summary:"Deep wine gemstone palette."},
-  glacier:{label:"Glacier",group:"More",summary:"Pale ice-cyan on navy."},
-  ember:{label:"Ember",group:"More",summary:"Smoldering charcoal and ember red."}
+  memorialday:{label:"Memorial Day",group:"Holidays & Observances",summary:"Reflective red, white, and blue."},
+  laborday:{label:"Labor Day",group:"Holidays & Observances",summary:"Late-summer blue and red."},
+  veterans:{label:"Veterans Day",group:"Holidays & Observances",summary:"Respectful navy, red, and gold."},
+  mothersday:{label:"Mother's Day",group:"Holidays & Observances",summary:"Soft floral celebration."},
+  fathersday:{label:"Father's Day",group:"Holidays & Observances",summary:"Warm blue and green celebration."},
+  hanukkah:{label:"Hanukkah",group:"Holidays & Observances",summary:"Blue, silver, and candlelight.",availability:"jewish-hanukkah"},
+  kwanzaa:{label:"Kwanzaa",group:"Holidays & Observances",summary:"Red, green, black, and gold.",availability:"holiday-kwanzaa"},
 };
-const THEME_GROUP_ORDER=["Readability","Core","Seasons","Seasonal","Fun","More"];
+const THEME_GROUP_ORDER=["Readability","Core","Color","Nature & Elements","Aesthetic","Fun","Materials","Practical","Seasons","Seasonal","Holidays & Observances"];
+const THEME_GROUP_COLUMNS=Object.freeze({
+  "Core":4,"Readability":6,"Color":6,"Nature & Elements":6,"Aesthetic":6,"Fun":4,"Materials":4,"Practical":4,"Seasons":4,"Seasonal":4,"Holidays & Observances":6
+});
+function themeGroupColumns(group,count){
+  const total=Math.max(1,Number(count)||1);
+  if(group==="Holidays & Observances") return total<=6?total:4;
+  return Math.min(total,THEME_GROUP_COLUMNS[group]||4);
+}
 const THEME_BASE={
   "--bg":"#0a0a0d","--panel":"rgba(255,255,255,0.025)","--fg":"#e8e8ea",
   "--dim":"#8a8a93","--dimmer":"#5a5a62","--line":"#43454f","--line-soft":"#303239",
@@ -81,6 +122,6 @@ const THEME_BASE={
 function themeInfo(name){
   const raw=String(name||"basic");
   const fallback=raw.replace(/[-_]/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-  return Object.assign({label:fallback,group:"More",summary:"Dashboard color theme."}, THEME_META[raw]||{});
+  return Object.assign({label:fallback,group:"Other",summary:"Dashboard color theme."},THEME_META[raw]||{});
 }
-function themeVars(name){ return Object.assign({}, THEME_BASE, THEMES[name]||{}); }
+function themeVars(name){return Object.assign({},THEME_BASE,THEMES[name]||{});}

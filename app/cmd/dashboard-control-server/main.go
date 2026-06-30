@@ -106,6 +106,8 @@ func main() {
 			os.Exit(a.runHolidayUpdateCLI(os.Args[2:]))
 		case "--update-iss-passes":
 			os.Exit(a.runISSPassesCLI(os.Args[2:]))
+		case "--seasonal-theme":
+			os.Exit(a.runSeasonalThemeCLI(os.Args[2:]))
 		case "--maps-prewarm":
 			os.Exit(a.runMapPrewarmCLI(os.Args[2:]))
 		case "--update-message-feeds":

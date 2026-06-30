@@ -129,7 +129,8 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 	case "/api/chalkboard":
 		a.json(w, a.readJSONDefault(filepath.Join(a.configDir, "chalkboard.json"), map[string]any{"version": 1, "strokes": []any{}}))
 	case "/api/themes":
-		a.json(w, map[string]any{"themes": a.themeList(), "current": a.currentTheme(), "base": fileio.ReadString(filepath.Join(a.home, ".dashboard-base-theme"), "basic"), "seasonal": true})
+		themes, availability := a.availableThemes()
+		a.json(w, map[string]any{"themes": themes, "current": a.currentTheme(), "base": fileio.ReadString(filepath.Join(a.home, ".dashboard-base-theme"), "basic"), "seasonal": a.seasonalThemesEnabled(), "optionalThemeInfo": availability.Reasons, "optionalThemes": availability.Available, "themeAvailabilityDate": availability.Today})
 	case "/api/logs":
 		name := r.URL.Query().Get("name")
 		a.json(w, map[string]any{"name": name, "log": tailFile(a.logPath(name), 12000)})

@@ -11,7 +11,7 @@ Object.assign(THEMES, {
   thanksgiving: { // harvest table — wheat gold, pumpkin, cranberry
     "--bg":"#110b06","--panel":"rgba(230,160,90,0.045)","--fg":"#f4e8d8",
     "--dim":"#b59c80","--dimmer":"#76644e","--line":"#4c3a26","--line-soft":"#36291b",
-    "--today":"#e8b85f","--sat":"#d08a4a","--sun":"#c05f54","--accent":"#cf8f3f",
+    "--today":"#e8b85f","--sat":"#d08a4a","--sun":"#c05f54","--accent":"#b5612f",
     "--pay":"#d8b05f","--endtime":"#a8906f","--altweek":"rgba(230,160,90,0.032)",
     "--todaywash":"rgba(232,184,95,0.12)",
   },
@@ -32,9 +32,9 @@ Object.assign(THEMES, {
   cincodemayo: { // papel picado — green, red, festive pink on warm white accents
     "--bg":"#0c0e0a","--panel":"rgba(120,220,140,0.04)","--fg":"#f2f4ee",
     "--dim":"#a0ac98","--dimmer":"#66705e","--line":"#3e4838","--line-soft":"#2a3226",
-    "--today":"#f0e8d8","--sat":"#4fc05f","--sun":"#e04f4f","--accent":"#e85f9f",
+    "--today":"#ffd23f","--sat":"#4fc05f","--sun":"#e04f4f","--accent":"#e85f9f",
     "--pay":"#f0c84f","--endtime":"#9aa890","--altweek":"rgba(120,220,140,0.03)",
-    "--todaywash":"rgba(240,232,216,0.12)",
+    "--todaywash":"rgba(255,210,63,0.13)",
   },
   juneteenth: { // red, black, and green + a gold star
     "--bg":"#0b0a0a","--panel":"rgba(230,90,70,0.04)","--fg":"#f4ece6",
@@ -90,9 +90,9 @@ Object.assign(THEMES, {
   daylight: { // neutral cool-gray light + crisp ink — bright readable daylight
     "--bg":"#eef2f4","--panel":"rgba(18,34,45,0.045)","--fg":"#1d252b",
     "--dim":"#53616a","--dimmer":"#77838a","--line":"#b5c0c7","--line-soft":"#d5dde2",
-    "--today":"#2f7a9c","--sat":"#347ea8","--sun":"#a85d52","--accent":"#2b728f",
+    "--today":"#b5681a","--sat":"#347ea8","--sun":"#a85d52","--accent":"#2b728f",
     "--pay":"#8a6f2f","--endtime":"#5e6b72","--altweek":"rgba(18,34,45,0.028)",
-    "--todaywash":"rgba(47,122,156,0.13)",
+    "--todaywash":"rgba(181,104,26,0.13)",
   },
   summer: { // sky blue + sun gold + grass — the missing fourth season
     "--bg":"#071018","--panel":"rgba(120,200,255,0.045)","--fg":"#eaf4f8",
@@ -139,9 +139,9 @@ Object.assign(THEMES, {
   olive: { // warm khaki + olive + brass — earthy but not moss
     "--bg":"#0e0e06","--panel":"rgba(190,180,110,0.040)","--fg":"#edead8",
     "--dim":"#aca474","--dimmer":"#706b44","--line":"#474326","--line-soft":"#312f1a",
-    "--today":"#d7c45a","--sat":"#9da85a","--sun":"#c58a56","--accent":"#a4a34a",
+    "--today":"#e8cf52","--sat":"#8aa84f","--sun":"#c58a56","--accent":"#b5772f",
     "--pay":"#c7a94d","--endtime":"#a8a06e","--altweek":"rgba(190,180,110,0.030)",
-    "--todaywash":"rgba(215,196,90,0.12)",
+    "--todaywash":"rgba(232,207,82,0.12)",
   },
   plum: { // deep wine gemstone — rich purple-red
     "--bg":"#12070f","--panel":"rgba(185,85,130,0.047)","--fg":"#f3e4ec",
@@ -167,4 +167,54 @@ Object.assign(THEMES, {
 
   dark: {},    // alias of basic
   default: {}, // legacy alias — existing config.local.js files may still say "default"
+  // Calendar-aware holiday and observance additions. Hanukkah and Kwanzaa are API-gated by loaded holiday events.
+  memorialday: { // Memorial Day
+    "--bg":"#0a0c12","--panel":"rgba(150,170,210,0.045)","--fg":"#eef1f7",
+    "--dim":"#97a0b6","--dimmer":"#5b6276","--line":"#323c5a",
+    "--line-soft":"#222942","--today":"#cdd8ef","--sat":"#6f86cc",
+    "--sun":"#cf5450","--accent":"#c23b3b","--pay":"#c9a85a",
+    "--endtime":"#8f98ad","--altweek":"rgba(150,170,210,0.03)","--todaywash":"rgba(205,216,239,0.12)",
+  },
+  laborday: { // Labor Day
+    "--bg":"#0c0e12","--panel":"rgba(143,160,184,0.045)","--fg":"#eef0f4",
+    "--dim":"#969eaa","--dimmer":"#5a606c","--line":"#363c48",
+    "--line-soft":"#262a33","--today":"#e6ddc8","--sat":"#5f8ad0",
+    "--sun":"#d85f54","--accent":"#2f6fb0","--pay":"#d8a85a",
+    "--endtime":"#8e96a2","--altweek":"rgba(143,160,184,0.03)","--todaywash":"rgba(230,221,200,0.12)",
+  },
+  veterans: { // Veterans Day
+    "--bg":"#0c0d0a","--panel":"rgba(154,160,122,0.045)","--fg":"#f0ecdc",
+    "--dim":"#a8a489","--dimmer":"#6c6a52","--line":"#43432e",
+    "--line-soft":"#2e2e1f","--today":"#e8c45a","--sat":"#6f86b8",
+    "--sun":"#c06f4a","--accent":"#7d8a3f","--pay":"#d8b85a",
+    "--endtime":"#a09c7e","--altweek":"rgba(154,160,122,0.03)","--todaywash":"rgba(232,196,90,0.12)",
+  },
+  mothersday: { // Mother's Day
+    "--bg":"#140d10","--panel":"rgba(240,168,188,0.045)","--fg":"#f9eaee",
+    "--dim":"#c69aa6","--dimmer":"#83606b","--line":"#4f3540",
+    "--line-soft":"#37252d","--today":"#f6c98a","--sat":"#a8c8a0",
+    "--sun":"#f08aa0","--accent":"#ee8aa6","--pay":"#f0b0a0",
+    "--endtime":"#b09ab0","--altweek":"rgba(240,168,188,0.03)","--todaywash":"rgba(246,201,138,0.12)",
+  },
+  fathersday: { // Father's Day
+    "--bg":"#0c0d10","--panel":"rgba(138,160,188,0.045)","--fg":"#e8ecf0",
+    "--dim":"#94a0ac","--dimmer":"#5b6470","--line":"#37414e",
+    "--line-soft":"#262d36","--today":"#d8a86a","--sat":"#6f93c0",
+    "--sun":"#c08868","--accent":"#5a82a8","--pay":"#d0a35e",
+    "--endtime":"#93a0ac","--altweek":"rgba(138,160,188,0.03)","--todaywash":"rgba(216,168,106,0.12)",
+  },
+  hanukkah: { // Hanukkah
+    "--bg":"#080b14","--panel":"rgba(127,160,224,0.045)","--fg":"#eaf0fa",
+    "--dim":"#8fa0c0","--dimmer":"#54637e","--line":"#2e3c5c",
+    "--line-soft":"#202a44","--today":"#f0d066","--sat":"#6f9ae8",
+    "--sun":"#9ab0e0","--accent":"#3f78d8","--pay":"#f0d877",
+    "--endtime":"#8a98c0","--altweek":"rgba(127,160,224,0.03)","--todaywash":"rgba(240,208,102,0.12)",
+  },
+  kwanzaa: { // Kwanzaa
+    "--bg":"#0a0908","--panel":"rgba(192,154,90,0.045)","--fg":"#f4ece2",
+    "--dim":"#ad9c88","--dimmer":"#6c6050","--line":"#45392e",
+    "--line-soft":"#2f271f","--today":"#e8c24a","--sat":"#4fb060",
+    "--sun":"#e0483f","--accent":"#1f9e57","--pay":"#e8b84a",
+    "--endtime":"#a8967e","--altweek":"rgba(192,154,90,0.03)","--todaywash":"rgba(232,194,74,0.12)",
+  },
 });

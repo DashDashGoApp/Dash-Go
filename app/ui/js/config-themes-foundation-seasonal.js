@@ -19,9 +19,9 @@ Object.assign(THEMES, {
   desert: { // muted sand + clay — soft, dusty (sat = desert sage for real contrast)
     "--bg":"#100d09","--panel":"rgba(225,195,150,0.04)","--fg":"#f1e9dc",
     "--dim":"#b6a486","--dimmer":"#776652","--line":"#48402f","--line-soft":"#332d20",
-    "--today":"#e6c884","--sat":"#a9b585","--sun":"#cf9b78","--accent":"#c4ad7e",
+    "--today":"#f0c24f","--sat":"#9fb06a","--sun":"#cf9b78","--accent":"#cf8550",
     "--pay":"#d2b682","--endtime":"#b3a489","--altweek":"rgba(225,195,150,0.028)",
-    "--todaywash":"rgba(230,200,132,0.12)",
+    "--todaywash":"rgba(240,194,79,0.12)",
   },
   unicorn: { // CUTE: pastel candy — bubblegum, lavender, mint, butter
     "--bg":"#17101c","--panel":"rgba(255,200,240,0.12)","--fg":"#fdeef9",
@@ -40,7 +40,7 @@ Object.assign(THEMES, {
   sunset: { // hot orange + coral + gold — warm, vivid, bold-ish
     "--bg":"#160a08","--panel":"rgba(255,160,120,0.05)","--fg":"#fde6da",
     "--dim":"#c89685","--dimmer":"#8a5e4d","--line":"#5a382c","--line-soft":"#3f261d",
-    "--today":"#ffc24d","--sat":"#ffa15c","--sun":"#ff6f61","--accent":"#ff8a4c",
+    "--today":"#ffc24d","--sat":"#ffbf57","--sun":"#ff6f61","--accent":"#ff8a4c",
     "--pay":"#ff9d4d","--endtime":"#e09070","--altweek":"rgba(255,160,120,0.04)",
     "--todaywash":"rgba(255,194,77,0.12)",
   },
@@ -96,9 +96,9 @@ Object.assign(THEMES, {
   america: { // patriotic red, off-white, blue
     "--bg":"#080a14","--panel":"rgba(180,200,235,0.045)","--fg":"#f0f2f8",
     "--dim":"#9aa2b8","--dimmer":"#5e6478","--line":"#34406a","--line-soft":"#242a48",
-    "--today":"#eceff5","--sat":"#5f7ee0","--sun":"#e0524f","--accent":"#4f6ad8",
+    "--today":"#8fb0ff","--sat":"#5f7ee0","--sun":"#e0524f","--accent":"#4f6ad8",
     "--pay":"#d6443f","--endtime":"#8f9bc5","--altweek":"rgba(180,200,235,0.035)",
-    "--todaywash":"rgba(236,239,245,0.12)",
+    "--todaywash":"rgba(143,176,255,0.14)",
   },
   spring: { // fresh multi-pastel bloom — green, peach, lilac, sky
     "--bg":"#0a0f0c","--panel":"rgba(190,235,190,0.04)","--fg":"#ecf4ea",
@@ -110,9 +110,9 @@ Object.assign(THEMES, {
   winter: { // icy blue + frost white, cold and crisp
     "--bg":"#080c12","--panel":"rgba(190,220,240,0.045)","--fg":"#eef4fa",
     "--dim":"#90a6ba","--dimmer":"#586a7c","--line":"#33455a","--line-soft":"#233140",
-    "--today":"#d6e6f0","--sat":"#7fc0e0","--sun":"#c89ad0","--accent":"#6fb8e0",
+    "--today":"#8fd3f5","--sat":"#7fc0e0","--sun":"#c89ad0","--accent":"#6fb8e0",
     "--pay":"#9ac8e8","--endtime":"#8fa8c0","--altweek":"rgba(190,220,240,0.035)",
-    "--todaywash":"rgba(214,230,240,0.12)",
+    "--todaywash":"rgba(143,211,245,0.14)",
   },
   valentine: { // deep romantic red + rich pink
     "--bg":"#14070c","--panel":"rgba(255,120,150,0.05)","--fg":"#fbe2e8",
@@ -148,5 +148,69 @@ Object.assign(THEMES, {
     "--today":"#ecc84a","--sat":"#5fb86a","--sun":"#c77dff","--accent":"#9a52d8",
     "--pay":"#e8c44a","--endtime":"#8a9f6a","--altweek":"rgba(160,90,220,0.04)",
     "--todaywash":"rgba(236,200,74,0.12)",
+  },
+  // Nature & Elements additions reviewed for the expanded picker.
+  tundra: { // Tundra
+    "--bg":"#080d10","--panel":"rgba(154,196,208,0.045)","--fg":"#e9f1f4",
+    "--dim":"#90a4ac","--dimmer":"#566870","--line":"#314349",
+    "--line-soft":"#222f34","--today":"#cfe6ec","--sat":"#7fbcd0",
+    "--sun":"#c0a0a8","--accent":"#7fc4cc","--pay":"#c8c8a8",
+    "--endtime":"#8aa4ac","--altweek":"rgba(154,196,208,0.03)","--todaywash":"rgba(207,230,236,0.12)",
+  },
+  volcano: { // Volcano
+    "--bg":"#0c0807","--panel":"rgba(224,104,58,0.045)","--fg":"#f4e6df",
+    "--dim":"#b08c80","--dimmer":"#6e5249","--line":"#46302a",
+    "--line-soft":"#2f201c","--today":"#ff8a3a","--sat":"#c08a78",
+    "--sun":"#e84f2f","--accent":"#f0612a","--pay":"#f0a83a",
+    "--endtime":"#ad8478","--altweek":"rgba(224,104,58,0.03)","--todaywash":"rgba(255,138,58,0.12)",
+  },
+  redwood: { // Redwood
+    "--bg":"#0f0a08","--panel":"rgba(176,104,63,0.045)","--fg":"#f1e6dc",
+    "--dim":"#b29684","--dimmer":"#705a4c","--line":"#492f25",
+    "--line-soft":"#33211a","--today":"#e0b060","--sat":"#6faa78",
+    "--sun":"#c06a48","--accent":"#a8542f","--pay":"#d8a85a",
+    "--endtime":"#a89684","--altweek":"rgba(176,104,63,0.03)","--todaywash":"rgba(224,176,96,0.12)",
+  },
+  reef: { // Reef
+    "--bg":"#06110f","--panel":"rgba(95,202,191,0.045)","--fg":"#e4f4ef",
+    "--dim":"#84b6ad","--dimmer":"#4e746c","--line":"#28504a",
+    "--line-soft":"#193632","--today":"#ffce6a","--sat":"#4fc8d0",
+    "--sun":"#ff8a82","--accent":"#ff7f8f","--pay":"#ffc070",
+    "--endtime":"#8abcb2","--altweek":"rgba(95,202,191,0.03)","--todaywash":"rgba(255,206,106,0.12)",
+  },
+  savanna: { // Savanna
+    "--bg":"#100d06","--panel":"rgba(192,168,90,0.045)","--fg":"#f3ecd8",
+    "--dim":"#b6a87e","--dimmer":"#75694a","--line":"#4a4026",
+    "--line-soft":"#342c19","--today":"#f0c24a","--sat":"#a0a85a",
+    "--sun":"#d8804a","--accent":"#c89a3f","--pay":"#e0b85a",
+    "--endtime":"#aca480","--altweek":"rgba(192,168,90,0.03)","--todaywash":"rgba(240,194,74,0.12)",
+  },
+  monsoon: { // Monsoon
+    "--bg":"#0a0e0e","--panel":"rgba(127,168,170,0.045)","--fg":"#e6eeee",
+    "--dim":"#8ca09e","--dimmer":"#566866","--line":"#344442",
+    "--line-soft":"#24302e","--today":"#e0d07a","--sat":"#5fa8b0",
+    "--sun":"#c08a8a","--accent":"#4f9aa0","--pay":"#d0c478",
+    "--endtime":"#8aa09e","--altweek":"rgba(127,168,170,0.03)","--todaywash":"rgba(224,208,122,0.12)",
+  },
+  wildflower: { // Wildflower
+    "--bg":"#0a0f09","--panel":"rgba(176,160,208,0.045)","--fg":"#eef2e6",
+    "--dim":"#9aae8e","--dimmer":"#5e7054","--line":"#34472f",
+    "--line-soft":"#233020","--today":"#f4cf5a","--sat":"#7fc0b0",
+    "--sun":"#f08a9a","--accent":"#c87fd0","--pay":"#f0a85a",
+    "--endtime":"#9ab0a0","--altweek":"rgba(176,160,208,0.03)","--todaywash":"rgba(244,207,90,0.12)",
+  },
+  fjord: { // Fjord
+    "--bg":"#070f12","--panel":"rgba(95,154,160,0.045)","--fg":"#e6f0f2",
+    "--dim":"#84a2a6","--dimmer":"#506468","--line":"#2e4448",
+    "--line-soft":"#1f3033","--today":"#bfe0e0","--sat":"#5f9ac0",
+    "--sun":"#b89488","--accent":"#3f8a92","--pay":"#c0b888",
+    "--endtime":"#86a2a4","--altweek":"rgba(95,154,160,0.03)","--todaywash":"rgba(191,224,224,0.12)",
+  },
+  prairie: { // Prairie
+    "--bg":"#0d0e0a","--panel":"rgba(192,170,90,0.045)","--fg":"#f1eedc",
+    "--dim":"#aeac88","--dimmer":"#6e6c4c","--line":"#45452c",
+    "--line-soft":"#2f2f1d","--today":"#f4d45a","--sat":"#6faad8",
+    "--sun":"#d89a4a","--accent":"#b07a2f","--pay":"#e0c05a",
+    "--endtime":"#a8a680","--altweek":"rgba(192,170,90,0.03)","--todaywash":"rgba(244,212,90,0.12)",
   },
 });

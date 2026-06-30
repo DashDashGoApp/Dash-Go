@@ -13,15 +13,17 @@
 
 ## Active development beta
 
-- **Version:** `1.5.2-beta.2`
+- **Version:** `1.5.2-beta.3`
 - **Track:** beta
-- **Focus:** retain safe rotating-message fitting and calendar-aware holiday observances while adding editable local Paydays, Trash Pickup, and Recycling Pickup schedules.
+- **Focus:** retain safe rotating-message fitting and calendar-aware holiday observances while adding editable local Paydays, Trash Pickup, and Recycling Pickup schedules, plus a curated 100-theme picker.
 
-`1.5.2-beta.2` clamps each message to the fitted line count, uses one bounded rendered verification before a new fit becomes trusted in cache, biases Lite Canvas width prediction conservatively, and reserves additional line-box headroom. The fixed bottom band can therefore ellipsize safely within its own bounds rather than letting a late wrapped line fall below the viewport.
+`1.5.2-beta.3` clamps each message to the fitted line count, uses one bounded rendered verification before a new fit becomes trusted in cache, biases Lite Canvas width prediction conservatively, and reserves additional line-box headroom. The fixed bottom band can therefore ellipsize safely within its own bounds rather than letting a late wrapped line fall below the viewport.
 
 The default catalog now uses calmer household-safe wording, preserves hidden/edited state when a built-in message is renamed, and recognizes holiday events only from loaded calendar sources. Installer-selected Jewish, Islamic, Christian, Orthodox Christian, and Hindu layers automatically enable their matching curated greetings when an exact celebration event is present. Neutral wording remains available for any enabled holiday calendar; solemn observances remain respectful; overlapping distinct occasions use inclusive wording instead of choosing one celebration.
 
-`1.5.2-beta.2` adds a versioned local Household Schedules model for one or more named payday rules plus the existing Trash Pickup and Recycling Pickup feeds. Dashboard Control now edits recurring rules without rerunning the installer, while the day popup can move, skip, or restore one explicit Dash-Go-owned occurrence. Paydays support every-N-week, multiple monthly-date, and nth-weekday patterns with optional previous/next-business-day adjustment; each rule selects only installed holiday layers it should honor. Existing installer settings migrate once without changing their original schedule.
+`1.5.2-beta.3` adds a versioned local Household Schedules model for one or more named payday rules plus the existing Trash Pickup and Recycling Pickup feeds. Dashboard Control now edits recurring rules without rerunning the installer, while the day popup can move, skip, or restore one explicit Dash-Go-owned occurrence. Paydays support every-N-week, multiple monthly-date, and nth-weekday patterns with optional previous/next-business-day adjustment; each rule selects only installed holiday layers it should honor. Existing installer settings migrate once without changing their original schedule.
+
+`1.5.2-beta.3` expands the theme catalog into curated Core, Readability, Color, Nature & Elements, Aesthetic, Fun, Materials, Practical, Seasons, Seasonal, and Holidays & Observances groups. The former More catchall is retired, Back to School and Game Day are intentionally absent, and the picker retains preview cards while choosing touch-safe 4–6-column grids per group. Hanukkah appears only when the enabled Jewish holiday layer contributes a recognized Hanukkah event today; Kwanzaa appears only when an enabled holiday-tagged source contributes Kwanzaa today. Event-backed observance themes remain local-cache-only and can take priority over the fixed seasonal-date helper when seasonal rotation is enabled.
 
 ## Recommended operating model
 

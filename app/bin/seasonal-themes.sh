@@ -27,9 +27,10 @@ ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
 # Ranges are inclusive and compared by month-day. Earlier lines win if
 # two ranges overlap (order matters) — that's why juneteenth (a single
 # day inside the pride range) is listed BEFORE pride. Edit freely.
-# Not every theme is scheduled: floating-date holidays (Hanukkah, Diwali,
-# Mother's/Father's Day, ...) move each year, so pick those manually with
-# set-theme.sh when they come around.
+# Floating observances are resolved by the local dashboard-control-server from
+# the enabled, already cached holiday calendars. There is no network request or
+# date guess here; if no matching event is loaded, this fixed-date schedule
+# remains the fallback.
 SCHEDULE="
 01-01 01-02 newyear
 01-29 02-04 lunar
@@ -56,6 +57,13 @@ pick_theme(){
   local today; today="$(date +%m-%d)"
   local base; base="basic"
   [ -f "$BASEFILE" ] && base="$(cat "$BASEFILE" 2>/dev/null)"
+  # Exact enabled-calendar observances outrank a fixed date range. The Go CLI
+  # only reads events.cache.json and prints a catalog theme name or nothing.
+  local event_theme=""
+  if [ -x "$DASH/bin/dashboard-control-server" ]; then
+    event_theme="$("$DASH/bin/dashboard-control-server" --seasonal-theme 2>/dev/null || true)"
+  fi
+  if [ -n "$event_theme" ]; then echo "$event_theme"; return; fi
   # Walk the schedule; handle ranges that wrap the year end (start>end).
   local s e th
   while read -r s e th; do
@@ -101,6 +109,7 @@ case "$CMD" in
       ok "base theme remembered as: $cur (change with: seasonal-themes.sh base <name>)"
     fi
     # Daily at 00:05, set the theme appropriate for the date.
+    printf '1\n' > "$HOME/.dashboard-seasonal-themes"
     CT="$(mktemp)"
     crontab -l 2>/dev/null | grep -v "seasonal-themes.sh apply" > "$CT" || true
     echo "5 0 * * * $DASH/bin/seasonal-themes.sh apply >/dev/null 2>&1" >> "$CT"
@@ -113,6 +122,7 @@ case "$CMD" in
     CT="$(mktemp)"
     crontab -l 2>/dev/null | grep -v "seasonal-themes.sh apply" > "$CT" || true
     crontab "$CT"; rm -f "$CT"
+    rm -f "$HOME/.dashboard-seasonal-themes"
     ok "seasonal cron removed (current theme unchanged)"
     ;;
   show)
