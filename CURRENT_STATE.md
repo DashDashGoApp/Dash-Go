@@ -11,6 +11,13 @@
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
 
+## Current development beta
+
+- **Version:** `1.5.3-beta.1`
+- **Track:** beta
+- **Focus:** reviewed static SVG polish: five calendar decals for every seasonal/holiday theme and calendar-aware observance theme, richer user-selected décor density on every profile including Lite, clearer Bold and High Contrast weather SVGs, and modest crescent earthshine refinement.
+- **Runtime posture:** no decoration polling, network work, animation, external SVG assets, raster images, SVG filters, masks, or gradients were added to calendar décor. Decals are inserted only during a normal calendar render or an explicit visual/theme setting change.
+
 ## 1.5.2 highlights
 
 - **Message readability:** rotating messages use conservative Lite fitting, bounded rendered verification, and safe ellipsis within the fixed footer. The refreshed household-safe catalog preserves hidden and edited built-in-message state while using loaded calendar events for appropriate observance wording.

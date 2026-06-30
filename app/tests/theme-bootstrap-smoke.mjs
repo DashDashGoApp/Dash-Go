@@ -9,6 +9,10 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const runtime=read("ui/js/config-runtime.js");
 const seasonal=read("ui/js/calendar-seasonal-decor.js");
+const decorArt=
+  read("ui/js/calendar-decor-art-seasons.js")+"\n"+
+  read("ui/js/calendar-decor-art-seasonal.js")+"\n"+
+  read("ui/js/calendar-decor-art-observances.js");
 const settings=read("ui/js/settings-runtime.js");
 
 function functionBody(source,name){
@@ -59,7 +63,7 @@ const context=vm.createContext({
 // call executes while the later lexical SETTINGS declaration is still in TDZ.
 // This must complete without touching that binding; deferred decor work runs
 // only after settings initializes and mirrors itself to window.
-assert.doesNotThrow(()=>vm.runInContext(`${runtime}\n${seasonal}\n${settings}\nglobalThis.__themeBoot={theme:CURRENT_THEME,settings:window.DASHGO_RUNTIME_SETTINGS};`,context),"bundle startup must survive early theme application");
+assert.doesNotThrow(()=>vm.runInContext(`${runtime}\n${decorArt}\n${seasonal}\n${settings}\nglobalThis.__themeBoot={theme:CURRENT_THEME,settings:window.DASHGO_RUNTIME_SETTINGS};`,context),"bundle startup must survive early theme application");
 while(frames.length)frames.shift()();
 assert.equal(context.__themeBoot.theme,"paper","config-local theme applies during startup");
 assert.equal(context.__themeBoot.settings.seasonalDecor,"off","settings bridge is available after initialization");

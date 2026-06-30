@@ -6,21 +6,22 @@
 function buildWeatherIconSet(style){
   const palettes={
     soft:{sun:'#d9c074',cloud:'#c4c8d0',cloudDk:'#9aa0ab',rain:'#8bb4d4',snow:'#dfe6ee',bolt:'#d9c074',ray:1.6,drop:1.6,outline:false},
-    bold:{sun:'#f2cf64',cloud:'#d1d6df',cloudDk:'#aab2bf',rain:'#81bff0',snow:'#f0f6ff',bolt:'#ffd45a',ray:2.1,drop:2.2,outline:false},
+    bold:{sun:'#ffd768',cloud:'#edf4ff',cloudDk:'#b9cce0',rain:'#72c8ff',snow:'#ffffff',bolt:'#ffdd5f',ray:3.0,drop:2.7,disk:5.8,edge:'rgba(26,38,54,.46)',edgeWidth:.78,flake:1.45,outline:false},
     outline:{sun:'#e5cf77',cloud:'#cfd6e2',cloudDk:'#aeb8c7',rain:'#92c7ef',snow:'#edf5ff',bolt:'#f4d35e',ray:1.8,drop:1.8,outline:true},
-    contrast:{sun:'#ffe169',cloud:'#dbe6f4',cloudDk:'#b9c9dc',rain:'#5bbcff',snow:'#f2f7ff',bolt:'#ffe04f',ray:2.1,drop:2.2,outline:false},
+    contrast:{sun:'#ffe66b',cloud:'#f8fbff',cloudDk:'#dcecff',rain:'#24bfff',snow:'#ffffff',bolt:'#fff14a',ray:2.6,drop:2.6,disk:5.35,edge:'#182535',edgeWidth:.78,flake:1.45,outline:false},
     playful:{sun:'#ffce5c',cloud:'#b9d7f6',cloudDk:'#8faed2',rain:'#68d8ff',snow:'#f4fbff',bolt:'#ffe15c',ray:1.9,drop:1.9,outline:false}
   };
   const p=palettes[style]||palettes.soft;
   const wrap=(inner)=>`<svg class="wxsvg wxsvg-${style}" viewBox="0 0 24 24" width="1em" height="1em" style="display:block;overflow:visible" aria-hidden="true" focusable="false">${inner}</svg>`;
-  const iconEdge='rgba(28,36,44,.26)';
-  const fillOrStroke=(c)=>p.outline?`fill="rgba(0,0,0,.08)" stroke="${c}" stroke-width="1.55" stroke-linejoin="round"`:`fill="${c}" stroke="${iconEdge}" stroke-width="0.35" stroke-linejoin="round"`;
-  const sunC=`<circle cx="12" cy="12" r="${p.outline?4.8:5}" ${fillOrStroke(p.sun)}/>`+
+  const iconEdge=p.edge||'rgba(28,36,44,.26)';
+  const iconEdgeWidth=p.edgeWidth==null?.35:p.edgeWidth;
+  const fillOrStroke=(c)=>p.outline?`fill="rgba(0,0,0,.08)" stroke="${c}" stroke-width="1.55" stroke-linejoin="round"`:`fill="${c}" stroke="${iconEdge}" stroke-width="${iconEdgeWidth}" stroke-linejoin="round"`;
+  const sunC=`<circle cx="12" cy="12" r="${p.outline?4.8:(p.disk||5)}" ${fillOrStroke(p.sun)}/>`+
     [...Array(8)].map((_,i)=>{const a=i*Math.PI/4,x=12+Math.cos(a)*8.5,y=12+Math.sin(a)*8.5,x2=12+Math.cos(a)*6.7,y2=12+Math.sin(a)*6.7;return `<line x1="${x2.toFixed(1)}" y1="${y2.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${p.sun}" stroke-width="${p.ray}" stroke-linecap="round"/>`;}).join('');
   const cloudPath=(c)=>`<path d="M7 17.5h9a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 6.5 11 3.25 3.25 0 0 0 7 17.5z" ${fillOrStroke(c)}/>`;
   const cloudShift=(c,dx,dy)=>`<g transform="translate(${dx} ${dy})">${cloudPath(c)}</g>`;
   const drops=(c)=>[8,12,16].map(x=>`<line x1="${x}" y1="18.4" x2="${x-1.6}" y2="22.1" stroke="${c}" stroke-width="${p.drop}" stroke-linecap="round"/>`).join('');
-  const flake=(x,y,c)=>`<g stroke="${c}" stroke-width="1.1" stroke-linecap="round" opacity=".98"><line x1="${x}" y1="${y-2.2}" x2="${x}" y2="${y+2.2}"/><line x1="${x-1.9}" y1="${y-1.1}" x2="${x+1.9}" y2="${y+1.1}"/><line x1="${x-1.9}" y1="${y+1.1}" x2="${x+1.9}" y2="${y-1.1}"/></g>`;
+  const flake=(x,y,c)=>`<g stroke="${c}" stroke-width="${p.flake||1.1}" stroke-linecap="round" opacity=".98"><line x1="${x}" y1="${y-2.2}" x2="${x}" y2="${y+2.2}"/><line x1="${x-1.9}" y1="${y-1.1}" x2="${x+1.9}" y2="${y+1.1}"/><line x1="${x-1.9}" y1="${y+1.1}" x2="${x+1.9}" y2="${y-1.1}"/></g>`;
   const flakes=(c)=>[8,12,16].map(x=>flake(x,21.1,c)).join('');
   const partlySun=`<circle cx="9" cy="10" r="4" ${fillOrStroke(p.sun)}/>`+
       [...Array(8)].map((_,i)=>{const a=i*Math.PI/4,x=9+Math.cos(a)*6.8,y=10+Math.sin(a)*6.8,x2=9+Math.cos(a)*5.4,y2=10+Math.sin(a)*5.4;return `<line x1="${x2.toFixed(1)}" y1="${y2.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${p.sun}" stroke-width="${Math.max(1.25,p.ray-.25)}" stroke-linecap="round"/>`;}).join('');

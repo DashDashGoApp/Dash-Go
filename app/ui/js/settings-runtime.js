@@ -48,8 +48,8 @@ const WEATHER_ICON_STYLES={
 };
 const SEASONAL_DECOR_MODES={
   off:{label:"Off",summary:"No holiday decoration layer."},
-  subtle:{label:"Subtle",summary:"A few faint SVG accents in empty cells."},
-  standard:{label:"Standard",summary:"More visible accents, still content-safe."}
+  subtle:{label:"Subtle",summary:"Five quiet static SVG accents in empty cells."},
+  standard:{label:"Standard",summary:"Up to ten visible static accents in empty cells, including Lite."}
 };
 function visualChoice(map,value,fallback){ return map[value] ? value : fallback; }
 // Dashboard typography is intentionally target-scoped. Legacy fontPreset still

@@ -9,6 +9,7 @@ const read=relative=>fs.readFileSync(path.join(root,relative),"utf8");
 const weather=read("internal/weather/weather_provider_cache.go");
 const weatherPayload=read("internal/weather/weather_payload.go");
 const archive=read("cmd/dashboard-control-server/config_backup_archive.go");
+const backupLinks=read("cmd/dashboard-control-server/config_backup_links.go");
 const restore=read("cmd/dashboard-control-server/config_backup_restore.go");
 const backups=read("cmd/dashboard-control-server/config_backups.go");
 const fontHTTP=read("cmd/dashboard-control-server/fonts_http.go");
@@ -27,9 +28,9 @@ assert.doesNotMatch(weatherPayload,/sha256\.Sum256\(\[\]byte\(v\)\)/,"aggregate 
 assert.match(weatherPayload,/weatherProviderKeyFingerprintGo\(value\)/,"aggregate weather cache must use the keyed provider marker");
 
 for(const token of ["calendarBackupLinkRootHome","calendarBackupLinkRootSystem","calendarBackupSystemCalendarsRoot","trusted calendar roots","validateExistingCalendarTarget"]){
-  assert.ok(archive.includes(token),`calendar backup root policy missing ${token}`);
+  assert.ok(backupLinks.includes(token),`calendar backup root policy missing ${token}`);
 }
-assert.match(archive,/calendarBackupSystemCalendarsRoot\s*=\s*"\/Calendars"/,"trusted system calendar root must remain /Calendars");
+assert.match(backupLinks,/calendarBackupSystemCalendarsRoot\s*=\s*"\/Calendars"/,"trusted system calendar root must remain /Calendars");
 assert.doesNotMatch(restore,/os\.Symlink\(link\.Target,/,"raw backup link target must never reach os.Symlink");
 assert.match(restore,/policy\.restoreTarget\(link\)/,"calendar restore must resolve a normalized trusted target");
 assert.match(backups,/type configBackupRecord struct/,"backup selection must use server-owned records");

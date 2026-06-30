@@ -11,25 +11,26 @@
 #ctrlvisualstyle .visualiconpreview{font-size:27px;line-height:1;margin-bottom:2px;color:var(--fg);}
 .seasonal-decor{
   position:absolute;right:9px;bottom:8px;width:44px;height:44px;
-  color:var(--accent);opacity:.40;pointer-events:none;z-index:0;
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,.22));
-  transition:none;animation:none;
+  color:var(--accent);opacity:.46;pointer-events:none;z-index:0;
+  filter:none;transition:none;animation:none;
 }
 .seasonal-decor svg{display:block;width:100%;height:100%;overflow:visible;}
-.seasonal-decor.decor-subtle{width:36px;height:36px;opacity:.24;}
+.seasonal-decor.decor-subtle{width:36px;height:36px;opacity:.30;}
+/* Lite keeps the same selected decal count as every other profile. It only
+   drops filters and uses a compact static footprint for low-power paint cost. */
 html[data-profile="lite"] .seasonal-decor,
 html[data-profile="zero2"] .seasonal-decor,
 html[data-profile="low"] .seasonal-decor,
 html[data-profile="low-power"] .seasonal-decor,
 html.profile-lite .seasonal-decor{
   filter:none!important;transition:none!important;animation:none!important;
-  width:34px;height:34px;opacity:.20;right:6px;bottom:6px;
+  width:34px;height:34px;opacity:.30;right:6px;bottom:6px;
 }
-html[data-profile="lite"] .seasonal-decor:not(.decor-subtle),
-html[data-profile="zero2"] .seasonal-decor:not(.decor-subtle),
-html[data-profile="low"] .seasonal-decor:not(.decor-subtle),
-html[data-profile="low-power"] .seasonal-decor:not(.decor-subtle),
-html.profile-lite .seasonal-decor:not(.decor-subtle){opacity:.20;}
+html[data-profile="lite"] .seasonal-decor.decor-subtle,
+html[data-profile="zero2"] .seasonal-decor.decor-subtle,
+html[data-profile="low"] .seasonal-decor.decor-subtle,
+html[data-profile="low-power"] .seasonal-decor.decor-subtle,
+html.profile-lite .seasonal-decor.decor-subtle{opacity:.26;}
 
 .daycell .dnum,.daycell .evlist{z-index:1;}
 .decor-halloween{color:#df8a45;}
@@ -52,6 +53,13 @@ html.profile-lite .seasonal-decor:not(.decor-subtle){opacity:.20;}
 .decor-cincodemayo{color:#e0b75f;}
 .decor-juneteenth{color:#d69a63;}
 .decor-muertos{color:#e6a241;}
+.decor-memorialday{color:#d99494;}
+.decor-laborday{color:#e0a760;}
+.decor-veterans{color:#8eaee6;}
+.decor-mothersday{color:#e69cb4;}
+.decor-fathersday{color:#86b5d9;}
+.decor-hanukkah{color:#9dc9ee;}
+.decor-kwanzaa{color:#d79d5d;}
 html[data-font-preset="mono"] .ev .etitle,
 html[data-font-preset="mono"] .spanbar .spantitle{letter-spacing:-.03em;}
 @media(max-width:760px){

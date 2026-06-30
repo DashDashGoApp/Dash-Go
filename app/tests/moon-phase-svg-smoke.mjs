@@ -20,6 +20,7 @@ assert.match(weather,/const size=32, r=size\*0\.44, cx=size\/2, cy=size\/2/,
   "moon SVG must retain its compact 32px viewport geometry");
 assert.match(weather,/feTurbulence/,"moon SVG must retain its inline surface texture");
 assert.match(weather,/const detailRelief=/,"moon SVG must vary crater relief through the lunar cycle");
+assert.match(weather,/const earthshineOpacity=0\.050\+0\.090\*\(1-illumination\);/,"moon SVG must retain the reviewed modest earthshine lift");
 assert.match(weather,/function terminatorPath\(\)/,"moon SVG must draw a phase-correct terminator");
 assert.match(weather,/<mask id="night\$\{uid\}"/,
   "moon SVG must derive the dark side from the exact inverse of the illuminated mask");

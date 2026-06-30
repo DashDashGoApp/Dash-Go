@@ -208,7 +208,7 @@ function moonPhaseSVG(phase){
   const litLeft=p>0.5,lightSide=litLeft?-1:1;
   const illumination=(1-Math.cos(2*Math.PI*p))/2;
   const detailRelief=0.44+0.56*Math.abs(Math.cos(Math.PI*p));
-  const earthshineOpacity=0.035+0.075*(1-illumination);
+  const earthshineOpacity=0.050+0.090*(1-illumination);
   const earthDetailOpacity=0.42+0.28*(1-illumination);
   const terminatorOpacity=0.06+0.13*Math.sqrt(1-illumination);
   const lightReach=Math.abs(Math.cos(Math.PI*p));
