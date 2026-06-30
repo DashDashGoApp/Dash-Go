@@ -49,9 +49,9 @@ assert.match(actions,/openChoreWheel/,"Chores action popup must hand off to its 
 assert.match(actions,/openMaintenance/,"Maintenance action popup must hand off to its app");
 assert.match(actions,/showRoutinesCalendarActionPopup/,"Routines group must use person-first checklist popup");
 assert.match(actions,/openRoutines\(\{date:appCalendarActionDate\(day\)\}\)/,"Routines group action must hand off to the selected day");
-assert.match(cache,/cache\.version!==5/,"browser must reject pre-group cache payloads");
+assert.match(cache,/cache\.version!==6/,"browser must reject pre-group cache payloads");
 assert.match(parser,/X-DASHGO-APP-OWNER/,"direct ICS fallback must retain app owner metadata");
-assert.match(eventTypes,/const CacheVersion = 5/,"server cache version must invalidate pre-owner records");
+assert.match(eventTypes,/const CacheVersion = 6/,"server cache version must invalidate pre-owner records");
 assert.match(eventCache,/item\["appOwner"\] = owner/,"cache event serialization must expose app owner metadata");
 assert.match(manifest,/obj\["owner"\] = owner/,"manifest must carry canonical app owner metadata");
 assert.match(choreCalendar,/AppOwner: "chore-wheel"/,"Chore Wheel calendar projection must declare owner metadata");

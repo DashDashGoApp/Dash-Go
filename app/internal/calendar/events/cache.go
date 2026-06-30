@@ -139,6 +139,15 @@ func serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[string]any {
 	if owner != "" {
 		item["appOwner"] = owner
 	}
+	if kind := strings.TrimSpace(ev.Meta["X-DASHGO-MANAGED-SCHEDULE"]); kind != "" {
+		item["managedSchedule"] = map[string]any{
+			"type":        kind,
+			"ruleId":      strings.TrimSpace(ev.Meta["X-DASHGO-SCHEDULE-RULE-ID"]),
+			"nominalDate": strings.TrimSpace(ev.Meta["X-DASHGO-NOMINAL-DATE"]),
+			"actualDate":  strings.TrimSpace(ev.Meta["X-DASHGO-SCHEDULE-ACTUAL-DATE"]),
+			"reason":      strings.TrimSpace(ev.Meta["X-DASHGO-SCHEDULE-REASON"]),
+		}
+	}
 	return item
 }
 

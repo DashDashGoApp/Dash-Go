@@ -44,6 +44,14 @@ function parseICS(text, cal){
     else if(name==="RRULE") cur.rrule=val;
     else if(name==="UID") cur.uid=val;
     else if(name==="X-DASHGO-APP-OWNER") cur.appOwner=icsUnescape(val).trim();
+    else if(name==="X-DASHGO-MANAGED-SCHEDULE"||name==="X-DASHGO-SCHEDULE-RULE-ID"||name==="X-DASHGO-NOMINAL-DATE"||name==="X-DASHGO-SCHEDULE-ACTUAL-DATE"||name==="X-DASHGO-SCHEDULE-REASON"){
+      const managed=cur.managedSchedule||(cur.managedSchedule={});
+      if(name==="X-DASHGO-MANAGED-SCHEDULE") managed.type=icsUnescape(val).trim();
+      else if(name==="X-DASHGO-SCHEDULE-RULE-ID") managed.ruleId=icsUnescape(val).trim();
+      else if(name==="X-DASHGO-NOMINAL-DATE") managed.nominalDate=icsUnescape(val).trim();
+      else if(name==="X-DASHGO-SCHEDULE-ACTUAL-DATE") managed.actualDate=icsUnescape(val).trim();
+      else managed.reason=icsUnescape(val).trim();
+    }
     else if(name==="EXDATE"){
       // Comma-separated list of excluded occurrence starts.
       (cur.exdates=cur.exdates||[]).push(

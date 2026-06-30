@@ -16,18 +16,6 @@ function timeBucket(d){
   if(h<21) return "evening";      // 17:00–20:59
   return "night";                 // 21:00–23:59
 }
-// Today's holiday name from loaded calendar events tagged "holiday", if any.
-function todaysHolidayName(){
-  if(!Array.isArray(EVENTS)) return null;
-  const today=new Date(); today.setHours(0,0,0,0);
-  for(const ev of EVENTS){
-    const isHol = (ev.cal && ev.cal.tag==="holiday") || /holiday/i.test((ev.cal&&ev.cal.name)||"");
-    if(!isHol) continue;
-    const s=new Date(ev.start); s.setHours(0,0,0,0);
-    if(+s===+today && ev.title) return ev.title.trim();
-  }
-  return null;
-}
 function messageNormKey(text){ return String(text||"").trim().replace(/\s+/g," ").toLowerCase(); }
 function messageKind(c){
   if(c && c.temporary) return "temporary";
@@ -62,6 +50,8 @@ function eligibleMessage(c,text,weight){
     id: c && c.id!=null ? c.id : null,
     source: c && c.source ? String(c.source) : "",
     defaultKey: kind==="default" ? messageNormKey(text) : "",
+    holiday: !!(c&&c.holiday),
+    holidayMajor: !!(c&&c.holidayMajor),
     priority: kind==="temporary" || kind==="scheduled" || kind==="birthday"
   };
 }
@@ -70,17 +60,17 @@ function eligibleCompliments(){
   const bucket=timeBucket();
   const now=new Date();
   const md=String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
-  const holiday=todaysHolidayName();
-  const out=[];
+  const holidayContexts=todaysHolidayContexts(now),holidayName=holidayDisplayName(holidayContexts);
+  let out=[];
   for(const c of (COMP_LIST||CONFIG.compliments)){
     if(!c || !c.text) continue;
     if(c.when && !c.when.includes(bucket)) continue;   // wrong time of day
     if(c.date && c.date!==md) continue;                // not its date
-    if(c.holiday && !holiday) continue;                // no holiday today
+    if(!holidayEntryMatches(c,holidayContexts)) continue;
     let text=String(c.text||"");
     if(text.includes("%holiday%")){
-      if(!holiday) continue;
-      text=text.replace(/%holiday%/g, holiday);
+      if(!holidayName) continue;
+      text=text.replace(/%holiday%/g, holidayName);
     }
     out.push(eligibleMessage(c, text, c.weight||1));
   }
@@ -97,6 +87,9 @@ function eligibleCompliments(){
     }
   }
   for(const c of out){ delete c.share; }
+  // A holiday day deliberately remains a mixed household rotation: 40% for a
+  // normal observance and 60% when a curated major celebration is eligible.
+  out=applyHolidayMessageShare(out);
   // Fallback: if somehow nothing matched, allow the anytime-untagged ones.
   if(!out.length){
     for(const c of CONFIG.compliments){

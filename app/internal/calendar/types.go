@@ -22,6 +22,9 @@ type Event struct {
 	Description string
 	UID         string
 	AppOwner    string
+	// Meta carries explicit machine-readable Dash-Go markers for generated
+	// household schedule occurrences. It is never inferred from event titles.
+	Meta map[string]string
 }
 
 // Source is the canonical presentation metadata for a Dash-Go owned feed.

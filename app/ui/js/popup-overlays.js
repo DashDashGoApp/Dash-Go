@@ -42,7 +42,7 @@ function noteOverlayInput(){
 function setPopupMode(cls){
   if(cls!=="messagepop"&&typeof releaseMessagePopupRotationPause==="function")releaseMessagePopupRotationPause();
   const pop=$("#pop");if(!pop)return;
-  pop.classList.remove("daytimelinepop","weatherpop","messagepop","eventpop","healthwarningpop");
+  pop.classList.remove("daytimelinepop","weatherpop","messagepop","eventpop","managedschedulepop","healthwarningpop");
   if(cls)pop.classList.add(cls);
 }
 function popupNextFrame(fn){

@@ -33,7 +33,7 @@ func (a *app) newCalendarService(refreshCacheAsync func()) *calendarpkg.Service 
 	}
 	return calendarpkg.New(calendarpkg.ServiceConfig{
 		DashDir: a.dash, HomeDir: a.home, CalendarDir: a.calDir, CacheDir: a.cacheDir,
-		LogDir: a.logDir, ConfigLocal: a.configLocal, CelebrationsFile: a.celebrationsFile,
+		LogDir: a.logDir, ConfigLocal: a.configLocal, CelebrationsFile: a.celebrationsFile, HouseholdSchedulesFile: a.householdSchedulesFile(),
 		Now:                  time.Now,
 		OutputEnabled:        a.appCalendarOutputEnabled,
 		AppKnown:             a.appCalendarKnown,

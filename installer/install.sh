@@ -6190,6 +6190,7 @@ choose_observance_layers(){
   }
   while true; do
     echo "  Observance layers — toggle one number at a time"
+    echo "  Selected layers appear on Calendar and enable matching rotating holiday messages."
     echo "    $(mark "$sel_jewish") 1) Jewish"
     echo "    $(mark "$sel_islamic") 2) Islamic"
     echo "    $(mark "$sel_christian") 3) Christian"
@@ -6219,6 +6220,7 @@ DEFAULT_DST_CHANGES="$(ask_on "Daylight Saving Time change markers" "${DEFAULT_D
 DEFAULT_METEOR_SHOWERS="$(ask_on "Meteor showers" "${DEFAULT_METEOR_SHOWERS:-0}")"
 DEFAULT_SUPERMOONS="$(ask_on "Supermoons" "${DEFAULT_SUPERMOONS:-0}")"
 DEFAULT_ECLIPSES="$(ask_on "Eclipse date reminders" "${DEFAULT_ECLIPSES:-0}")"
+echo "  Household Schedules in Dashboard Control can later add, pause, or correct Paydays, Trash Pickup, and Recycling Pickup without rerunning setup."
 read -rp "  Weekly trash pickup weekday (blank = none) [${TRASH_WEEKDAY:-none}]: " ans; [ -n "$ans" ] && TRASH_WEEKDAY="$ans"
 read -rp "  Recycling pickup weekday (blank = none) [${RECYCLING_WEEKDAY:-none}]: " ans; [ -n "$ans" ] && RECYCLING_WEEKDAY="$ans"
 if [ -n "${RECYCLING_WEEKDAY:-}" ]; then
@@ -6250,7 +6252,7 @@ if [ ! -f "$CELECFG" ]; then
 else
   echo "  Celebrations source already exists: $CELECFG"
 fi
-echo "  Payday calendar:"
+echo "  Payday calendar (initial shortcut — add multiple named paydays and business-day rules later in Dashboard Control → Calendars → Household Schedules):"
 echo "    1) none"
 echo "    2) weekly from a start date"
 echo "    3) biweekly from a start date"

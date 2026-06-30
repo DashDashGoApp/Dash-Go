@@ -9,7 +9,7 @@ const LOCALE = "en-US";
    Edit these and nothing else for normal tweaks.
    ===================================================================== */
 const CONFIG = {
-  version: "1.5.2-beta.1",
+  version: "1.5.2-beta.2",
   // ICS files served from the same origin (you SFTP them next to this file).
   // Give each a color + optional name. Add as many as you like.
   calendars: [
@@ -116,8 +116,8 @@ const CONFIG = {
   nightDim: { start: 23, end: 4, level: 0.45 },
 
   // ---- COMPLIMENTS ----
-  // Each entry: { text, when?, weight?, share?, date?, holiday? }
-  //   text   : the phrase. "%holiday%" is replaced with today's holiday name.
+  // Each entry: { text, when?, weight?, share?, date?, holiday?, legacyKeys? }
+  //   text   : the phrase. "%holiday%" is replaced with the loaded holiday name.
   //   when   : array of time-of-day buckets it may show in. Omit = anytime.
   //            buckets: "earlymorning" "morning" "afternoon" "evening"
   //                     "night" "latenight"
@@ -126,7 +126,15 @@ const CONFIG = {
   //            ~33%). Auto-balanced regardless of how many others are eligible,
   //            so it stays on target as you add phrases. Overrides weight.
   //   date   : "MM-DD" — only eligible on that calendar date.
-  //   holiday: true — only eligible when today is a holiday (from holidays.ics)
+  //   holiday: true — only eligible when a loaded, enabled holiday calendar has
+  //            an event today. holidayLayers and holidayNames are exact optional
+  //            filters for curated greetings; they never infer an observance.
+  //   holidayOverlap: true only on inclusive wording for distinct simultaneous
+  //            occasions; false suppresses one-occasion/direct greetings then.
+  //   holidayMajor: makes the eligible holiday catalog about 60% of rotation;
+  //            other holiday days target about 40% while retaining regular messages.
+  //   legacyKeys: prior default text keys whose hidden/edit state should follow
+  //            a renamed built-in message without touching custom messages.
   // Time buckets (local time):
   //   latenight  00:00–03:59   (runs until 4am)
   //   earlymorning 04:00–07:59

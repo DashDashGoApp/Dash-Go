@@ -111,7 +111,7 @@ func cleanCompliment(body map[string]any, existing map[string]any) (map[string]a
 	return out, nil
 }
 func defaultKeyFromBody(body map[string]any) string {
-	if k := jsonutil.BodyString(body, "key"); k != "" {
+	if k := normalizeDefaultMessageKey(body["key"]); k != "" {
 		return k
 	}
 	if text := cleanTextLimit(body["text"], 300); text != "" {
@@ -199,22 +199,32 @@ func (s *Service) handleCompliments(w http.ResponseWriter, path string, body map
 		s.saveCompliments(payload)
 		s.json(w, map[string]any{"imported": len(newItems), "messages": newItems})
 	case "/api/compliments/defaults/toggle":
-		key := defaultKeyFromBody(body)
-		if key == "" {
+		keys := defaultKeyAliasesFromBody(body)
+		if len(keys) == 0 {
 			s.err(w, "missing default key", 400)
 			return
 		}
-		removed := jsonutil.List(payload["removedDefaults"])
-		out := []any{}
-		found := false
-		for _, v := range removed {
-			if fmt.Sprint(v) == key {
+		key, aliases := keys[0], map[string]bool{}
+		for _, alias := range keys {
+			aliases[alias] = true
+		}
+		out, found := []any{}, false
+		for _, value := range jsonutil.List(payload["removedDefaults"]) {
+			current := normalizeDefaultMessageKey(value)
+			if aliases[current] {
 				found = true
-			} else {
-				out = append(out, v)
+				continue
+			}
+			if current != "" {
+				out = append(out, current)
 			}
 		}
-		if !found {
+		desired, explicit := body["removed"]
+		hide := !found
+		if explicit {
+			hide = jsonutil.Truthy(desired)
+		}
+		if hide {
 			out = append(out, key)
 		}
 		payload["removedDefaults"] = out
@@ -273,8 +283,14 @@ func (s *Service) handleCompliments(w http.ResponseWriter, path string, body map
 		s.saveCompliments(payload)
 		s.json(w, s.complimentsPayload())
 	case "/api/compliments/reconcile-defaults":
-		payload["defaultsSeeded"] = true
-		s.saveCompliments(payload)
-		s.json(w, map[string]any{"changed": 0, "messages": payload["messages"], "removedDefaults": payload["removedDefaults"], "defaultsCleared": payload["defaultsCleared"], "defaultsSeeded": payload["defaultsSeeded"], "defaultEdits": payload["defaultEdits"], "version": payload["version"]})
+		changed := reconcileDefaultCatalog(payload, jsonutil.List(body["messages"]))
+		if !jsonutil.Truthy(payload["defaultsSeeded"]) {
+			payload["defaultsSeeded"] = true
+			changed++
+		}
+		if changed > 0 {
+			s.saveCompliments(payload)
+		}
+		s.json(w, map[string]any{"changed": changed, "messages": payload["messages"], "removedDefaults": payload["removedDefaults"], "defaultsCleared": payload["defaultsCleared"], "defaultsSeeded": payload["defaultsSeeded"], "defaultEdits": payload["defaultEdits"], "version": payload["version"]})
 	}
 }

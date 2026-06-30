@@ -101,7 +101,11 @@ function oskInput(placeholder,value,opts){
 function compPayloadMessages(r){ return (r&&Array.isArray(r.messages))?r.messages:[]; }
 function defaultBuiltins(){ return (CONFIG.compliments||[]).filter(c=>c && c.text && !c._bday); }
 function normMsgText(v){ return String(v||"").trim().replace(/\s+/g," ").toLowerCase(); }
-function defaultKey(c){ return normMsgText(c && c.text); }
+function defaultKey(c){ return typeof defaultMessageKey==="function"?defaultMessageKey(c):normMsgText(c && c.text); }
+function defaultLegacyKeys(c){
+  return typeof defaultMessageAliases==="function"?defaultMessageAliases(c):[defaultKey(c),...(Array.isArray(c&&c.legacyKeys)?c.legacyKeys.map(normMsgText):[])].filter(Boolean);
+}
+function defaultIsRemoved(c,removed){ return defaultLegacyKeys(c).some(key=>removed.has(key)); }
 function defaultKeys(){ return defaultBuiltins().map(defaultKey).filter(Boolean); }
 function defaultTextSet(){ return new Set(defaultKeys()); }
 let _defaultsReconciled=false;
@@ -205,13 +209,13 @@ async function renderCtrlBuiltins(){
   ctrlSetLoading(wrap,"Loading default messages…","Reading built-in message toggles.");
   const built=defaultBuiltins();
   let payload;
-  try{ payload=await api("/api/compliments"); CTRL_CACHE["/api/compliments"]=payload; }
+  try{ await reconcileDefaultMessages(); payload=await api("/api/compliments"); CTRL_CACHE["/api/compliments"]=payload; }
   catch(e){ ctrlSetError(wrap,"Default messages unavailable",friendlyUnavailable("Default messages",e)); return; }
   wrap.innerHTML=""; hideOSK();
-  const removed=new Set((payload&&Array.isArray(payload.removedDefaults))?payload.removedDefaults:[]);
+  const removed=new Set(((payload&&Array.isArray(payload.removedDefaults))?payload.removedDefaults:[]).map(normMsgText).filter(Boolean));
   const cleared=payload&&payload.defaultsCleared===true;
   const keys=defaultKeys();
-  const hidden=cleared?built.length:built.filter(d=>removed.has(defaultKey(d))).length;
+  const hidden=cleared?built.length:built.filter(d=>defaultIsRemoved(d,removed)).length;
   wrap.appendChild(ctrlStateCard("info","Default messages",built.length+" built-in · "+hidden+" hidden. Built-ins are set-and-forget; open the list only when you need to hide or restore individual defaults."));
   const actions=el("div","ctrlrow compact msgactiongrid");
   const addAll=cbtn("Restore all","on",async()=>{
@@ -234,16 +238,18 @@ async function renderCtrlBuiltins(){
   const list=el("div","builtinlist builtinlist-scroll"); drawer.appendChild(list); wrap.appendChild(drawer);
   if(!built.length){ list.appendChild(ctrlStateCard("empty","No built-in defaults found","The dashboard default-message list did not load.")); return; }
   for(const d of built){
-    const key=defaultKey(d);
-    const isRemoved=cleared || removed.has(key);
+    const key=defaultKey(d),legacyKeys=defaultLegacyKeys(d);
+    const isRemoved=cleared || defaultIsRemoved(d,removed);
     const row=el("div","comprow builtinrow"+(isRemoved?" removed":""));
     row.appendChild(el("span","ct",d.text||""));
-    const meta=[d.date?("on "+d.date):"", d.weight&&d.weight!==1?msgWeightLabel(d.weight):""].filter(Boolean).join(" · ");
+    const holidayMeta=d.holiday?(d.holidayTone==="direct"?"holiday greeting":(d.holidayTone==="solemn"?"holiday observance":"holiday message")):"";
+    const layerMeta=Array.isArray(d.holidayLayers)&&d.holidayLayers.length?d.holidayLayers.join("/"):"";
+    const meta=[d.date?("on "+d.date):"", d.when?d.when.join("/"):"", holidayMeta,layerMeta,d.weight&&d.weight!==1?msgWeightLabel(d.weight):""].filter(Boolean).join(" · ");
     row.appendChild(el("span","cm",meta));
     const tog=cbtn(isRemoved?"Removed":"Added",isRemoved?"":"on",async()=>{
       try{
         delete CTRL_CACHE["/api/compliments"];
-        await api("/api/compliments/defaults/toggle","POST",{key,removed:!isRemoved,allKeys:keys});
+        await api("/api/compliments/defaults/toggle","POST",{key,legacyKeys,removed:!isRemoved,allKeys:keys});
         await loadCompliments();
         await stableMessageAction(()=>renderCtrlBuiltins());
       }catch(e){ ctrlMsg("Could not update default: "+e.message); }

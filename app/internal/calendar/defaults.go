@@ -56,14 +56,23 @@ func (s *Service) GenerateDefaults(refreshIndexes bool) (map[string]any, error) 
 	years := []int{today.Year(), today.Year() + 1, today.Year() + 2}
 	rangeStart, rangeEnd := DateOnly(today.Year(), 1, 1), DateOnly(today.Year()+3, 1, 1)
 	written, removed := []string{}, []string{}
+	var writeErr error
 	write := func(file, name string, events []Event) {
+		if writeErr != nil {
+			return
+		}
 		if len(events) == 0 {
-			if RemoveFile(filepath.Join(s.calendarDir, file)) {
+			if err := os.Remove(filepath.Join(s.calendarDir, file)); err == nil {
 				removed = append(removed, file)
+			} else if !os.IsNotExist(err) {
+				writeErr = err
 			}
 			return
 		}
-		_ = WriteICSFile(filepath.Join(s.calendarDir, file), name, events)
+		if err := WriteICSFile(filepath.Join(s.calendarDir, file), name, events); err != nil {
+			writeErr = err
+			return
+		}
 		written = append(written, file)
 	}
 	remove := func(file string) {
@@ -98,11 +107,29 @@ func (s *Service) GenerateDefaults(refreshIndexes bool) (map[string]any, error) 
 	if values["DEFAULT_ISO_WEEKS"] == "1" && s.enableISOWeek != nil {
 		s.enableISOWeek()
 	}
-	holidayDates := s.CivilHolidayDates()
-	write("trash.amber.ics", "Trash Pickup", PickupEvents(values["TRASH_WEEKDAY"], "Trash pickup", "trash", 1, rangeStart, rangeEnd, holidayDates, values))
-	write("recycling.teal.ics", "Recycling Pickup", PickupEvents(values["RECYCLING_WEEKDAY"], "Recycling pickup", "recycling", atoiClamp(values["RECYCLING_EVERY_WEEKS"], 2, 1, 52), rangeStart, rangeEnd, holidayDates, values))
-	write("payday.violet.pay.ics", "Paydays", PaydayEvents(values, years, rangeStart, rangeEnd))
+	// Migrate the old installer-only pickup/payday variables on first use. The
+	// legacy values stay intact as a safe fallback; the structured config then
+	// becomes the Dashboard Control source of truth.
+	household, migrated, householdErr := s.loadHouseholdSchedulesLocked(values)
+	if householdErr != nil {
+		s.mu.Unlock()
+		return nil, householdErr
+	}
+	if migrated {
+		if err := s.writeHouseholdSchedulesLocked(household); err != nil {
+			s.mu.Unlock()
+			return nil, err
+		}
+	}
+	feeds := householdScheduleFeeds(household, rangeStart, rangeEnd, s.HolidayDatesByLayer(nextHolidayLayers(household)))
+	write("trash.amber.ics", "Trash Pickup", feeds["trash"])
+	write("recycling.teal.ics", "Recycling Pickup", feeds["recycling"])
+	write("payday.violet.pay.ics", "Paydays", feeds["payday"])
 	write("celebrations.gold.ics", "Celebrations", CelebrationICSEvents(s.celebrationsFile, years, rangeStart, rangeEnd))
+	if writeErr != nil {
+		s.mu.Unlock()
+		return nil, writeErr
+	}
 	sky := map[string]any{}
 	if s.generateSky != nil {
 		sky = s.generateSky()

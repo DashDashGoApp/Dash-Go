@@ -94,6 +94,13 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 		a.json(w, a.calendars())
 	case "/api/calendars/manage":
 		a.json(w, a.calendarManagementStatus())
+	case "/api/household-schedules":
+		payload, err := a.householdSchedulesPayload()
+		if err != nil {
+			a.err(w, err.Error(), 500)
+			return
+		}
+		a.json(w, payload)
 	case "/api/calendars/health", "/api/cache/status":
 		a.json(w, a.cacheStatus())
 	case "/api/moon/status":

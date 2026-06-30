@@ -5,7 +5,8 @@ function cacheEventToRuntime(e){
     cal:{url:cal.url||e.calUrl||"",name:cal.name||"",color:cal.color||"",tag:cal.tag||"",owner:cal.owner||e.appOwner||""},
     title:e.title||"(no title)", desc:e.desc||"", location:e.location||"",
     start:new Date(e.start), end:e.end?new Date(e.end):null, allDay:!!e.allDay,
-    uid:e.uid||"", appOwner:e.appOwner||cal.owner||""
+    uid:e.uid||"", appOwner:e.appOwner||cal.owner||"",
+    managedSchedule:(e.managedSchedule&&typeof e.managedSchedule==="object"?e.managedSchedule:null)
   };
 }
 let MAP_PREWARM_LAST=0;
@@ -27,7 +28,7 @@ async function loadEventsCache(winStart,winEnd){
     const res=await fetch("cache/events.cache.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) return null;
     const cache=await res.json();
-    if(!cache || cache.version!==5 || !Array.isArray(cache.events)) return null;
+    if(!cache || cache.version!==6 || !Array.isArray(cache.events)) return null;
     if(cache.windowStart>+winStart || cache.windowEnd<+winEnd) return null;
     const all=[];
     for(const raw of cache.events){
@@ -49,7 +50,8 @@ async function loadEventsCache(winStart,winEnd){
 function commitCalendarEvents(all,sigExtra){
   const sig=(sigExtra||"")+"::"+all.map(e=>(e.title||"")+"|"+(+e.start)+"|"+(e.end?+e.end:0)+"|"+
                        ((e.location||"").length)+"|"+((e.desc||"").length)+"|"+
-                       ((e.cal&&e.cal.name)||"")+"|"+((e.cal&&e.cal.color)||"")+"|"+((e.cal&&e.cal.tag)||"")+"|"+(e.appOwner||((e.cal&&e.cal.owner)||""))).join("~");
+                       ((e.cal&&e.cal.name)||"")+"|"+((e.cal&&e.cal.color)||"")+"|"+((e.cal&&e.cal.tag)||"")+"|"+
+                       (e.appOwner||((e.cal&&e.cal.owner)||""))+"|"+JSON.stringify(e.managedSchedule||null)).join("~");
   // A routine cache refresh often returns byte-for-byte equivalent events.
   // Keep the current EVENTS array and per-day index intact in that case; there
   // is no DOM work to perform and rebuilding the index would only allocate on
@@ -59,7 +61,7 @@ function commitCalendarEvents(all,sigExtra){
   rebuildDayIndex();
   loadCalendars._sig=sig;
   try{ localStorage.setItem("dashboard:lastEvents",JSON.stringify({ts:Date.now(),events:all.map(e=>({
-    id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",cal:e.cal||{}
+    id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",managedSchedule:e.managedSchedule||null,cal:e.cal||{}
   }))})); }catch(_){ }
   const paint=()=>{ renderCalendar(); renderAgenda(); };
   if(typeof deferDashboardWork==="function" && deferDashboardWork("calendar-render",paint)) return true;

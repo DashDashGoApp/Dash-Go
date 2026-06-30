@@ -10,6 +10,12 @@ function eventPopupWhen(ev){
   return f;
 }
 function showEventPopup(ev){
+  // Managed Paydays/Trash/Recycle entries are identified by trusted generated
+  // metadata. Never infer editability from an event title in a subscribed feed.
+  if(typeof managedScheduleInfo==="function"&&typeof showManagedSchedulePopup==="function"&&managedScheduleInfo(ev)){
+    showManagedSchedulePopup(ev);
+    return;
+  }
   // Agenda and day-list app-owned entries should open the same actionable
   // household surface as a grouped month-cell row, rather than a read-only
   // ICS detail card. Ownership is explicit metadata, never title inference.

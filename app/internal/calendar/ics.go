@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -66,6 +67,21 @@ func WriteICSFile(path, name string, events []Event) error {
 		}
 		if owner := strings.TrimSpace(event.AppOwner); owner != "" {
 			body.WriteString("X-DASHGO-APP-OWNER:" + icsEsc(owner) + "\r\n")
+		}
+		// Managed household schedule markers are explicit machine data, not
+		// inferred from a summary such as "Payday" or "Trash pickup".
+		// Keep deterministic key ordering so generated feeds are reproducible.
+		if len(event.Meta) > 0 {
+			keys := make([]string, 0, len(event.Meta))
+			for key := range event.Meta {
+				if strings.HasPrefix(key, "X-DASHGO-") {
+					keys = append(keys, key)
+				}
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				body.WriteString(key + ":" + icsEsc(event.Meta[key]) + "\r\n")
+			}
 		}
 		body.WriteString("END:VEVENT\r\n")
 	}

@@ -1,0 +1,22 @@
+/* One-off correction surface for explicit Dash-Go household schedule events. */
+#pop.managedschedulepop #popbody{max-width:680px;}
+.managed-schedule-popup{display:grid;gap:14px;}
+.managed-schedule-intro{margin:0;color:var(--muted);line-height:1.42;}
+.managed-schedule-detail{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);}
+.managed-schedule-label,.managed-schedule-note{font-size:.86em;color:var(--muted);}
+.managed-schedule-subhead{font-weight:700;}
+.managed-schedule-shifts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.managed-schedule-button{min-height:48px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);padding:8px 10px;font:inherit;font-weight:700;line-height:1.15;touch-action:manipulation;}
+.managed-schedule-button.primary{border-color:var(--accent);background:var(--accent);color:var(--onaccent,#10231b);}
+.managed-schedule-button.danger{color:var(--danger,#df786e);}
+.managed-schedule-button.danger.armed{border-color:var(--danger,#df786e);background:var(--danger,#df786e);color:#fff;}
+.managed-schedule-button:active{filter:brightness(1.1);}
+.managed-schedule-action{display:grid;text-align:left;gap:3px;}
+.managed-schedule-action-title{font-weight:800;}.managed-schedule-action-detail{font-size:.83em;font-weight:500;color:var(--muted);line-height:1.25;}
+.managed-schedule-action.primary .managed-schedule-action-detail{color:inherit;opacity:.82;}
+.managed-schedule-custom{display:grid;grid-template-columns:minmax(130px,.6fr) minmax(0,1fr);align-items:center;gap:10px;}
+.managed-schedule-date{width:100%;min-height:46px;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);padding:0 12px;font:inherit;}
+.managed-schedule-custom-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.managed-schedule-actions{display:grid;gap:8px;}.managed-schedule-message{min-height:1.25em;color:var(--warn);font-size:.92em;}
+.managed-schedule-popup.busy .managed-schedule-button{pointer-events:none;opacity:.58;}
+@media(max-width:700px){.managed-schedule-shifts{grid-template-columns:repeat(2,minmax(0,1fr));}.managed-schedule-custom{grid-template-columns:1fr;}.managed-schedule-custom-actions{grid-template-columns:1fr;}}

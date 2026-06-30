@@ -18,6 +18,6 @@ assert.match(sources,/seen, out := map\[string\]bool\{\}, \[\]CalendarSource\{\}
 assert.match(sources,/seen\[key\] = true[\s\S]*?if !calendarEntryEnabled\(m\)/,"an explicit disabled source must block app feed reinjection");
 assert.doesNotMatch(sources,/chore-wheel\.ics/,"Chore Wheel feed must not be appended as a duplicate runtime source");
 assert.doesNotMatch(sources,/maintenance\.ics/,"Maintenance feed must not be appended as a duplicate runtime source");
-assert.match(cache,/const CacheVersion = 5/,"calendar source repair requires a new server cache version");
-assert.match(browserCache,/cache\.version!==5/,"browser must reject pre-repair duplicate event caches");
+assert.match(cache,/const CacheVersion = 6/,"calendar source repair requires a new server cache version");
+assert.match(browserCache,/cache\.version!==6/,"browser must reject pre-repair duplicate event caches");
 console.log("owned calendar source smoke: canonical app feeds, explicit ownership, visibility, de-duplication, and cache invalidation hold");

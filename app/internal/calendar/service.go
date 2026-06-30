@@ -11,14 +11,15 @@ import (
 // weather-generated sky feeds, Settings' ISO-week preference, and event-cache
 // work remain consumer-owned callbacks.
 type ServiceConfig struct {
-	DashDir          string
-	HomeDir          string
-	CalendarDir      string
-	CacheDir         string
-	LogDir           string
-	ConfigLocal      string
-	CelebrationsFile string
-	Now              func() time.Time
+	DashDir                string
+	HomeDir                string
+	CalendarDir            string
+	CacheDir               string
+	LogDir                 string
+	ConfigLocal            string
+	CelebrationsFile       string
+	HouseholdSchedulesFile string
+	Now                    func() time.Time
 
 	OutputEnabled func(owner string) bool
 	AppKnown      func(owner string) bool
@@ -37,14 +38,15 @@ type ServiceConfig struct {
 // Service owns the calendar-management lock, local manifest/trash persistence,
 // generated default feeds, and source visibility decisions.
 type Service struct {
-	dashDir          string
-	homeDir          string
-	calendarDir      string
-	cacheDir         string
-	logDir           string
-	configLocal      string
-	celebrationsFile string
-	nowFn            func() time.Time
+	dashDir                string
+	homeDir                string
+	calendarDir            string
+	cacheDir               string
+	logDir                 string
+	configLocal            string
+	celebrationsFile       string
+	householdSchedulesFile string
+	nowFn                  func() time.Time
 
 	outputEnabled func(owner string) bool
 	appKnown      func(owner string) bool
@@ -65,7 +67,7 @@ func New(cfg ServiceConfig) *Service {
 	return &Service{
 		dashDir: cfg.DashDir, homeDir: cfg.HomeDir, calendarDir: cfg.CalendarDir,
 		cacheDir: cfg.CacheDir, logDir: cfg.LogDir, configLocal: cfg.ConfigLocal,
-		celebrationsFile: cfg.CelebrationsFile, nowFn: cfg.Now,
+		celebrationsFile: cfg.CelebrationsFile, householdSchedulesFile: cfg.HouseholdSchedulesFile, nowFn: cfg.Now,
 		outputEnabled: cfg.OutputEnabled, appKnown: cfg.AppKnown, setAppOutput: cfg.SetAppOutput,
 		generateMoon: cfg.GenerateMoon, generateSky: cfg.GenerateSky,
 		enableISOWeek: cfg.EnableISOWeekNumbers, refreshCacheSync: cfg.RefreshCacheSync,

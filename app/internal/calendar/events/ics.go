@@ -79,6 +79,11 @@ func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*ca
 			ev.UID = prop.value
 		case "X-DASHGO-APP-OWNER":
 			ev.AppOwner = strings.TrimSpace(icsUnescape(prop.value))
+		case "X-DASHGO-MANAGED-SCHEDULE", "X-DASHGO-SCHEDULE-RULE-ID", "X-DASHGO-NOMINAL-DATE", "X-DASHGO-SCHEDULE-ACTUAL-DATE", "X-DASHGO-SCHEDULE-REASON":
+			if ev.Meta == nil {
+				ev.Meta = map[string]string{}
+			}
+			ev.Meta[prop.name] = strings.TrimSpace(icsUnescape(prop.value))
 		case "EXDATE":
 			parseExdates(&ev, prop, zones)
 		case "RDATE":

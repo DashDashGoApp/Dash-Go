@@ -1,0 +1,33 @@
+/* Local-only Paydays, Trash Pickup, and Recycling Pickup editor. */
+#ctrlschedules{display:grid;gap:14px;}
+#ctrlschedules .hsc-section{display:grid;gap:10px;padding:13px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,.025);}
+#ctrlschedules .hsc-section>h3,#ctrlschedules .hsc-editor>h3,#ctrlschedules .hsc-editor-section>h4,#ctrlschedules .hsc-adjustment>h4{margin:0;color:var(--fg);font-size:16px;}
+#ctrlschedules .hsc-section>p{margin:0;color:var(--dimmer);font-size:13px;line-height:1.35;}
+#ctrlschedules .hsc-rule-card{display:grid;gap:10px;padding:12px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.035);}
+#ctrlschedules .hsc-rule-card.off{opacity:.74;}
+#ctrlschedules .hsc-rule-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+#ctrlschedules .hsc-rule-copy{display:grid;gap:3px;min-width:0;}
+#ctrlschedules .hsc-rule-copy>span{color:var(--dimmer);font-size:13px;line-height:1.3;}
+#ctrlschedules .hsc-rule-copy .hsc-rule-adjust{font-size:12px;}
+#ctrlschedules .hsc-rule-state{flex:0 0 auto;border:1px solid var(--line-soft);border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800;color:var(--dimmer);}
+#ctrlschedules .hsc-rule-state.on{color:var(--accent);}
+#ctrlschedules .hsc-preview{color:var(--dimmer);font-size:12px;line-height:1.35;overflow-wrap:anywhere;}
+#ctrlschedules .hsc-rule-actions,#ctrlschedules .hsc-editor-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+#ctrlschedules .hsc-rule-actions .cbtn,#ctrlschedules .hsc-editor-actions .cbtn{min-height:48px;white-space:normal;}
+#ctrlschedules .hsc-remove{color:var(--ctrl-danger-fg);}
+#ctrlschedules .hsc-editor{display:grid;gap:14px;padding:14px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(255,255,255,.03);}
+#ctrlschedules .hsc-editor-section,#ctrlschedules .hsc-adjustment{display:grid;gap:10px;padding:12px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.025);}
+#ctrlschedules .hsc-field{display:grid;gap:5px;}
+#ctrlschedules .hsc-field-label{font-size:13px;font-weight:800;color:var(--fg);}
+#ctrlschedules .hsc-field-detail{font-size:12px;line-height:1.3;color:var(--dimmer);}
+#ctrlschedules .hsc-field .oskfield{width:100%;box-sizing:border-box;min-height:46px;}
+#ctrlschedules .hsc-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;}
+#ctrlschedules .hsc-choice-grid .cbtn{min-height:46px;font-size:13px;white-space:normal;}
+#ctrlschedules .hsc-day-picker{display:grid;gap:7px;}
+#ctrlschedules .hsc-month-day-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;}
+#ctrlschedules .hsc-month-day-grid .cbtn{min-height:40px;padding:3px;font-size:13px;}
+#ctrlschedules .hsc-holidays{display:grid;gap:7px;}
+#ctrlschedules .hsc-override-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line-soft);font-size:13px;line-height:1.3;}
+#ctrlschedules .hsc-override-row:first-of-type{border-top:0;}
+#ctrlschedules .hsc-override-row .cbtn{flex:0 0 auto;min-height:44px;}
+@media(max-width:700px){#ctrlschedules .hsc-rule-actions,#ctrlschedules .hsc-editor-actions{grid-template-columns:repeat(2,minmax(0,1fr));}#ctrlschedules .hsc-rule-actions .hsc-remove{grid-column:1/-1;}#ctrlschedules .hsc-choice-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.hsc-override-row{align-items:flex-start!important;flex-direction:column;}.hsc-override-row .cbtn{width:100%;}}

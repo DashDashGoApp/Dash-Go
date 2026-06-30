@@ -2,7 +2,7 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.2-beta.1] — Active development
+## [1.5.2-beta.2] — Active development
 
 ### Rotating-message safety
 
@@ -11,6 +11,23 @@ This changelog records stable Dash-Go milestones. Detailed development increment
 - Add one bounded animation-frame verification for each newly generated fit cache entry; an observed wrap mismatch is corrected once, then the repaired result is cached.
 - Add a conservative Canvas width allowance, explicit pre-font fallback guard, and a larger multi-line WebKit line-box budget for vertical headroom.
 - Extend source and browser message-fit regressions to cover fitted-line clamping and a deliberately induced Lite prediction miss.
+
+### Message catalog and calendar-aware observances
+
+- Reworked the built-in rotating-message catalog around household-safe encouragement, with the requested removals, revisions, and additions.
+- Preserve a user’s hidden/default-edit state when a revised built-in message receives new wording; custom messages remain untouched.
+- Add event-derived holiday contexts for enabled civil and installer-selected Jewish, Islamic, Christian, Orthodox Christian, and Hindu calendar layers.
+- Add neutral acknowledgement, direct celebration greetings, solemn-observance wording, and inclusive overlapping-occasion messages. Direct greetings require both the matching loaded calendar layer and an exact known celebration title; unknown or manually tagged holiday sources receive neutral acknowledgement only.
+- Keep holiday-aware rotations mixed with normal household messages: 40% on ordinary observances and 60% on curated major celebrations.
+
+### Household schedules and date corrections
+
+- Added a versioned, local-only Household Schedules model that migrates existing installer-created Payday, Trash Pickup, and Recycling Pickup settings without requiring setup to run again.
+- Added multiple named Payday rules with every-N-week, multiple monthly-date, and nth-weekday schedules; monthly dates support 1–31 and use the last day when a requested date does not exist in a month.
+- Added per-rule business-day or holiday-shift policies, with weekends and only the user-selected installed holiday layers counted for each rule.
+- Added Dashboard Control → Calendars → Household Schedules for recurring edits, pauses, previews, deletion of Payday rules, and restoration of one-time adjustments.
+- Added trusted generated-event metadata and a day-popup Manage schedule flow for Dash-Go-owned Paydays, Trash Pickup, and Recycling Pickup only: quick ±1/2/3/7-day moves, a chosen date, skip, and restore normal date.
+- Kept imported, subscribed, public holiday, astronomy, and other external calendars read-only; visible titles never determine editability.
 
 ## [1.5.1] — 2026-06-29
 

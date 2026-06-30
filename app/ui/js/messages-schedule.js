@@ -92,6 +92,20 @@ function cleanFeedText(item){
   return text ? {...item,text} : null;
 }
 
+function defaultMessageKey(value){
+  const text=value&&typeof value==="object"?value.text:value;
+  return String(text||"").trim().replace(/\s+/g," ").toLowerCase();
+}
+function defaultMessageAliases(item){
+  const keys=[defaultMessageKey(item)];
+  for(const legacy of Array.isArray(item&&item.legacyKeys)?item.legacyKeys:[]) keys.push(defaultMessageKey(legacy));
+  return [...new Set(keys.filter(Boolean))];
+}
+function defaultMessageIsRemoved(item,removed){ return defaultMessageAliases(item).some(key=>removed.has(key)); }
+function defaultMessageEdit(item,edits){
+  for(const key of defaultMessageAliases(item)) if(edits&&edits[key]&&typeof edits[key]==="object") return edits[key];
+  return {};
+}
 async function fetchLocalJson(path, fallback){
   try{
     const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"});
@@ -116,14 +130,13 @@ async function loadCompliments(){
     removedDefaults=Array.isArray(payload.removedDefaults)?payload.removedDefaults:[];
     defaultEdits=(payload.defaultEdits && typeof payload.defaultEdits==="object")?payload.defaultEdits:{};
   }
-  const defaultSet=new Set((CONFIG.compliments||[]).filter(c=>c&&!c._bday&&c.text).map(c=>String(c.text).trim().replace(/\s+/g," ").toLowerCase()));
-  const customs=msgs.filter(m=>m && m.origin==="custom" && !defaultSet.has(String(m.text||"").trim().replace(/\s+/g," ").toLowerCase()));
-  const removed=new Set(removedDefaults.map(x=>String(x||"").trim().toLowerCase()).filter(Boolean));
+  const defaultSet=new Set((CONFIG.compliments||[]).filter(c=>c&&!c._bday&&c.text).map(defaultMessageKey));
+  const customs=msgs.filter(m=>m && m.origin==="custom" && !defaultSet.has(defaultMessageKey(m)));
+  const removed=new Set(removedDefaults.map(defaultMessageKey).filter(Boolean));
   let defaults=[];
   if(!cleared){
-    defaults=(CONFIG.compliments||[]).filter(c=>c&&!c._bday&&c.text).filter(c=>!removed.has(String(c.text).trim().replace(/\s+/g," ").toLowerCase())).map(c=>{
-      const key=String(c.text).trim().replace(/\s+/g," ").toLowerCase();
-      return {...c, ...(defaultEdits[key]||{}), origin:"default"};
+    defaults=(CONFIG.compliments||[]).filter(c=>c&&!c._bday&&c.text).filter(c=>!defaultMessageIsRemoved(c,removed)).map(c=>{
+      return {...c, ...defaultMessageEdit(c,defaultEdits), origin:"default"};
     });
   }
   const base=[...customs,...defaults];

@@ -9,8 +9,8 @@ import "time"
 // CacheVersion advances when recurrence expansion semantics change. A previous
 // cache remains structurally readable, but must be rebuilt before it can be
 // reused with the current parser.
-const CacheVersion = 5
-const FingerprintVersion = 4
+const CacheVersion = 6
+const FingerprintVersion = 5
 const maxRecurrenceSteps = 50000
 
 // CalendarSource is the stable source descriptor persisted inside
@@ -73,6 +73,7 @@ type ICSEvent struct {
 	Recur           bool
 	Seq             int
 	AppOwner        string
+	Meta            map[string]string
 	zone            *calendarZone
 }
 

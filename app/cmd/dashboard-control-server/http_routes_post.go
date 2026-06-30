@@ -141,6 +141,22 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 		a.json(w, payload)
+	case "/api/household-schedules":
+		result, err := a.saveHouseholdSchedules(body)
+		if err != nil {
+			a.err(w, err.Error(), 400)
+			return
+		}
+		a.recordAction("calendars", "Save household schedules", "success", "Paydays and pickup calendars refreshed", nil)
+		a.json(w, result)
+	case "/api/household-schedules/override":
+		result, err := a.saveHouseholdScheduleOverride(body)
+		if err != nil {
+			a.err(w, err.Error(), 400)
+			return
+		}
+		a.recordAction("calendars", "Adjust household schedule", "success", "One scheduled occurrence updated", nil)
+		a.json(w, result)
 	case "/api/chalkboard":
 		if err := validateChalkboardPayload(body); err != nil {
 			a.err(w, "request fields exceed supported limits", http.StatusBadRequest)

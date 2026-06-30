@@ -1,0 +1,627 @@
+{
+  "meta": {
+    "project": "Dash-Go",
+    "target_file": "app/ui/js/config-default-messages.js",
+    "schema": "Each entry maps to a CONFIG.compliments object: { text, when? }. Omitted 'when' = anytime/general (eligible in every bucket). Buckets: earlymorning, morning, afternoon, evening, night, latenight.",
+    "counts": {
+      "remove": 10,
+      "revise": 6,
+      "add": 114
+    },
+    "note": "Holiday entries are unchanged and intentionally not included here."
+  },
+  "remove": [
+    "Hello, gorgeous.",
+    "Stunning, as usual.",
+    "That smile though.",
+    "Good morning, gorgeous.",
+    "Bright and early, beautiful.",
+    "Afternoon delight, you are.",
+    "Golden hour, gorgeous.",
+    "Night owl, and a cute one.",
+    "Get some rest soon, sweetie.",
+    "Moonlight becomes you."
+  ],
+  "revise": [
+    {
+      "from": "Looking lovely today.",
+      "to": "Lovely to have you around."
+    },
+    {
+      "from": "Someone's looking radiant.",
+      "to": "You bring real warmth."
+    },
+    {
+      "from": "Good evening, lovely.",
+      "to": "Good evening, friend.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "from": "Up late, still lovely.",
+      "to": "Up late — be kind to yourself.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "from": "Best part of my morning.",
+      "to": "A bright start to the morning.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "from": "Sunset's got nothing on you.",
+      "to": "Evening looks good on this house.",
+      "when": [
+        "evening"
+      ]
+    }
+  ],
+  "add": [
+    {
+      "text": "You belong here."
+    },
+    {
+      "text": "Be gentle with yourself today."
+    },
+    {
+      "text": "Progress, not perfection."
+    },
+    {
+      "text": "Small steps still count."
+    },
+    {
+      "text": "You're capable of hard things."
+    },
+    {
+      "text": "Choose kindness today."
+    },
+    {
+      "text": "You're enough, just as you are."
+    },
+    {
+      "text": "Good to see you."
+    },
+    {
+      "text": "Home is better with you in it."
+    },
+    {
+      "text": "Thanks for all you do here."
+    },
+    {
+      "text": "This home runs on teamwork."
+    },
+    {
+      "text": "Hello, new day.",
+      "when": [
+        "earlymorning",
+        "morning"
+      ]
+    },
+    {
+      "text": "Start where you are.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Make today gentle.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Keep going — you're doing fine.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Take a breath, then carry on.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "You did your best today.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Rest is productive too.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Be proud of today.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "You made it through today.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Tomorrow's a fresh start.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Let today go. Rest well.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "The world can wait till morning.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "Be kind to yourself — rest soon.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "One good thing at a time."
+    },
+    {
+      "text": "Begin, and the rest follows."
+    },
+    {
+      "text": "Done beats perfect today."
+    },
+    {
+      "text": "Trust yourself today."
+    },
+    {
+      "text": "Keep showing up."
+    },
+    {
+      "text": "You're stronger than you think."
+    },
+    {
+      "text": "You're doing better than you think."
+    },
+    {
+      "text": "Try — that's already brave."
+    },
+    {
+      "text": "You're a good one."
+    },
+    {
+      "text": "The world needs your kind."
+    },
+    {
+      "text": "Someone here is glad for you."
+    },
+    {
+      "text": "You're worth the good days."
+    },
+    {
+      "text": "Kindness always fits."
+    },
+    {
+      "text": "Lead with your heart today."
+    },
+    {
+      "text": "Be someone's reason to smile."
+    },
+    {
+      "text": "Count three good things today."
+    },
+    {
+      "text": "Notice something lovely today."
+    },
+    {
+      "text": "A little gratitude goes far."
+    },
+    {
+      "text": "Slow down, you're not late."
+    },
+    {
+      "text": "Breathe in, breathe out."
+    },
+    {
+      "text": "This moment is yours."
+    },
+    {
+      "text": "Let it be easy today."
+    },
+    {
+      "text": "Nothing to prove — just be."
+    },
+    {
+      "text": "Be the cozy in the chaos."
+    },
+    {
+      "text": "Drink some water, hero."
+    },
+    {
+      "text": "Stretch. Yes, right now."
+    },
+    {
+      "text": "You've earned a good day."
+    },
+    {
+      "text": "Good people make good homes."
+    },
+    {
+      "text": "We're glad you're part of this."
+    },
+    {
+      "text": "Smile — it suits everyone."
+    },
+    {
+      "text": "Morning. Take it slow.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Stretch, sip, and begin.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "The day is wide open.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "One sunrise at a time.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Ease into the day.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Hello, fresh start.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "The kettle's on — let's go.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Quiet mornings, good thoughts.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Today gets to be new.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Be gentle with the early hours.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Wake slow, shine steady.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "A calm start is still a start.",
+      "when": [
+        "earlymorning"
+      ]
+    },
+    {
+      "text": "Let's make today good.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "One task at a time.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "You set the tone today.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Fuel up, then begin.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Plenty of day ahead.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Find your first small win.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Good morning, good start.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Today's worth a real try.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Step in — you've got this.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Make room for a little joy.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Morning calm, steady heart.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Today is yours to shape.",
+      "when": [
+        "morning"
+      ]
+    },
+    {
+      "text": "Push through the middle.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "A little more — you've got it.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Stretch break: go on.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Refill your cup, keep going.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "The hard part's behind you.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Steady wins the afternoon.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "You're closer than you feel.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Keep that good pace.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Pause, breathe, continue.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Snack, water, carry on.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Mid-day check: you're doing fine.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Finish strong, finish kind.",
+      "when": [
+        "afternoon"
+      ]
+    },
+    {
+      "text": "Ease off — the day is done.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Soft evenings, warm hearts.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Set today down gently.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "You showed up. That's enough.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Evening is for slowing down.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Trade the to-do list for rest.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Be glad for the small wins.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Let the evening be easy.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "Good food, good company.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "You earned this calm.",
+      "when": [
+        "evening"
+      ]
+    },
+    {
+      "text": "The day is yours to close.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Tuck the worries away.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Quiet now — you did enough.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Stars are out, so rest.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Let tomorrow keep its plans.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Soften, settle, sleep soon.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "You're allowed to rest.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Goodnight, and well done.",
+      "when": [
+        "night"
+      ]
+    },
+    {
+      "text": "Still up? Be gentle with you.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "The night is quiet — let it be.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "Rest will be here when you're ready.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "Slow your mind, soft and easy.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "Whatever it is, morning can help.",
+      "when": [
+        "latenight"
+      ]
+    },
+    {
+      "text": "Sleep is self-care too.",
+      "when": [
+        "latenight"
+      ]
+    }
+  ]
+}

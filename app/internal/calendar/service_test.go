@@ -21,7 +21,7 @@ func testService(t *testing.T) *Service {
 	}
 	return New(ServiceConfig{
 		DashDir: dash, HomeDir: home, CalendarDir: filepath.Join(dash, "calendars"), CacheDir: filepath.Join(dash, "cache"), LogDir: filepath.Join(dash, "logs"),
-		ConfigLocal: filepath.Join(dash, "config", "config.local.js"), CelebrationsFile: filepath.Join(home, ".dashboard-celebrations"),
+		ConfigLocal: filepath.Join(dash, "config", "config.local.js"), CelebrationsFile: filepath.Join(home, ".dashboard-celebrations"), HouseholdSchedulesFile: filepath.Join(dash, "config", "household-schedules.json"),
 		Now:              func() time.Time { return time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC) },
 		RefreshCacheSync: func() error { return nil }, RefreshCacheAsync: func() {},
 	})

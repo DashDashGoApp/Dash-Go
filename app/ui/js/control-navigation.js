@@ -329,6 +329,7 @@ async function renderCtrlLazy(key,force){
     case "calendarlayout": renderCtrlUiSettings(); break;
     case "theme": await renderCtrlTheme(); break;
     case "visuals": renderCtrlVisualStyle(); break;
+    case "schedules": await renderCtrlHouseholdSchedules(); break;
     case "cals": await renderCtrlCals(); break;
     case "content": await renderCtrlComp(); break;
     case "builtins": await renderCtrlBuiltins(); break;
