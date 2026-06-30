@@ -2,63 +2,17 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## Unreleased — 1.5.0-beta.42
+## [1.5.1] — 2026-06-29
 
-- Release-candidate updater proof only: no functional application, installer, updater, UI, or package behavior changes from beta.41.
-- Advances the versioned release identity and browser/map cache-buster references so Dashboard Control can prove the full beta.41 → beta.42 transaction on the VM and Pi.
-- Carries beta.41’s canonical `~/install.sh` refresh, legacy-launcher preflight block, staged verification, rollback, service recovery, and kiosk-return behavior unchanged.
-- After the beta.41 → beta.42 touchscreen update succeeds on both target devices, freeze functional code and create one separately versioned immutable `1.5.0` stable release.
+### Documentation and showcase assets
 
-## Earlier migration increment — 1.5.0-beta.41
+- Added repository-owned Dash-Go Showcase Studio screenshots for the dashboard, weather details, radar, Apps launcher, Family Message Board, Dashboard Control, themes, and future gallery use.
+- Re-encoded every repository screenshot as a uniform `2034 × 1144` RGB PNG with no EXIF, XMP, ICC, text, timestamp, author, comment, GPS, or software metadata.
+- Added a focused README screenshot gallery and linked the complete project screenshot set under `docs/screenshots`.
+- Reduced the Raspberry Pi Imager visual walkthrough to one retained orientation image while preserving the full written headless-installation workflow.
+- Preserved the 1.5.0 functional application, installer, updater, and UI baseline; only normal stable-release identity, browser-cache, and map user-agent references changed.
 
-- Corrected the missed canonical-installer migration exposed by the first Dashboard Control update rehearsal: every verified release bundle now atomically refreshes `~/install.sh` alongside the managed app payload.
-- Records the prior home-directory installer in the same rollback stage and restores it if any later commit or runtime verification step fails.
-- Makes Dashboard Control preflight reject a retained legacy `~/install.sh` rather than reporting a false-ready state and failing only after the safety backup/service launch.
-- Added regression coverage for installer refresh, rollback restoration, bundle installer discovery, and the legacy-installer preflight block.
-
-## Earlier migration increment — 1.5.0-beta.40
-
-- Release-candidate updater proof only: no new user-facing feature scope.
-- Adds explicit update-availability coverage for a beta-track device advancing from `1.5.0-beta.39` to the matching stable `1.5.0` release.
-- The first physical Dashboard Control rehearsal exposed a retained pre-GitHub `~/install.sh`; beta.41 corrects that migration gap before stable promotion.
-
-## Earlier migration increment — 1.5.0-beta.39
-
-- Corrected Dashboard Control’s self-update preflight to consume the canonical immutable GitHub Release bundle and `SHA256SUMS` metadata rather than retired nginx catalog fields.
-- Removed the false update-credential gate from the Dashboard Control status and preflight surfaces; devices remain token-free and use only their local Stable/Beta track preference.
-- Added source and Go regression coverage for the GitHub Release self-update contract before stable promotion.
-
-## Earlier migration increment — 1.5.0-beta.38
-
-- Public-transition privacy correction: public source tests no longer contain private historical markers; the local builder performs the exact private audit outside the repository.
-- Clarified the public GitHub Release transition and conditional private vulnerability-reporting channel.
-- Retained the maintainer release guide for privacy-reviewed source import, exact Git tag, local release build, draft-release review, asset verification, and public transition.
-- Clarified that private GitHub releases can be rehearsed by authorized maintainers without putting a GitHub token on a Dash-Go VM or Pi; the installed updater remains deliberately anonymous.
-- Made the security-reporting policy conditional on the actual GitHub repository setting; enable and verify private vulnerability reporting before public prerelease publication.
-- Kept normal installed-device updates, Doctor online validation, and repair resolution on the canonical GitHub Release transaction with the beta.35 integrity/recovery guarantees intact.
-
-## Earlier migration increment — 1.5.0-beta.36
-
-- Added a local release-bundle identity path for private/offline device rehearsal. An extracted bundle exposes a side-effect-free `--bundle-info` command and forces its own beta/stable track so a beta archive cannot accidentally write a stable device update preference.
-- Added matching local-builder device tooling: a non-destructive SSH smoke for the four GitHub Release assets and an explicitly confirmed SSH staging/install helper for a VM or Pi. Both verify `SHA256SUMS`; neither adds a GitHub token or an alternate runtime update source to the device.
-
-## Earlier migration increment — 1.5.0-beta.35
-
-- Added bounded private ETag caching for canonical GitHub Release metadata: 304 responses reuse validated cached metadata, and a GitHub rate-limit response may reuse metadata for no more than six hours without downloading or installing anything.
-- Removed checksum-bypass installer wording and the remaining executable references to retired distribution metadata; release resolution remains GitHub-only, exact-asset, digest-checked, checksum-checked, staged, and rollback-safe.
-- Added source and builder contracts that distinguish the private transitional managed baseline from the public GitHub Release asset set and block reintroduction of retired updater vocabulary into executable code.
-
-## Earlier migration increment — 1.5.0-beta.34
-
-- Moved the active installer, updater, repair path, and Doctor online validation to the compiled canonical GitHub Release resolver.
-- Added fail-closed GitHub asset handling: exact immutable release metadata, GitHub SHA-256 digests, `SHA256SUMS`, private staging, selected-architecture verification, generated-asset validation, and atomic managed-file replacement.
-- Made the GitHub Release bundle self-contained for fresh installation and one-time migration from an pre-GitHub device; it carries both `install.sh` and the verified app payload.
-- Changed plain `--repair` to restore the exact installed release; `--repair --update` is the explicit newest-release recovery path.
-- Replaced historical update-host/profile handling with owner-only Stable/Beta track state and removed arbitrary release endpoint or credential use from the executable updater path.
-- Updated the local builder’s selected output to a validated GitHub Release asset directory while preserving its internal full-webroot baseline only for transitional managed-baseline continuity.
-- Added source and builder contracts for GitHub release progress, migration-state scrubbing, repair targeting, and atomic public asset-directory publication.
-
-## [1.5.0] — 2026-06-28
+## [1.5.0] — 2026-06-29
 
 ### Product and interface
 

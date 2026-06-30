@@ -2,24 +2,18 @@
 
 **Dash-Go** is pronounced **“Dash Dash Go.”**
 
-## Current development release
+## Current stable release
 
-- **Version:** `1.5.0-beta.42`
-- **Track:** beta
-- **Stable promotion target:** `1.5.0`
+- **Version:** `1.5.1`
+- **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
-- **Release integrity:** published assets are intended to use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
+- **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
 
-## This beta
+## This release
 
-Beta.42 is the no-feature release-candidate proof for the repaired Dashboard Control updater path.
-
-- It carries beta.41’s canonical `~/install.sh` refresh and rollback behavior unchanged.
-- Its only intentional source differences are release identity, versioned browser-cache references, versioned map user agents, and release documentation.
-- The physical acceptance test is a Dashboard Control update from beta.41 to beta.42 on the VM first and then the Pi; do not use `~/install.sh --update` for that proof.
-- After both touchscreen transactions complete with backup, verification, service recovery, kiosk return, and beta.42 readiness, freeze functional code and create one separately versioned immutable `1.5.0` stable release.
+`1.5.1` is a documentation and showcase-asset maintenance release built from the `1.5.0` functional baseline. It adds repository-owned, metadata-sanitized screenshots and streamlines the README’s Raspberry Pi Imager imagery. There are no intentional application, installer, updater, UI, or runtime behavior changes beyond the normal release identity, cache-buster, and map user-agent version references.
 
 ## Recommended operating model
 

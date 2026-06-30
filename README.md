@@ -14,6 +14,28 @@ The dashboard control server is a local Go service. The kiosk browser talks only
 - Local-first Apps: Chalkboard, Weather Radar, To Do, Grocery, Family Message Board, Chore Wheel, Maintenance, and Routines.
 - Local backup, Doctor, repair, terminal access, and optional Control PIN protection.
 
+## Screenshots
+
+Dash-Go is designed for a shared wall-mounted display: calendar-first, glanceable, touch-friendly, and useful without external accounts. The screenshots below use generic Dash-Go Showcase Studio fixture data only.
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-dark.png" alt="Dash-Go dashboard in a dark theme" width="100%">
+</p>
+
+| Weather details | Weather radar |
+| --- | --- |
+| <img src="docs/screenshots/weather-details.png" alt="Dash-Go weather details popup"> | <img src="docs/screenshots/weather-radar.png" alt="Dash-Go weather radar"> |
+
+| Apps launcher | Family Message Board |
+| --- | --- |
+| <img src="docs/screenshots/apps-launcher.png" alt="Dash-Go Apps launcher"> | <img src="docs/screenshots/family-message-board.png" alt="Dash-Go Family Message Board"> |
+
+| Dashboard Control themes |
+| --- |
+| <img src="docs/screenshots/dashboard-control-themes-paper.png" alt="Dash-Go Dashboard Control theme gallery"> |
+
+Additional repository-owned screenshots, including Chalkboard, Chore Wheel, Grocery, event map, alerts, and light-theme examples, are in [`docs/screenshots`](docs/screenshots).
+
 ## Recommended fresh installation: Raspberry Pi OS Lite
 
 For a new Dash-Go device, start with **Raspberry Pi OS Lite** written with **Raspberry Pi Imager**. This is the preferred headless setup because Imager can create the user account, Wi-Fi connection, hostname, time zone, and SSH access before the Pi boots for the first time.
@@ -44,8 +66,6 @@ In **OS**, choose **Raspberry Pi OS Lite** for the selected device. On a Pi Zero
 
 In **Storage**, choose the intended microSD card. Verify the drive by capacity before continuing; writing erases that drive.
 
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/os-tab.png?hash=50d6e59b1a2d6ab8f71824c7fef32162" alt="Raspberry Pi Imager Operating System step" width="760">
-
 ### 3. Configure the Pi before the first boot
 
 Do **not** skip Customisation. Complete these pages before writing the card:
@@ -56,21 +76,11 @@ Do **not** skip Customisation. Complete these pages before writing the card:
 4. **Wi-Fi** — enter the correct SSID and password. For a Pi Zero 2 W, use a 2.4 GHz-capable SSID. Skip this page only when the Pi will be connected by Ethernet during first boot.
 5. **Remote access** — turn on **Enable SSH**. Prefer **public key authentication** when you already use SSH keys; password authentication is acceptable for a private home network when paired with a strong unique password.
 
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/hostname-subtab.png?hash=51693b3ebdb09bba96fb64201b40da72" alt="Raspberry Pi Imager hostname customisation" width="760">
-
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/user-subtab.png?hash=04cce5eb7abaf9b54f1739c09ce00240" alt="Raspberry Pi Imager user customisation" width="760">
-
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/wifi-subtab.png?hash=af650262f4fee59eb3046f8328a656b6" alt="Raspberry Pi Imager Wi-Fi customisation" width="760">
-
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/ssh-subtab.png?hash=74dae6978e0ceee6f5b573b5f2d716d0" alt="Raspberry Pi Imager SSH remote-access customisation" width="760">
-
 Dash-Go keeps an SSH activation and recovery path in the installer for an existing OS or another imaging workflow. That is a fallback, not the preferred path for a new headless Pi: configure SSH in Imager so the device is reachable on its first boot.
 
 ### 4. Review, write, verify, and boot
 
 Review the summary, select **Write**, accept the erase warning, and allow Imager to complete verification. Insert the finished card into the Pi, connect power, and allow a few minutes for the first boot and network join.
-
-<img src="https://www.raspberrypi.com/documentation/computers/images/imager/write.png?hash=86d1360405fe7d52f63916d0acb10853" alt="Raspberry Pi Imager write summary" width="760">
 
 ### 5. Connect over SSH
 
@@ -86,7 +96,7 @@ If `dash-go.local` does not resolve on your network, find the device IP address 
 ssh YOUR_USER@192.168.1.50
 ```
 
-The official Raspberry Pi documentation is the source for the Imager workflow and screenshots above. Screenshots are © Raspberry Pi Ltd and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+The official Raspberry Pi documentation is the source for the Imager workflow and the screenshot above. The retained screenshot is © Raspberry Pi Ltd and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 ## Install Dash-Go
 
@@ -100,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.0"
+VERSION="1.5.1"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -124,7 +134,7 @@ sha256sum --ignore-missing --check SHA256SUMS
 A successful check reports:
 
 ```text
-Dash-Go_1.5.0_release.tar.gz: OK
+Dash-Go_1.5.1_release.tar.gz: OK
 ```
 
 Do not continue if checksum verification fails.
