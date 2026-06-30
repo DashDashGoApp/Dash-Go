@@ -20,8 +20,11 @@ func (a *app) handleChoreWheelGet(w http.ResponseWriter, r *http.Request, path s
 }
 
 func (a *app) handleChoreWheelPost(w http.ResponseWriter, r *http.Request, path string, body map[string]any) bool {
-	if path == "/api/chore-wheel/assignments/complete" {
+	switch path {
+	case "/api/chore-wheel/assignments/complete":
 		return a.handleChoreWheelAssignmentComplete(w, body)
+	case "/api/chore-wheel/assignments/status":
+		return a.handleChoreWheelAssignmentStatus(w, body)
 	}
 	if path != "/api/chore-wheel" {
 		return false

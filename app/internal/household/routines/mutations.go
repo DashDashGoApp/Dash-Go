@@ -318,6 +318,11 @@ func ApplyOccurrence(payload, body map[string]any, now time.Time) (MutationResul
 	op := strings.ToLower(Text(body["op"], 16))
 	stamp := now.Format(time.RFC3339)
 	prior := Text(occ["state"], 16)
+	// Skipped sessions are a deliberate calendar correction, not a completed
+	// checklist waiting to be reopened. Their correction path stays in Routines.
+	if prior == "skipped" && (op == "step" || op == "steps" || op == "complete") {
+		return MutationResult{}, bad("skipped routine sessions cannot be changed from the calendar")
+	}
 	rebuild := prior == "skipped"
 	switch op {
 	case "step":

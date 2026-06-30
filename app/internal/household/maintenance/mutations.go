@@ -15,11 +15,63 @@ type MutationResult struct {
 
 func taskID(now time.Time) string    { return fmt.Sprintf("mt_%d", now.UnixNano()) }
 func historyID(now time.Time) string { return fmt.Sprintf("mh_%d", now.UnixNano()) }
-func AddHistory(payload, task map[string]any, action, occurred, prior, next string, now time.Time) {
+
+func addHistory(payload, task map[string]any, action, occurred, prior, next, priorLastCompleted, undoOf string, now time.Time) map[string]any {
+	entry := map[string]any{
+		"id":                            historyID(now),
+		"taskId":                        task["id"],
+		"action":                        action,
+		"occurredOn":                    occurred,
+		"priorDueOn":                    prior,
+		"nextDueOn":                     next,
+		"priorLastCompletedOn":          priorLastCompleted,
+		"undoOf":                        undoOf,
+		"createdAt":                     now.Format(time.RFC3339),
+		"responsiblePersonId":           TaskPersonID(task),
+		"responsiblePersonNameSnapshot": TaskPersonSnapshot(task),
+	}
 	history := jsonutil.List(payload["history"])
-	history = append([]any{map[string]any{"id": historyID(now), "taskId": task["id"], "action": action, "occurredOn": occurred, "priorDueOn": prior, "nextDueOn": next, "createdAt": now.Format(time.RFC3339), "responsiblePersonId": TaskPersonID(task), "responsiblePersonNameSnapshot": TaskPersonSnapshot(task)}}, history...)
-	payload["history"] = history
+	payload["history"] = append([]any{entry}, history...)
+	return entry
 }
+
+// AddHistory retains the original maintenance-history contract for ordinary
+// edits. Completion/undo records below add the small amount of context needed
+// to safely restore a mistaken completion.
+func AddHistory(payload, task map[string]any, action, occurred, prior, next string, now time.Time) {
+	addHistory(payload, task, action, occurred, prior, next, "", "", now)
+}
+
+func addCompletionHistory(payload, task map[string]any, completed, priorDue, nextDue, priorLastCompleted string, now time.Time) map[string]any {
+	return addHistory(payload, task, "completed", completed, priorDue, nextDue, priorLastCompleted, "", now)
+}
+
+func historyByID(payload map[string]any, id string) map[string]any {
+	for _, raw := range jsonutil.List(payload["history"]) {
+		row := jsonutil.Map(raw)
+		if ID(row["id"]) == id {
+			return row
+		}
+	}
+	return nil
+}
+
+// CanUndoCompletion is intentionally strict. A completion may be reverted only
+// while it is still the task's latest completion state and the task still has
+// the exact due/last-completed values produced by that action.
+func CanUndoCompletion(task, completion map[string]any) bool {
+	if task == nil || completion == nil || task["state"] != "active" || completion["action"] != "completed" {
+		return false
+	}
+	if ID(task["lastCompletionHistoryId"]) == "" || ID(task["lastCompletionHistoryId"]) != ID(completion["id"]) {
+		return false
+	}
+	if Date(task["lastCompletedOn"]) != Date(completion["occurredOn"]) || Date(task["nextDueOn"]) != Date(completion["nextDueOn"]) {
+		return false
+	}
+	return Date(completion["priorDueOn"]) != ""
+}
+
 func personFields(body, existing map[string]any, resolver PersonResolver) (string, string, error) {
 	if _, present := body["responsiblePersonId"]; !present && existing != nil {
 		return ID(existing["responsiblePersonId"]), Text(existing["responsiblePersonNameSnapshot"], 64), nil
@@ -61,7 +113,7 @@ func TaskFromBody(body, defaults, existing map[string]any, now time.Time, resolv
 	}
 	stamp := now.Format(time.RFC3339)
 	calendarEnabled := jsonutil.Truthy(defaults["defaultCalendarEnabled"])
-	row := map[string]any{"id": taskID(now), "title": Text(rawTitle, 120), "note": Text(rawNote, 280), "state": "active", "cadence": map[string]any{"unit": unit, "every": every}, "lastCompletedOn": "", "nextDueOn": next, "calendarEnabled": calendarEnabled, "createdAt": stamp, "updatedAt": stamp, "archivedAt": "", "responsiblePersonId": personID, "responsiblePersonNameSnapshot": personName}
+	row := map[string]any{"id": taskID(now), "title": Text(rawTitle, 120), "note": Text(rawNote, 280), "state": "active", "cadence": map[string]any{"unit": unit, "every": every}, "lastCompletedOn": "", "lastCompletionHistoryId": "", "nextDueOn": next, "calendarEnabled": calendarEnabled, "createdAt": stamp, "updatedAt": stamp, "archivedAt": "", "responsiblePersonId": personID, "responsiblePersonNameSnapshot": personName}
 	if existing != nil {
 		for k, v := range existing {
 			row[k] = v
@@ -73,6 +125,29 @@ func TaskFromBody(body, defaults, existing map[string]any, now time.Time, resolv
 		row["calendarEnabled"] = jsonutil.Truthy(body["calendarEnabled"])
 	}
 	return row, nil
+}
+
+func undoCompletion(payload map[string]any, taskIDValue, completionID string, now time.Time) (MutationResult, error) {
+	idx, task := Find(payload, ID(taskIDValue))
+	if idx < 0 || task == nil {
+		return MutationResult{}, fmt.Errorf("unknown maintenance task")
+	}
+	completion := historyByID(payload, ID(completionID))
+	if completion == nil || ID(completion["taskId"]) != ID(task["id"]) || completion["action"] != "completed" {
+		return MutationResult{}, fmt.Errorf("completion history was not found")
+	}
+	if !CanUndoCompletion(task, completion) {
+		return MutationResult{}, fmt.Errorf("completion was followed by a later change; open Maintenance to review the task")
+	}
+	priorLastCompleted := Date(task["lastCompletedOn"])
+	priorDue := Date(task["nextDueOn"])
+	restoredDue := Date(completion["priorDueOn"])
+	task["lastCompletedOn"], task["lastCompletionHistoryId"], task["nextDueOn"], task["updatedAt"] = Date(completion["priorLastCompletedOn"]), "", restoredDue, now.Format(time.RFC3339)
+	tasks := jsonutil.List(payload["tasks"])
+	tasks[idx] = task
+	payload["tasks"] = tasks
+	addHistory(payload, task, "undo", now.In(time.Local).Format("2006-01-02"), priorDue, restoredDue, priorLastCompleted, ID(completion["id"]), now)
+	return MutationResult{Payload: Normalize(payload, now), Extra: map[string]any{"undoneCompletionId": ID(completion["id"])}}, nil
 }
 
 func Apply(payload map[string]any, path string, body map[string]any, now time.Time, resolver PersonResolver) (MutationResult, error) {
@@ -108,6 +183,9 @@ func Apply(payload map[string]any, path string, body map[string]any, now time.Ti
 		if err != nil {
 			return MutationResult{}, err
 		}
+		// Any deliberate task edit becomes the newer source of truth and means
+		// an older calendar-popup completion must not restore stale values.
+		task["lastCompletionHistoryId"] = ""
 		tasks[idx] = task
 		if DueChanged(old, task) {
 			AddHistory(payload, task, "rescheduled", today, Date(old["nextDueOn"]), Date(task["nextDueOn"]), now)
@@ -126,15 +204,20 @@ func Apply(payload map[string]any, path string, body map[string]any, now time.Ti
 		if prior > today {
 			return MutationResult{}, fmt.Errorf("future maintenance tasks cannot be completed yet")
 		}
+		priorLastCompleted := Date(task["lastCompletedOn"])
 		cadence := jsonutil.Map(task["cadence"])
 		task["lastCompletedOn"] = completed
 		task["nextDueOn"] = NextDue(completed, Unit(cadence["unit"]), Every(Unit(cadence["unit"]), cadence["every"]))
 		task["updatedAt"] = now.Format(time.RFC3339)
+		completion := addCompletionHistory(payload, task, completed, prior, Date(task["nextDueOn"]), priorLastCompleted, now)
+		task["lastCompletionHistoryId"] = ID(completion["id"])
 		tasks[idx] = task
-		AddHistory(payload, task, "completed", completed, prior, Date(task["nextDueOn"]), now)
-		completedTask := DayItem(task, completed, now)
-		completedTask["actionable"], completedTask["status"], completedTask["completedOn"], completedTask["nextDueOn"] = false, "completed", completed, Date(task["nextDueOn"])
+		completedTask := DayItem(task, prior, now)
+		completedTask["actionable"], completedTask["status"], completedTask["completedOn"], completedTask["nextDueOn"], completedTask["completionId"], completedTask["undoAvailable"] = true, "completed", completed, Date(task["nextDueOn"]), ID(completion["id"]), true
 		return save(map[string]any{"completedTask": completedTask})
+	case "/api/maintenance/tasks/undo-complete":
+		payload["tasks"], payload["settings"] = tasks, settings
+		return undoCompletion(payload, ID(body["id"]), ID(body["completionId"]), now)
 	case "/api/maintenance/tasks/reschedule":
 		idx, task := Find(payload, ID(body["id"]))
 		if idx < 0 {
@@ -145,7 +228,7 @@ func Apply(payload map[string]any, path string, body map[string]any, now time.Ti
 			return MutationResult{}, fmt.Errorf("next due date must be YYYY-MM-DD")
 		}
 		prior := Date(task["nextDueOn"])
-		task["nextDueOn"], task["updatedAt"] = next, now.Format(time.RFC3339)
+		task["nextDueOn"], task["lastCompletionHistoryId"], task["updatedAt"] = next, "", now.Format(time.RFC3339)
 		tasks[idx] = task
 		AddHistory(payload, task, "rescheduled", today, prior, next, now)
 		return save(nil)
@@ -154,7 +237,7 @@ func Apply(payload map[string]any, path string, body map[string]any, now time.Ti
 		if idx < 0 {
 			return MutationResult{}, fmt.Errorf("unknown maintenance task")
 		}
-		task["state"], task["archivedAt"], task["updatedAt"] = "archived", now.Format(time.RFC3339), now.Format(time.RFC3339)
+		task["state"], task["archivedAt"], task["lastCompletionHistoryId"], task["updatedAt"] = "archived", now.Format(time.RFC3339), "", now.Format(time.RFC3339)
 		tasks[idx] = task
 		AddHistory(payload, task, "archived", today, Date(task["nextDueOn"]), "", now)
 		return save(nil)
@@ -167,7 +250,7 @@ func Apply(payload map[string]any, path string, body map[string]any, now time.Ti
 		if next == "" {
 			return MutationResult{}, fmt.Errorf("next due date must be YYYY-MM-DD")
 		}
-		task["state"], task["archivedAt"], task["nextDueOn"], task["updatedAt"] = "active", "", next, now.Format(time.RFC3339)
+		task["state"], task["archivedAt"], task["nextDueOn"], task["lastCompletionHistoryId"], task["updatedAt"] = "active", "", next, "", now.Format(time.RFC3339)
 		tasks[idx] = task
 		AddHistory(payload, task, "restored", today, "", next, now)
 		return save(nil)
@@ -196,7 +279,7 @@ func ReconcilePeople(payload map[string]any, op, personID, targetID, targetName 
 		if task["state"] != "active" || TaskPersonID(task) != ID(personID) {
 			continue
 		}
-		task["responsiblePersonId"], task["responsiblePersonNameSnapshot"] = ID(targetID), Text(targetName, 64)
+		task["responsiblePersonId"], task["responsiblePersonNameSnapshot"], task["lastCompletionHistoryId"] = ID(targetID), Text(targetName, 64), ""
 		tasks[i] = task
 		changed = true
 	}

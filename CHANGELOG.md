@@ -2,7 +2,17 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.2-beta.3] — Active development
+## [1.5.2-beta.4] — Active development
+
+### Reversible day-popup completion
+
+- Made Dash-Go-owned Chore Wheel day-popup checkboxes reversible for current and past assignments: checked means completed and unchecked restores assigned without changing person, date, identity, or fairness planning.
+- Replaced the one-way chore completion control with a bounded assigned/completed status mutation while keeping skipped and future assignments read-only.
+- Made Maintenance completion state durable in the requested day projection. A mistaken completion can restore its original due date and prior completion value only while it remains the task’s latest safe action.
+- Added linked Maintenance undo history, server-side verification, and read-only explanatory rows when a later edit, reschedule, archive, restore, person correction, or newer completion makes restoration unsafe.
+- Kept Routine checklist steps reversible after whole-routine completion, and explicitly reject skipped or future routine-session checkbox mutations.
+- Updated actionable popup controls to use native checkboxes, server-authoritative rerenders, saving guards, error rollback, touch/keyboard labels, and no browser-memory-only Maintenance completion list.
+
 
 ### Rotating-message safety
 

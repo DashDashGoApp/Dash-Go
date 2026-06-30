@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
 func routineNow() time.Time { return time.Date(2026, 6, 24, 9, 0, 0, 0, time.Local) }
@@ -52,5 +54,29 @@ func TestServiceWritesNormalizedDocument(t *testing.T) {
 	}
 	if len(s.Payload()["routines"].([]any)) != 1 {
 		t.Fatalf("payload=%#v", s.Payload())
+	}
+}
+
+func TestCompletedRoutineStepCanBeUncheckedButSkippedSessionCannot(t *testing.T) {
+	now := routineNow()
+	payload := routinePayload()
+	complete, err := ApplyOccurrence(payload, map[string]any{"op": "complete", "routineId": "morning", "assignmentId": "sam-am", "date": "2026-06-24"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := ApplyOccurrence(complete.Payload, map[string]any{"op": "step", "routineId": "morning", "assignmentId": "sam-am", "date": "2026-06-24", "stepId": "teeth", "checked": false}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	occ := jsonutil.Map(jsonutil.List(reopened.Payload["occurrences"])[0])
+	if occ["state"] != "active" || len(jsonutil.List(occ["completedStepIds"])) != 0 {
+		t.Fatalf("unchecked completed routine=%#v", occ)
+	}
+	skipped, err := ApplyOccurrence(reopened.Payload, map[string]any{"op": "skip", "routineId": "morning", "assignmentId": "sam-am", "date": "2026-06-24"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ApplyOccurrence(skipped.Payload, map[string]any{"op": "step", "routineId": "morning", "assignmentId": "sam-am", "date": "2026-06-24", "stepId": "teeth", "checked": true}, now); err == nil {
+		t.Fatal("skipped routine step mutation was accepted")
 	}
 }

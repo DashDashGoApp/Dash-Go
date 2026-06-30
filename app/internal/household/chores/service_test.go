@@ -107,3 +107,37 @@ func TestServiceWritesCanonicalJSON(t *testing.T) {
 		t.Fatalf("persisted payload=%#v", s.Payload())
 	}
 }
+
+func TestCalendarCheckboxCanReopenCurrentCompletion(t *testing.T) {
+	s := testService(t)
+	payload := NormalizeAt(map[string]any{
+		"people":      []any{map[string]any{"id": "sam", "name": "Sam"}},
+		"chores":      []any{map[string]any{"id": "dishes", "name": "Dishes"}},
+		"assignments": []any{map[string]any{"id": "today", "date": "2026-06-24", "choreId": "dishes", "personId": "sam", "status": "completed"}},
+	}, s.Now())
+	day := s.DayResponse(payload, "2026-06-24")
+	item := jsonutil.Map(jsonutil.List(day["items"])[0])
+	if !jsonutil.Truthy(item["actionable"]) {
+		t.Fatalf("completed current assignment must be reversible: %#v", day)
+	}
+	next, changed, err := s.SetAssignmentCompleted(payload, "today", "2026-06-24", false)
+	if err != nil || !changed {
+		t.Fatalf("reopen changed=%v err=%v", changed, err)
+	}
+	assignment := jsonutil.Map(jsonutil.List(next["assignments"])[0])
+	if got := Text(assignment["status"], 16); got != "assigned" {
+		t.Fatalf("status=%q want assigned", got)
+	}
+}
+
+func TestCalendarCheckboxCannotReopenSkippedAssignment(t *testing.T) {
+	s := testService(t)
+	payload := NormalizeAt(map[string]any{
+		"people":      []any{map[string]any{"id": "sam", "name": "Sam"}},
+		"chores":      []any{map[string]any{"id": "dishes", "name": "Dishes"}},
+		"assignments": []any{map[string]any{"id": "today", "date": "2026-06-24", "choreId": "dishes", "personId": "sam", "status": "skipped"}},
+	}, s.Now())
+	if _, _, err := s.SetAssignmentCompleted(payload, "today", "2026-06-24", false); err != ErrAssignmentStatus {
+		t.Fatalf("skipped reopen err=%v", err)
+	}
+}

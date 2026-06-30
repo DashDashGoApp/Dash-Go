@@ -12,9 +12,13 @@ import (
 
 var (
 	ErrAssignmentAndDate = errors.New("assignment and date are required")
-	ErrFutureComplete    = errors.New("future chores cannot be completed from the calendar")
+	ErrFutureMutation    = errors.New("future chores cannot be changed from the calendar")
+	// ErrFutureComplete is retained as an alias for callers/tests that still
+	// describe the original one-way endpoint. Calendar actions now use the
+	// same guard for both completing and reopening a current/past assignment.
+	ErrFutureComplete    = ErrFutureMutation
 	ErrAssignmentMissing = errors.New("chore assignment was not found for that day")
-	ErrAssignmentStatus  = errors.New("only an assigned chore can be completed from the calendar")
+	ErrAssignmentStatus  = errors.New("only an assigned or completed chore can be changed from the calendar")
 )
 
 func DayResponse(payload map[string]any, date string, now time.Time) map[string]any {
@@ -32,7 +36,10 @@ func DayResponse(payload map[string]any, date string, now time.Time) map[string]
 		items = append(items, map[string]any{
 			"assignmentId": ID(row["id"]), "date": date,
 			"choreName": Text(row["choreName"], 96), "personName": Text(row["personName"], 64),
-			"status": status, "actionable": status == "assigned" && date <= today,
+			"status": status,
+			// Completed assignments remain actionable so a mistaken tap can be
+			// corrected. Skipped assignments stay intentionally read-only.
+			"actionable": (status == "assigned" || status == "completed") && date <= today,
 		})
 	}
 	slices.SortStableFunc(items, func(left, right any) int {
@@ -52,13 +59,17 @@ func (s *Service) DayResponse(payload map[string]any, date string) map[string]an
 	return DayResponse(payload, date, s.Now())
 }
 
-func (s *Service) CompleteAssignment(payload map[string]any, assignmentID, date string) (map[string]any, bool, error) {
+// SetAssignmentCompleted applies the only reversible status transition the day
+// popup is allowed to make: assigned <-> completed. It deliberately rejects
+// skipped assignments and future dates so the full Chore Wheel remains the
+// correction surface for larger schedule decisions.
+func (s *Service) SetAssignmentCompleted(payload map[string]any, assignmentID, date string, completed bool) (map[string]any, bool, error) {
 	assignmentID, date = ID(assignmentID), DateKey(date)
 	if assignmentID == "" || date == "" {
 		return nil, false, ErrAssignmentAndDate
 	}
 	if date > s.Today() {
-		return nil, false, ErrFutureComplete
+		return nil, false, ErrFutureMutation
 	}
 	next := NormalizeAt(payload, s.Now())
 	assignments := jsonutil.List(next["assignments"])
@@ -75,14 +86,24 @@ func (s *Service) CompleteAssignment(payload map[string]any, assignmentID, date 
 		return nil, false, ErrAssignmentMissing
 	}
 	status := Text(assignment["status"], 16)
-	if status == "completed" {
-		return next, false, nil
-	}
-	if status != "assigned" {
+	if status != "assigned" && status != "completed" {
 		return nil, false, ErrAssignmentStatus
 	}
-	assignment["status"] = "completed"
+	desired := "assigned"
+	if completed {
+		desired = "completed"
+	}
+	if status == desired {
+		return next, false, nil
+	}
+	assignment["status"] = desired
 	assignments[index] = assignment
 	next["assignments"] = assignments
 	return NextRevision(next), true, nil
+}
+
+// CompleteAssignment preserves the original public-domain helper for the
+// one-way endpoint while sharing the reversible implementation.
+func (s *Service) CompleteAssignment(payload map[string]any, assignmentID, date string) (map[string]any, bool, error) {
+	return s.SetAssignmentCompleted(payload, assignmentID, date, true)
 }

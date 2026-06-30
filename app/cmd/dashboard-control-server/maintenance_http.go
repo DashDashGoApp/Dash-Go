@@ -27,7 +27,7 @@ func (a *app) handleMaintenancePost(w http.ResponseWriter, r *http.Request, path
 		return false
 	}
 	switch path {
-	case "/api/maintenance/settings", "/api/maintenance/tasks/add", "/api/maintenance/tasks/update", "/api/maintenance/tasks/complete", "/api/maintenance/tasks/reschedule", "/api/maintenance/tasks/archive", "/api/maintenance/tasks/restore", "/api/maintenance/tasks/delete":
+	case "/api/maintenance/settings", "/api/maintenance/tasks/add", "/api/maintenance/tasks/update", "/api/maintenance/tasks/complete", "/api/maintenance/tasks/undo-complete", "/api/maintenance/tasks/reschedule", "/api/maintenance/tasks/archive", "/api/maintenance/tasks/restore", "/api/maintenance/tasks/delete":
 	default:
 		return false
 	}
@@ -53,6 +53,9 @@ func (a *app) handleMaintenancePost(w http.ResponseWriter, r *http.Request, path
 			return nil
 		}
 		response := a.maintenanceResponse(result.Payload)
+		if date := maintenanceDate(body["dayDate"]); date != "" {
+			response["day"] = maintenanceDayResponse(result.Payload, date)
+		}
 		for key, value := range result.Extra {
 			response[key] = value
 		}

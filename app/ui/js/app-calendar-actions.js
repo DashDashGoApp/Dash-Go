@@ -15,23 +15,33 @@ function appCalendarActionOpen(info,day){
 }
 function appCalendarActionStatus(item,date){
   const status=String(item&&item.status||"assigned");
-  if(status==="completed")return "Done";
+  if(status==="completed"){
+    if(item&&item.undoAvailable===false)return String(item.correctionMessage||"Completed · review in Maintenance");
+    return "Done · tap again to reopen";
+  }
   if(status==="skipped")return "Skipped";
   if(item&&item.actionable===false)return `Scheduled for ${date}`;
   return date<appCalendarActionDate(new Date())?"Assigned · overdue":"Assigned today";
 }
-function appCalendarActionRow(item,date,onComplete){
+function appCalendarActionTitle(item){ return item.title||item.choreName||"household item"; }
+function appCalendarActionSetAria(check,item){
+  check.setAttribute("aria-label",`Mark ${appCalendarActionTitle(item)} ${check.checked?"incomplete":"complete"}`);
+}
+function appCalendarActionRow(item,date,onToggle){
   const row=el("article","appgroup-action-row"),control=el("label","appgroup-action-check"),check=document.createElement("input"),copy=el("div","appgroup-action-copy"),state=el("span","appgroup-action-state",appCalendarActionStatus(item,date));
-  if(item.status==="completed")row.classList.add("is-complete");
-  check.type="checkbox";check.checked=item.status==="completed";check.disabled=item.status!=="assigned"||item.actionable===false;
-  check.setAttribute("aria-label",`Mark ${item.title||item.choreName||"household item"} complete`);
+  const status=String(item&&item.status||"assigned"),actionable=item&&item.actionable!==false&&(status==="assigned"||status==="completed");
+  if(status==="completed")row.classList.add("is-complete");
+  check.type="checkbox";check.checked=status==="completed";check.disabled=!actionable;appCalendarActionSetAria(check,item);
   control.appendChild(check);
-  copy.append(el("strong","",item.title||`${item.choreName||"Chore"}${item.personName?" — "+item.personName:""}`),el("small","",item.detail||item.cadence||""));
+  copy.append(el("strong","",appCalendarActionTitle(item)),el("small","",item.detail||item.cadence||""));
   row.append(control,copy,state);
   check.addEventListener("change",()=>{
-    if(!check.checked){check.checked=true;return;}
-    check.disabled=true;state.textContent="Saving…";
-    onComplete().catch(error=>{check.checked=false;check.disabled=false;state.textContent=error.message||"Could not save";row.classList.add("appgroup-action-error");});
+    const desired=check.checked,previous=!desired;
+    if(!actionable){check.checked=previous;appCalendarActionSetAria(check,item);return;}
+    check.disabled=true;state.textContent="Saving…";row.classList.remove("appgroup-action-error");row.classList.add("is-saving");
+    Promise.resolve(onToggle(desired)).catch(error=>{
+      check.checked=previous;check.disabled=false;appCalendarActionSetAria(check,item);state.textContent=error.message||"Could not save";row.classList.add("appgroup-action-error");
+    }).finally(()=>{row.classList.remove("is-saving");});
   });
   return row;
 }
@@ -46,7 +56,7 @@ function showChoresCalendarActionPopup(day,info){
       for(const item of items){
         item.title=`${item.choreName||"Chore"}${item.personName?" — "+item.personName:""}`;
         item.detail=appCalendarActionStatus(item,date);
-        host.appendChild(appCalendarActionRow(item,date,()=>appCalendarActionRequest("/api/chore-wheel/assignments/complete",{assignmentId:item.assignmentId,date}).then(next=>render(next.day||next))));
+        host.appendChild(appCalendarActionRow(item,date,desired=>appCalendarActionRequest("/api/chore-wheel/assignments/status",{assignmentId:item.assignmentId,date,completed:desired}).then(next=>render(next.day||next))));
       }
     }
     appCalendarActionRequest("/api/chore-wheel/day?date="+encodeURIComponent(date)).then(render).catch(error=>{intro.textContent=error.message||"Chores are unavailable.";});
@@ -54,26 +64,28 @@ function showChoresCalendarActionPopup(day,info){
   });
 }
 function showMaintenanceCalendarActionPopup(day,info){
-  const date=appCalendarActionDate(day),completed=[];
+  const date=appCalendarActionDate(day);
   popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening maintenance tasks…"},()=>{
     const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Loading maintenance tasks…"),host=el("div","appgroup-action-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
-    let current={date,items:[]};
     function render(payload){
-      current=payload||current;const items=Array.isArray(current.items)?current.items:[];
-      intro.textContent=items.length||completed.length?`${items.length} due · ${completed.length} completed today.`:"No maintenance tasks are due for this day.";
+      const current=payload||{date,items:[],completedItems:[]},items=Array.isArray(current.items)?current.items:[],completed=Array.isArray(current.completedItems)?current.completedItems:[];
+      intro.textContent=items.length||completed.length?`${items.length} due · ${completed.length} completed.`:"No maintenance tasks are due for this day.";
       host.replaceChildren();
       for(const item of items){
-        item.detail=`Due ${item.dueOn||date} · ${item.cadence||""}`;
-        host.appendChild(appCalendarActionRow(item,date,()=>appCalendarActionRequest("/api/maintenance/tasks/complete",{id:item.id,completedOn:appCalendarActionDate(new Date())}).then(next=>{
-          const completedTask=next.completedTask;
-          if(completedTask&&!completed.some(row=>row.id===completedTask.id))completed.push(completedTask);
-          current={...current,items:items.filter(row=>row.id!==item.id)};render(current);
-        })));
+        item.status="assigned";item.detail=`Due ${item.dueOn||date} · ${item.cadence||""}`;
+        host.appendChild(appCalendarActionRow(item,date,desired=>{
+          if(!desired)return Promise.reject(new Error("This task is not completed."));
+          return appCalendarActionRequest("/api/maintenance/tasks/complete",{id:item.id,completedOn:appCalendarActionDate(new Date()),dayDate:date}).then(next=>render(next.day||next));
+        }));
       }
       if(completed.length){
-        const heading=el("div","appgroup-action-section","Completed today");host.appendChild(heading);
+        host.appendChild(el("div","appgroup-action-section","Completed"));
         for(const item of completed){
-          const row={...item,status:"completed",title:item.title,detail:`Completed today · Next due ${item.nextDueOn||"—"}`,actionable:false};host.appendChild(appCalendarActionRow(row,date,()=>Promise.resolve()));
+          item.status="completed";item.detail=`Completed ${item.completedOn||date} · Next due ${item.nextDueOn||"—"}`;
+          host.appendChild(appCalendarActionRow(item,date,desired=>{
+            if(desired)return Promise.resolve();
+            return appCalendarActionRequest("/api/maintenance/tasks/undo-complete",{id:item.id,completionId:item.completionId,dayDate:date}).then(next=>render(next.day||next));
+          }));
         }
       }
     }
@@ -109,13 +121,13 @@ function showRoutinesCalendarActionPopup(day,info){
           const row=el("div","routine-calendar-session"),progress=routineCalendarProgress(session),actionable=session.actionable!==false&&session.state!=="skipped";
           row.appendChild(el("strong","",`${session.time&&!session.allDay?session.time+" · ":""}${session.routineTitle||"Routine"}`));
           const steps=el("div","routine-calendar-steps"),completed=new Set(Array.isArray(session.completedStepIds)?session.completedStepIds.map(String):[]);
+          const status=el("small","",session.state==="completed"?"Complete":session.state==="skipped"?"Skipped":`${progress.done}/${progress.total} complete`);
           for(const step of (session.steps||[])){
-            const label=el("label","routine-calendar-step"),check=document.createElement("input");check.type="checkbox";check.checked=completed.has(String(step.id));check.disabled=!actionable;check.setAttribute("aria-label",`Mark ${step.text||"routine step"} complete`);
-            check.addEventListener("change",()=>{check.disabled=true;mutate(session,{op:"step",stepId:step.id,checked:check.checked}).catch(error=>{check.checked=!check.checked;check.disabled=false;});});
+            const label=el("label","routine-calendar-step"),check=document.createElement("input");check.type="checkbox";check.checked=completed.has(String(step.id));check.disabled=!actionable;check.setAttribute("aria-label",`Mark ${step.text||"routine step"} ${check.checked?"incomplete":"complete"}`);
+            check.addEventListener("change",()=>{const desired=check.checked,previous=!desired;check.disabled=true;status.textContent="Saving…";mutate(session,{op:"step",stepId:step.id,checked:desired}).catch(error=>{check.checked=previous;check.disabled=false;check.setAttribute("aria-label",`Mark ${step.text||"routine step"} ${check.checked?"incomplete":"complete"}`);status.textContent=error.message||"Could not save";});});
             label.append(check,document.createTextNode(step.text||"Step"));steps.appendChild(label);
           }
-          row.appendChild(steps);
-          const status=el("small","",session.state==="completed"?"Complete":session.state==="skipped"?"Skipped":`${progress.done}/${progress.total} complete`);row.appendChild(status);
+          row.append(steps,status);
           if(actionable&&session.state==="active"&&progress.done<progress.total){
             const complete=el("button","routine-calendar-complete","Complete routine");complete.type="button";complete.addEventListener("click",()=>{complete.disabled=true;mutate(session,{op:"complete"}).catch(error=>{complete.disabled=false;status.textContent=error.message||"Could not save";});});row.appendChild(complete);
           }

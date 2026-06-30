@@ -12,7 +12,7 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
-const mapGeocoderUserAgent = "Dash-Go/1.5.2-beta.3 local-kiosk map preview"
+const mapGeocoderUserAgent = "Dash-Go/1.5.2-beta.4 local-kiosk map preview"
 
 func (s *Service) nominatimSearch(q string) ([]map[string]any, error) {
 	u := "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&q=" + url.QueryEscape(q)

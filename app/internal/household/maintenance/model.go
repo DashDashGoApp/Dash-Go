@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	Schema           = 2
+	Schema           = 3
 	HistoryLimit     = 500
 	TaskHistoryLimit = 50
 	MaxTasks         = 100
@@ -132,7 +132,7 @@ func Task(raw any, now time.Time) map[string]any {
 	return map[string]any{
 		"id": id, "title": title, "note": Text(row["note"], 280), "state": state(row["state"]),
 		"cadence":         map[string]any{"unit": unit, "every": Every(unit, cadence["every"])},
-		"lastCompletedOn": Date(row["lastCompletedOn"]), "nextDueOn": next,
+		"lastCompletedOn": Date(row["lastCompletedOn"]), "lastCompletionHistoryId": ID(row["lastCompletionHistoryId"]), "nextDueOn": next,
 		"calendarEnabled": jsonutil.Truthy(row["calendarEnabled"]), "createdAt": created, "updatedAt": updated, "archivedAt": Stamp(row["archivedAt"]),
 		"responsiblePersonId": ID(row["responsiblePersonId"]), "responsiblePersonNameSnapshot": Text(row["responsiblePersonNameSnapshot"], 64),
 	}
@@ -150,7 +150,12 @@ func HistoryRow(raw any) map[string]any {
 	if occurred == "" {
 		return nil
 	}
-	return map[string]any{"id": id, "taskId": taskID, "action": action, "occurredOn": occurred, "priorDueOn": Date(row["priorDueOn"]), "nextDueOn": Date(row["nextDueOn"]), "createdAt": Stamp(row["createdAt"]), "responsiblePersonId": ID(row["responsiblePersonId"]), "responsiblePersonNameSnapshot": Text(row["responsiblePersonNameSnapshot"], 64)}
+	return map[string]any{
+		"id": id, "taskId": taskID, "action": action, "occurredOn": occurred,
+		"priorDueOn": Date(row["priorDueOn"]), "nextDueOn": Date(row["nextDueOn"]),
+		"priorLastCompletedOn": Date(row["priorLastCompletedOn"]), "undoOf": ID(row["undoOf"]),
+		"createdAt": Stamp(row["createdAt"]), "responsiblePersonId": ID(row["responsiblePersonId"]), "responsiblePersonNameSnapshot": Text(row["responsiblePersonNameSnapshot"], 64),
+	}
 }
 
 func Normalize(raw map[string]any, now time.Time) map[string]any {

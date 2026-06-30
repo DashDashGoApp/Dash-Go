@@ -43,6 +43,16 @@ func TestChoreCalendarDayProjectionAndDirectCompletion(t *testing.T) {
 	if status := choreWheelText(jsonutil.Map(jsonutil.List(updated["assignments"])[0])["status"], 16); status != "completed" {
 		t.Fatalf("direct completion did not persist: %#v", updated)
 	}
+	reopen := httptest.NewRecorder()
+	if !a.handleChoreWheelAssignmentStatus(reopen, map[string]any{"assignmentId": "today", "date": "2026-06-24", "completed": false}) {
+		t.Fatal("chore reopen handler not handled")
+	}
+	if reopen.Code != http.StatusOK {
+		t.Fatalf("chore reopen status=%d body=%s", reopen.Code, reopen.Body.String())
+	}
+	if status := choreWheelText(jsonutil.Map(jsonutil.List(a.choreWheelPayload()["assignments"])[0])["status"], 16); status != "assigned" {
+		t.Fatalf("direct reopen did not persist: %#v", a.choreWheelPayload())
+	}
 	future := httptest.NewRecorder()
 	if !a.handleChoreWheelAssignmentComplete(future, map[string]any{"assignmentId": "future", "date": "2026-06-25"}) {
 		t.Fatal("future completion handler not handled")
@@ -80,6 +90,18 @@ func TestMaintenanceCalendarDayProjectionAndDirectCompletion(t *testing.T) {
 	_, filter := maintenanceFind(updated, "filter")
 	if filter == nil || maintenanceDate(filter["nextDueOn"]) != "2026-09-24" {
 		t.Fatalf("maintenance next due not recalculated: %#v", updated)
+	}
+	completion := jsonutil.Map(jsonutil.List(updated["history"])[0])
+	undo := httptest.NewRecorder()
+	if !a.handleMaintenancePost(undo, httptest.NewRequest(http.MethodPost, "/api/maintenance/tasks/undo-complete", nil), "/api/maintenance/tasks/undo-complete", map[string]any{"id": "filter", "completionId": completion["id"], "dayDate": "2026-06-24"}) {
+		t.Fatal("maintenance undo not handled")
+	}
+	if undo.Code != http.StatusOK {
+		t.Fatalf("maintenance undo status=%d body=%s", undo.Code, undo.Body.String())
+	}
+	_, filter = maintenanceFind(a.maintenancePayload(), "filter")
+	if filter == nil || maintenanceDate(filter["nextDueOn"]) != "2026-06-24" {
+		t.Fatalf("maintenance undo did not restore due date: %#v", a.maintenancePayload())
 	}
 	future := httptest.NewRecorder()
 	if !a.handleMaintenancePost(future, httptest.NewRequest(http.MethodPost, "/api/maintenance/tasks/complete", nil), "/api/maintenance/tasks/complete", map[string]any{"id": "future", "completedOn": "2026-06-24"}) {

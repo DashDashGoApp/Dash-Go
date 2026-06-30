@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	chorepkg "github.com/DashDashGoApp/Dash-Go/app/internal/household/chores"
+	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
 func (a *app) handleChoreWheelDayGet(w http.ResponseWriter, r *http.Request) bool {
@@ -17,10 +18,11 @@ func (a *app) handleChoreWheelDayGet(w http.ResponseWriter, r *http.Request) boo
 	return true
 }
 
-// handleChoreWheelAssignmentComplete is intentionally a narrow mutation: the
-// calendar can mark an eligible historical/current assignment done, but cannot
-// reassign, skip, remove, or overwrite the full Chore Wheel payload.
-func (a *app) handleChoreWheelAssignmentComplete(w http.ResponseWriter, body map[string]any) bool {
+// handleChoreWheelAssignmentCompletion is intentionally narrow: the calendar
+// can toggle an eligible historical/current assignment between assigned and
+// completed, but cannot reassign, skip, remove, or overwrite the full Chore
+// Wheel payload.
+func (a *app) handleChoreWheelAssignmentCompletion(w http.ResponseWriter, body map[string]any, completed bool) bool {
 	assignmentID := choreWheelID(body["assignmentId"])
 	date := choreWheelDateKey(body["date"])
 	if assignmentID == "" || date == "" {
@@ -33,10 +35,10 @@ func (a *app) handleChoreWheelAssignmentComplete(w http.ResponseWriter, body map
 		// Day completion changes an existing durable assignment only. It must not
 		// call the roster-projection helper while the Chore lock is held.
 		payload := a.choreWheelService().Payload()
-		next, changed, err := a.choreWheelService().CompleteAssignment(payload, assignmentID, date)
+		next, changed, err := a.choreWheelService().SetAssignmentCompleted(payload, assignmentID, date, completed)
 		if err != nil {
 			switch {
-			case errors.Is(err, chorepkg.ErrFutureComplete), errors.Is(err, chorepkg.ErrAssignmentAndDate), errors.Is(err, chorepkg.ErrAssignmentStatus):
+			case errors.Is(err, chorepkg.ErrFutureMutation), errors.Is(err, chorepkg.ErrAssignmentAndDate), errors.Is(err, chorepkg.ErrAssignmentStatus):
 				status, message = http.StatusBadRequest, err.Error()
 			case errors.Is(err, chorepkg.ErrAssignmentMissing):
 				status, message = http.StatusNotFound, err.Error()
@@ -62,4 +64,15 @@ func (a *app) handleChoreWheelAssignmentComplete(w http.ResponseWriter, body map
 	}
 	a.json(w, response)
 	return true
+}
+
+// handleChoreWheelAssignmentComplete keeps the pre-beta.4 endpoint stable for
+// callers that only need completion. The new status endpoint below is used by
+// the reversible checkbox UI.
+func (a *app) handleChoreWheelAssignmentComplete(w http.ResponseWriter, body map[string]any) bool {
+	return a.handleChoreWheelAssignmentCompletion(w, body, true)
+}
+
+func (a *app) handleChoreWheelAssignmentStatus(w http.ResponseWriter, body map[string]any) bool {
+	return a.handleChoreWheelAssignmentCompletion(w, body, jsonutil.Truthy(body["completed"]))
 }
