@@ -68,6 +68,8 @@ function renderCtrlThemeData(row,t){
     const compactCols=Math.min(wideCols,4);
     const narrowCols=Math.min(compactCols,3);
     cards.dataset.themeGroup=group;
+    cards.dataset.themeCount=String(names.length);
+    if(names.length===5||names.length===6)cards.classList.add("theme-count-"+names.length);
     cards.style.setProperty("--theme-cols-wide",String(wideCols));
     cards.style.setProperty("--theme-cols-medium",String(mediumCols));
     cards.style.setProperty("--theme-cols-compact",String(compactCols));

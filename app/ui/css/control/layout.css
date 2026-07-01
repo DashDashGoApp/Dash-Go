@@ -232,9 +232,25 @@
 #ctrl #ctrlhealth .doctor-overview-actions .actiongroup-grid>.cbtn.actionbtn,
 #ctrl #ctrldiag .doctor-actiongroup .actiongroup-grid>.cbtn.actionbtn{width:100%;max-width:var(--ctrl-action-button-max);justify-self:center;}
 
-/* Overview and Control keep their deliberate concise, grouped action language. */
-#ctrl #ctrlactions.actiongrid,#ctrl #ctrlpoweractions{display:flex;flex-direction:column;gap:var(--ctrl-gap);align-items:stretch;}
+/* Overview actions have one intrinsic action group. Do not let an inherited
+   flex lane reserve a large empty body below the rendered buttons. */
+#ctrl #ctrlactions.actiongrid{display:block;min-height:0;}
+#ctrl #ctrlactions.actiongrid>.actiongroup{min-height:0;height:auto;}
+#ctrl #ctrlpoweractions{display:flex;flex-direction:column;gap:var(--ctrl-gap);align-items:stretch;}
 #ctrl #ctrlpage-overview .actiongroup-common{border-color:var(--ctrl-line-soft);background:var(--ctrl-fill-quiet);}
+
+/* Opt-in count-aware action/choice grids. Generic auto-fit is useful for
+   unknown data grids, but touch choices are intentional: five items form a
+   centered 3 + 2 and six items form 3 + 3, never five-plus-one. */
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-1{grid-template-columns:minmax(0,1fr);}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-3{grid-template-columns:repeat(3,minmax(0,1fr));}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-4{grid-template-columns:repeat(4,minmax(0,1fr));}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5{grid-template-columns:repeat(6,minmax(0,1fr));}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5>*{grid-column:span 2;}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5>:nth-child(4){grid-column:2 / span 2;}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5>:nth-child(5){grid-column:4 / span 2;}
+#ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-6{grid-template-columns:repeat(3,minmax(0,1fr));}
 
 /* Three shared layout tiers. CSS custom properties document the scale; media
    queries use the same fixed boundaries because custom properties cannot be
@@ -262,4 +278,13 @@
   #ctrl .ctrlpage .calmanager-actions{grid-template-columns:1fr;}
   #ctrl .ctrlcardrow{grid-template-columns:1fr;}
   #ctrl .inline-time-editor{grid-template-columns:1fr;}
+}
+
+/* Count-aware grids retain two comfortable columns on compact touch screens;
+   an odd final choice spans both columns instead of hanging at the left edge. */
+@media(max-width:760px){
+  #ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid:not(.ctrl-grid-count-1){grid-template-columns:repeat(2,minmax(0,1fr));}
+  #ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5>*{grid-column:auto;}
+  #ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-3>:nth-child(3),
+  #ctrl .ctrlpage .actiongroup-grid.ctrl-balanced-grid.ctrl-grid-count-5>:nth-child(5){grid-column:1 / -1;}
 }

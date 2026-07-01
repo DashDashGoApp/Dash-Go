@@ -94,3 +94,18 @@ body.ctrl-lite #ctrl .ctrlstate.loading{background:rgba(255,255,255,0.045);}
 .displaygroup.displaycompact .cbtn.actionbtn .bd{font-size:12px;line-height:1.2;margin-top:3px;}
 @media(max-width:900px){.actiongroup-common .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:640px){.actiongroup-common .actiongroup-grid{grid-template-columns:1fr;}}
+
+/* Theme previews also opt out of accidental five-column wrapping. These
+   selectors are intentionally local to preview groups, not generic Control
+   action grids. */
+.themegroupcards.theme-count-5{grid-template-columns:repeat(6,minmax(0,1fr));}
+.themegroupcards.theme-count-5>.themebtn{grid-column:span 2;}
+.themegroupcards.theme-count-5>.themebtn:nth-child(4){grid-column:2 / span 2;}
+.themegroupcards.theme-count-5>.themebtn:nth-child(5){grid-column:4 / span 2;}
+.themegroupcards.theme-count-6{grid-template-columns:repeat(3,minmax(0,1fr));}
+@media(max-width:760px){
+  .themegroupcards.theme-count-5{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .themegroupcards.theme-count-5>.themebtn{grid-column:auto;}
+  .themegroupcards.theme-count-5>.themebtn:nth-child(5){grid-column:1 / -1;}
+  .themegroupcards.theme-count-6{grid-template-columns:repeat(2,minmax(0,1fr));}
+}

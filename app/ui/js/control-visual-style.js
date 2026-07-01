@@ -28,6 +28,7 @@ function renderCtrlVisualStyle(){
     b.insertBefore(sample,b.firstChild);
     icons.grid.appendChild(b);
   }
+  ctrlApplyBalancedGridCount(icons.grid);
   wrap.appendChild(icons.group);
 
   const decor=actionGroup("Seasonal décor","Five reviewed SVGs per active occasion; static accents stay inside empty calendar cells on every profile.","visualstylegroup");
@@ -41,5 +42,6 @@ function renderCtrlVisualStyle(){
       postSettings(); renderCtrlVisualStyle();
     }));
   }
+  ctrlApplyBalancedGridCount(decor.grid);
   wrap.appendChild(decor.group);
 }

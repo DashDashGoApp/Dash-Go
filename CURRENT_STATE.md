@@ -13,12 +13,13 @@
 
 ## Current development beta
 
-- **Version:** `1.5.4-beta.1`
+- **Version:** `1.5.4-beta.2`
 - **Track:** beta
-- **Focus:** Dashboard Control consolidation, PIN-security state-machine hardening, installer-flow repair, weather-data correctness, Doctor/repair safety, and generated-calendar resilience: visible selected/pressed touch states, one owned tab rail, safer PIN handling, a truthful non-destructive installer menu, canonical weather data, conservative repair recovery, DST-safe chore cadence, verified ISS preservation, and correctable generated schedule movement.
+- **Focus:** the cumulative 1.5.4 hardening work plus intentional Dashboard Control action/choice geometry: visible selected/pressed touch states, balanced option grids, safer PIN handling, a truthful non-destructive installer menu, canonical weather data, conservative repair recovery, DST-safe chore cadence, verified ISS preservation, and correctable generated schedule movement.
 
-## 1.5.4-beta.1 focus
+## 1.5.4-beta.2 focus
 
+- **Count-aware Control grids:** Quick actions stays at its intrinsic content height; five visual/action choices render as a centered 3 + 2; six choices render as 3 + 3; compact kiosk layouts retain two comfortable columns without changing the shared shell tiers.
 - **Dashboard Control clarity:** selected and pressed controls use visible theme-aware fills on every theme; the six-tab rail has symmetric internal spacing and stable two-column small-screen rows.
 - **Control maintainability:** retired action-drawer, obsolete Control-page maintenance, five-tab, and unused grid layers were removed so layout, sizing, and state ownership are explicit.
 - **Overview flow:** Device status opens by default and groups key network, device, and data-freshness signals, while lower-signal telemetry is available under More device details.

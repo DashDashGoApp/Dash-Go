@@ -112,6 +112,7 @@ function renderCtrlQuickActions(){
   common.grid.appendChild(caction("Screen off","Blank the display now; touch wakes it.","",async()=>{
     try{await api("/api/display/off","POST",{});closeCtrl();}catch(e){ctrlMsg(e.message);}
   }));
+  ctrlApplyBalancedGridCount(common.grid);
   row.appendChild(common.group);
 }
 function renderCtrlPowerActions(){
@@ -126,5 +127,6 @@ function renderCtrlPowerActions(){
   danger.grid.appendChild(confirmAction("Shut down","Power off safely. Use power to start again.","Tap again to shut down",async()=>{
     ctrlMsg("Shutting down… (unplug/replug power to start again)");try{await api("/api/poweroff","POST",{});}catch(e){ctrlMsg(e.message);}
   }));
+  ctrlApplyBalancedGridCount(danger.grid);
   row.appendChild(danger.group);
 }

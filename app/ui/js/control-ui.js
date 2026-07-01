@@ -166,6 +166,17 @@ function caction(label,desc,cls,fn){
   b.innerHTML=`<span class="bt">${escapeHTML(label)}</span>${desc?`<span class="bd">${escapeHTML(desc)}</span>`:""}`;
   return b;
 }
+// Mark a deliberately opted-in action/choice grid with its rendered item count.
+// The layout layer uses these semantic classes instead of auto-fit so a group
+// cannot accidentally become five columns with one item stranded below it.
+function ctrlApplyBalancedGridCount(grid){
+  if(!grid||!grid.classList)return 0;
+  const count=Array.from(grid.children||[]).filter(node=>node&&node.nodeType===1&&!node.hidden).length;
+  for(const name of Array.from(grid.classList))if(/^ctrl-grid-count-\d+$/.test(name))grid.classList.remove(name);
+  grid.classList.add("ctrl-balanced-grid","ctrl-grid-count-"+Math.min(6,Math.max(1,count)));
+  grid.dataset.gridCount=String(count);
+  return count;
+}
 function actionGroup(title,detail,cls){
   const group=el("div","actiongroup"+(cls?" "+cls:""));
   if(title||detail){
