@@ -74,6 +74,9 @@ function complimentLiteEnsureGeometry(el){
       COMP_LITE_GEOMETRY.observer=new ResizeObserver(()=>complimentLiteScheduleGeometryCapture(el,"resize-observer"));
       // Do not observe #comptext itself: each rotating message changes its
       // intrinsic height, which would turn normal rotation back into layout work.
+      // Keep observing parent/sun/stale instead: the Family Board footer and
+      // stale indicator change usable width through those ancestors. Replacing
+      // this with a #comptext observer would break Lite's bounded fit lifecycle.
       for(const node of [parent,sun,stale])if(node){COMP_LITE_GEOMETRY.observer.observe(node);COMP_LITE_GEOMETRY.observed.push(node);}
     }
   }

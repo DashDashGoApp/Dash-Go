@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	controlauth "github.com/DashDashGoApp/Dash-Go/app/internal/auth"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
@@ -20,13 +19,15 @@ func (a *app) runPinCheckCLI(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 64
 	}
-	cfg := a.lockConfig()
-	if cfg["enabled"] != true {
+	cfg := a.authService().Config()
+	if !cfg.Available {
+		fmt.Fprintln(os.Stderr, "Dashboard Control PIN configuration is unavailable")
+		return 1
+	}
+	if !cfg.Enabled {
 		return 0
 	}
-	sPin := strings.TrimSpace(*pin)
-	iterations, _ := cfg["iterations"].(int)
-	if controlauth.VerifyPIN(sPin, fmt.Sprint(cfg["salt"]), fmt.Sprint(cfg["hash"]), iterations) {
+	if a.verifyPin(strings.TrimSpace(*pin)) {
 		return 0
 	}
 	return 1

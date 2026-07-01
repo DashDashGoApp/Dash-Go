@@ -19,13 +19,13 @@ const lifecycle=read("ui/js/control-lifecycle.js");
 const index=read("index.html");
 
 assert.ok(!fs.existsSync(path.join(controlDir,"00-control-stack-actions.css")),"retired hard-fix layout file must be removed");
-for(const token of ["--ctrl-space-1:4px","--ctrl-space-6:24px","--ctrl-tap-min:44px","--ctrl-summary-min:48px","--ctrl-action-min:64px","--ctrl-action-min-lg:76px","--ctrl-bp-stack:760px","--ctrl-bp-two:1100px","--ctrl-bp-wide:1280px"]){assert.ok(tokens.includes(token),`missing shared token ${token}`);}
+for(const token of ["--ctrl-space-1:4px","--ctrl-space-6:24px","--ctrl-gap-compact:var(--ctrl-space-2)","--ctrl-tap-min:48px","--ctrl-summary-min:52px","--ctrl-tab-min:52px","--ctrl-action-min:64px","--ctrl-action-min-lg:76px","--ctrl-metric-min:180px","--ctrl-radius-sm:10px","--ctrl-radius-md:14px","--ctrl-bp-stack:760px","--ctrl-bp-two:1100px","--ctrl-bp-wide:1280px"]){assert.ok(tokens.includes(token),`missing shared token ${token}`);}
 assert.match(layout,/#ctrl \.ctrlpage \.actiongroup-grid,[\s\S]*?grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,220px\),1fr\)\)/,"action grids must use one intrinsic default");
 assert.match(layout,/@media\s*\(min-width:1280px\)/,"wide Control tier required");
 assert.match(layout,/@media\s*\(max-width:1100px\)/,"compact Control tier required");
 assert.match(layout,/@media\s*\(max-width:760px\)/,"stack Control tier required");
 assert.match(layout,/\.comprow \.cbtn\{padding:var\(--ctrl-space-2\) var\(--ctrl-space-3\);\}/,"compact message actions must still use the tap-floor layer");
-assert.match(layout,/:is\(\.cbtn,\.themebtn,\.pinbtn,\.oskkey,[\s\S]*?min-height:var\(--ctrl-tap-min\)/,"all shared interactive controls need the 44px floor");
+assert.match(layout,/:is\(\.cbtn,\.themebtn,\.pinbtn,\.oskkey,[\s\S]*?min-height:var\(--ctrl-tap-min\)/,"all shared interactive controls need the shared touch floor");
 assert.match(layout,/\.ctrltabs \.cbtn\.on:after/,"active Control tabs need a persistent orientation indicator");
 assert.ok((allCss.match(/!important/g)||[]).length<30,"Control CSS must retain fewer than 30 !important declarations");
 // Core Control tiers stay centralized. A small 700px component breakpoint is
@@ -45,7 +45,7 @@ assert.match(nav,/nightDim\.dataset\.settingKey="nightDim"/,"night dim action ne
 assert.match(nav,/b\.dataset\.settingChoice=String\(v\)/,"start-day choices need patchable selection markers");
 assert.match(nav,/b\.dataset\.settingChoice=String\(on\)/,"week-number choices need patchable selection markers");
 
-for(const page of ["ctrlpage-display","ctrlpage-content","ctrlpage-system"])assert.match(index,new RegExp(`id="${page}"[^>]*data-accordion`),`${page} must opt into the shared accordion model`);
+for(const page of ["ctrlpage-overview","ctrlpage-display","ctrlpage-calendars","ctrlpage-content","ctrlpage-control","ctrlpage-system"])assert.match(index,new RegExp(`id="${page}"[^>]*data-accordion`),`${page} must opt into the shared accordion model`);
 assert.match(nav,/const accordionPage=d\.closest && d\.closest\("\.ctrlpage\[data-accordion\]"\)/,"lazy toggle handler must generalize accordion ownership");
 assert.match(nav,/accordionPage\.querySelectorAll\("details\.ctrlsec\[data-lazy\]"\)/,"accordion handler must close only sibling lazy cards");
 assert.match(nav,/const CTRL_LAST_OPEN_SECTION=new Map\(\)/,"capable profiles need in-session last-open memory");
@@ -68,4 +68,4 @@ assert.match(lock,/main\.setAttribute\(\"aria-hidden\",visible\?\"false\":\"true
 for(const forbidden of [/main\.style\.display/,/main\.style\.setProperty\(\"display/,/main\.style\.removeProperty\(\"display/])assert.doesNotMatch(lock,forbidden,"PIN lock must not own #ctrlmain display mode");
 assert.match(lock,/showPinLock\(\)[\s\S]*?setCtrlMainVisible\(false\)/,"PIN presentation must hide Control main semantically");
 assert.match(lock,/setCtrlMainVisible\(true\);[\s\S]*?ctrlMsg\(\"\"\); await renderCtrlAll\(\)/,"PIN unlock must restore semantic Control-main visibility before rerendering");
-console.log("PASS: Control beta.6 foundation plus beta.8 semantic shell visibility keep Control scrolling structural, focus-safe, and cascade-independent");
+console.log("PASS: Control shared tokens, universal accordion behavior, and semantic shell visibility keep Control scrolling structural and focus-safe.");

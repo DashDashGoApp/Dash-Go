@@ -130,9 +130,10 @@ func TestCoreStateRetainsOnlyOrchestrationAndServiceReferences(t *testing.T) {
 	}
 	authFields := parsedStructFields(t, authServicePath, "Service")
 	for field, wantType := range map[string]string{
-		"sessions":  "map[string]sessionMeta",
-		"oneShots":  "map[string]oneShotMeta",
-		"failTimes": "[]time.Time",
+		"sessions":    "map[string]sessionMeta",
+		"oneShots":    "map[string]oneShotMeta",
+		"lockout":     "pinLockoutState",
+		"lockoutPath": "string",
 	} {
 		if got := authFields[field]; got != wantType {
 			t.Fatalf("auth service lost runtime ownership evidence for %s: got %q, want %q", field, got, wantType)

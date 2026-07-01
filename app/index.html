@@ -23,8 +23,8 @@
   try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
 }());
 </script>
-<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.3">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.3">
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.4-beta.1">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.4-beta.1">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
      birthdays:[...] }. Missing file is harmless (404 ignored). -->
@@ -103,11 +103,11 @@
       <button class="cbtn" data-ctrlpage="display">Display</button>
       <button class="cbtn" data-ctrlpage="calendars">Calendars</button>
       <button class="cbtn" data-ctrlpage="content">Messages</button>
-      <button class="cbtn" data-ctrlpage="control">Control</button>
+      <button class="cbtn" data-ctrlpage="control">Settings</button>
       <button class="cbtn" data-ctrlpage="system">System</button>
     </div>
-    <div class="ctrlpage show" id="ctrlpage-overview" data-scroll-policy="control-page">
-      <details class="ctrlsec" data-lazy="status"><summary>Device status</summary><div class="ctrlsecbody"><div id="ctrlstatus"></div></div></details>
+    <div class="ctrlpage show" id="ctrlpage-overview" data-scroll-policy="control-page" data-accordion>
+      <details class="ctrlsec" data-lazy="status" data-default-open="true"><summary>Device status</summary><div class="ctrlsecbody"><div id="ctrlstatus"></div></div></details>
       <details class="ctrlsec" data-lazy="health"><summary>Health check</summary><div class="ctrlsecbody"><div id="ctrlhealth"></div></div></details>
       <details class="ctrlsec ctrlsec-actions"><summary>Quick actions</summary><div class="ctrlsecbody"><div class="ctrlrow actiongrid" id="ctrlactions"></div></div></details>
     </div>
@@ -119,7 +119,7 @@
       <details class="ctrlsec" data-lazy="mapcache"><summary>Event maps &amp; cache</summary><div class="ctrlsecbody"><div id="ctrlmapcache"></div></div></details>
       <details class="ctrlsec" data-lazy="screen"><summary>Screen controls &amp; sleep schedule</summary><div class="ctrlsecbody"><div id="ctrlscreensettings"></div></div></details>
     </div>
-    <div class="ctrlpage" id="ctrlpage-calendars" data-scroll-policy="control-page">
+    <div class="ctrlpage" id="ctrlpage-calendars" data-scroll-policy="control-page" data-accordion>
       <details class="ctrlsec" data-lazy="calendarlayout"><summary>Calendar layout, density &amp; text</summary><div class="ctrlsecbody"><div id="ctrluisettings"></div></div></details>
       <details class="ctrlsec" data-lazy="moon"><summary>Moon</summary><div class="ctrlsecbody"><div id="ctrlmoon"></div></div></details>
       <details class="ctrlsec" data-lazy="calhealth"><summary>Calendar source health</summary><div class="ctrlsecbody"><div id="ctrlcalhealth"></div></div></details>
@@ -137,7 +137,7 @@
       <details class="ctrlsec" data-lazy="feeds"><summary>Jokes / Quotes / Facts</summary><div class="ctrlsecbody"><div id="ctrlfeeds"></div></div></details>
       <details class="ctrlsec" data-lazy="sources"><summary>Feed providers &amp; API keys</summary><div class="ctrlsecbody"><div id="ctrlsources"></div></div></details>
     </div>
-    <div class="ctrlpage" id="ctrlpage-control" data-scroll-policy="control-page">
+    <div class="ctrlpage" id="ctrlpage-control" data-scroll-policy="control-page" data-accordion>
       <div class="ctrlstack" id="ctrlstack-control">
         <details class="ctrlsec ctrlsec-profile" data-lazy="profile"><summary>Performance profile</summary><div class="ctrlsecbody"><div id="ctrlprofile"></div></div></details>
         <div class="ctrlcardrow ctrlcardrow-control-secondary">
@@ -251,6 +251,6 @@
   </section>
 </div>
 
-<script src="/ui/js/app.bundle.js?v=1.5.3" defer></script>
+<script src="/ui/js/app.bundle.js?v=1.5.4-beta.1" defer></script>
 </body>
 </html>

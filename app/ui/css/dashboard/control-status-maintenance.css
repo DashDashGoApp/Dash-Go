@@ -4,10 +4,7 @@
 #ctrlpanel{padding:24px 28px 26px;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015)),var(--bg);box-shadow:0 18px 55px rgba(0,0,0,0.52);}
 #ctrlmsg{background:rgba(0,0,0,0.18);border:1px solid transparent;border-radius:10px;padding:8px 10px;margin:10px 0 4px;min-height:1.2em;}
 #ctrlmsg:empty{padding:0;border:0;background:transparent;margin:0;min-height:0;}
-.ctrltabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:14px 0 14px;background:var(--bg);padding:6px 0 10px;}
-.ctrltabs .cbtn{min-height:42px;padding:8px 10px;font-size:15px;border-radius:999px;background:rgba(255,255,255,0.045);color:var(--dim);}
-.ctrltabs .cbtn.on{color:var(--fg);background:rgba(127,214,168,0.18);box-shadow:inset 0 0 0 1px rgba(127,214,168,0.24);}
-.ctrlsec{border-radius:14px;margin:12px 0;background:rgba(255,255,255,0.032);box-shadow:inset 0 1px 0 rgba(255,255,255,0.035);}
+.ctrlsec{border-radius:14px;margin:12px 0;background:var(--ctrl-fill);box-shadow:inset 0 1px 0 rgba(255,255,255,0.035);}
 .ctrlsec>summary{padding:14px 16px;font-size:14px;color:var(--fg);letter-spacing:0.07em;}
 .ctrlsecbody{padding:0 16px 16px;}
 .ctrlrow{gap:9px;}
@@ -16,29 +13,19 @@
 .actiongrid>.cbtn{width:100%;min-height:70px;justify-content:flex-start;text-align:left;}
 .cbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;transition:background 0.08s ease,border-color 0.08s ease,transform 0.08s ease;}
 .cbtn:active{transform:translateY(1px);}
-.cbtn.primary{background:rgba(127,214,168,0.16);border-color:rgba(127,214,168,0.58);}
+.cbtn.primary{background:var(--ctrl-accent-bg);border-color:var(--ctrl-accent-border);}
 .cbtn.actionbtn{flex-direction:column;align-items:flex-start;padding:11px 13px;line-height:1.2;}
-.cbtn.actionbtn .bt{font-weight:700;font-size:16px;color:var(--fg);}
-.cbtn.actionbtn .bd{font-size:12px;color:var(--dimmer);line-height:1.28;margin-top:2px;}
 .cbtn.danger{background:var(--ctrl-danger-bg);border-color:var(--ctrl-danger-border);color:var(--ctrl-danger-fg);}
 .ctrlgrid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
-.ctrlgrid .stat{border-radius:11px;padding:10px 12px;background:rgba(255,255,255,0.045);}
+.ctrlgrid .stat{border-radius:11px;padding:10px 12px;background:var(--ctrl-fill-quiet);}
 .ctrlmini{font-size:14px;color:var(--dimmer);margin:8px 0 10px;}
 .ctrltable th,.ctrltable td{padding:8px 7px;}
 @media (max-width:760px){
-  .ctrltabs{grid-template-columns:repeat(2,minmax(0,1fr));}
-  .ctrltabs .cbtn:last-child{grid-column:1 / -1;}
   .ctrlrow.actiongrid{grid-template-columns:1fr;}
 }
 
-/* 1.1.0 alpha correction: keep Control sections as one consistent full-width stack.
-   The earlier two-column experiment made the lower accordions look staggered on the kiosk. */
-#ctrlpage-control.show{display:flex;flex-direction:column;gap:10px;align-items:stretch;}
-#ctrlpage-control .ctrlsec{margin:0;width:100%;grid-column:1 / -1;}
-/* Tables use .ctrltable-scroll; ordinary card bodies do not become scrollers. */
-#ctrlpage-control .ctrlsecbody{overflow:visible;}
 
-/* 1.1.0 Section 2: Update / Restore / Backup belongs under Control. */
+/* Update, restore, and backup surfaces now live on System. */
 #ctrlupdate{display:flex;flex-direction:column;gap:12px;}
 #ctrlupdatelog{margin-top:10px;}
 .maintenancegrid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));}
@@ -52,18 +39,18 @@
 
 /* 1.1.0 Section 3: health summary / status-at-a-glance. */
 #ctrlhealth{display:flex;flex-direction:column;gap:12px;}
-.healthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
-.healthtop.ok{border-color:rgba(127,214,168,0.38);background:rgba(127,214,168,0.10);}
-.healthtop.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.09);}
-.healthtop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.09);}
+.healthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid var(--ctrl-line-soft);background:var(--ctrl-fill-quiet);}
+.healthtop.ok{border-color:rgba(127,214,168,0.38);background:var(--ctrl-state-ok-bg);}
+.healthtop.warn{border-color:rgba(255,213,138,0.38);background:var(--ctrl-state-warn-bg);}
+.healthtop.bad{border-color:rgba(255,138,138,0.38);background:var(--ctrl-state-bad-bg);}
 .healthlabel{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
 .healthstate{font-size:28px;font-weight:800;line-height:1.05;margin-top:2px;}
 .healthstamp{font-family:var(--mono);font-size:12px;color:var(--dimmer);white-space:nowrap;}
-.healthgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px;}
-.healthpill{min-height:58px;border-radius:12px;padding:10px 12px;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.075);display:flex;flex-direction:column;justify-content:center;gap:3px;}
+.healthgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--ctrl-metric-min)),1fr));gap:var(--ctrl-gap-compact);}
+.healthpill{min-height:58px;border-radius:var(--ctrl-radius-md);padding:var(--ctrl-space-3);background:var(--ctrl-fill-quiet);border:1px solid var(--ctrl-line-soft);display:flex;flex-direction:column;justify-content:center;gap:3px;}
 .healthpill.ok{border-color:rgba(127,214,168,0.34);}
-.healthpill.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.055);}
-.healthpill.bad{border-color:rgba(255,138,138,0.42);background:rgba(255,138,138,0.06);}
+.healthpill.warn{border-color:rgba(255,213,138,0.38);background:var(--ctrl-state-warn-bg);}
+.healthpill.bad{border-color:rgba(255,138,138,0.42);background:var(--ctrl-state-bad-bg);}
 .healthpill.unknown{opacity:0.78;}
 .healthpill .hl{font-family:var(--mono);font-size:11px;letter-spacing:0.10em;text-transform:uppercase;color:var(--dimmer);}
 .healthpill .hv{font-size:17px;font-weight:700;color:var(--fg);line-height:1.1;}
@@ -72,7 +59,7 @@
 
 
 /* 1.1.0 Section 4: clearer update / rollback / backup visibility. */
-.maintnotice{border-radius:13px;padding:12px 14px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
+.maintnotice{border-radius:13px;padding:12px 14px;border:1px solid var(--ctrl-line-soft);background:var(--ctrl-fill-quiet);}
 .maintnotice.ok{border-color:rgba(127,214,168,0.34);background:rgba(127,214,168,0.08);}
 .maintnotice.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.08);}
 .maintnotice.bad{border-color:rgba(255,138,138,0.42);background:rgba(255,138,138,0.08);}
@@ -80,7 +67,7 @@
 .maintnotice .mdetail{font-size:13px;color:var(--dimmer);line-height:1.35;margin-top:3px;}
 .maintenancegrid .stat.quiet{box-shadow:none;background:rgba(255,255,255,0.035);}
 .maintenancegrid .stat.ok{box-shadow:inset 0 0 0 1px rgba(127,214,168,0.24);}
-.maintenancegrid .stat.warn{box-shadow:inset 0 0 0 1px rgba(255,213,138,0.30);background:rgba(255,213,138,0.055);}
+.maintenancegrid .stat.warn{box-shadow:inset 0 0 0 1px rgba(255,213,138,0.30);background:var(--ctrl-state-warn-bg);}
 .maintenancegrid .stat.bad{box-shadow:inset 0 0 0 1px rgba(255,138,138,0.34);background:rgba(255,138,138,0.055);}
 .maintenancegrid .stat.unknown{opacity:0.78;}
 .update-detail{border-left:3px solid rgba(255,255,255,0.12);padding-left:10px;}
@@ -107,7 +94,7 @@
 
 /* 1.1.0 Section 6: terminal availability/status polish. */
 #ctrlterminal{display:flex;flex-direction:column;gap:12px;}
-.terminaltop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:13px 15px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.04);}
+.terminaltop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:13px 15px;border:1px solid var(--ctrl-line-soft);background:rgba(255,255,255,0.04);}
 .terminaltop.ok{border-color:rgba(127,214,168,0.34);background:rgba(127,214,168,0.08);}
 .terminaltop.warn{border-color:rgba(255,213,138,0.36);background:rgba(255,213,138,0.075);}
 .terminaltop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.075);}
@@ -165,10 +152,10 @@
 
 /* 1.1.0 Section 9: calendar source health. */
 #ctrlcalhealth{display:flex;flex-direction:column;gap:12px;}
-.calhealthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.045);}
-.calhealthtop.ok{border-color:rgba(127,214,168,0.38);background:rgba(127,214,168,0.10);}
-.calhealthtop.warn{border-color:rgba(255,213,138,0.38);background:rgba(255,213,138,0.09);}
-.calhealthtop.bad{border-color:rgba(255,138,138,0.38);background:rgba(255,138,138,0.09);}
+.calhealthtop{display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:14px;padding:14px 16px;border:1px solid var(--ctrl-line-soft);background:var(--ctrl-fill-quiet);}
+.calhealthtop.ok{border-color:rgba(127,214,168,0.38);background:var(--ctrl-state-ok-bg);}
+.calhealthtop.warn{border-color:rgba(255,213,138,0.38);background:var(--ctrl-state-warn-bg);}
+.calhealthtop.bad{border-color:rgba(255,138,138,0.38);background:var(--ctrl-state-bad-bg);}
 .calhealthlabel{font-family:var(--mono);font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
 .calhealthstate{font-size:26px;font-weight:800;line-height:1.05;margin-top:2px;}
 .calhealthdetail{font-size:14px;color:var(--dim);margin-top:5px;}
@@ -179,7 +166,7 @@
 .caldot{display:inline-block;width:10px;height:10px;border-radius:999px;box-shadow:0 0 0 2px rgba(255,255,255,0.10);flex:0 0 auto;}
 .calmeta{font-size:12px;color:var(--dimmer);margin-top:3px;}
 .calbadge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:800;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);white-space:nowrap;}
-.calbadge.ok{border-color:rgba(127,214,168,0.35);background:rgba(127,214,168,0.10);}
+.calbadge.ok{border-color:rgba(127,214,168,0.35);background:var(--ctrl-state-ok-bg);}
 .calbadge.warn{border-color:rgba(255,213,138,0.40);background:rgba(255,213,138,0.10);}
 .calbadge.bad{border-color:rgba(255,138,138,0.40);background:rgba(255,138,138,0.10);}
 .calbadge.unknown{opacity:.82;}

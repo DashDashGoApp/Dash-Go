@@ -105,6 +105,15 @@ trap doctor_plan_cleanup EXIT INT TERM
 if [ "$FIX" -eq 1 ] && [ "$NO_PROMPT" -eq 0 ] && [ -z "$FIX_ONLY" ] && [ -t 0 ]; then
   exec "$0" --full --interactive-plan
 fi
+# A redirected --fix must never silently apply guided or administrator repairs.
+# Non-interactive callers can use --only after reviewing exact repair keys;
+# otherwise they receive the same conservative safe-only behavior as --yes.
+if [ "$FIX" -eq 1 ] && [ -z "$FIX_ONLY" ] && [ ! -t 0 ]; then
+  SAFE_ONLY=1
+  NONINTERACTIVE_SAFE_FIX=1
+else
+  NONINTERACTIVE_SAFE_FIX=0
+fi
 
 section(){
   CURRENT_SECTION="$*"
@@ -125,6 +134,9 @@ ok(){
   if [ "$VERBOSE" = 1 ]; then section_emit; printf 'OK  %s\n' "$*"; fi
 }
 info(){ section_emit; printf 'INFO %s\n' "$*"; }
+if [ "${NONINTERACTIVE_SAFE_FIX:-0}" = 1 ]; then
+  info "Non-interactive --fix is limited to safe repairs; use --only after reviewing a plan to select guided or administrator repairs."
+fi
 # Historical log-state notes are available in --full output, but are not a
 # current finding and should not make a compact scan look unhealthy.
 info_quiet(){ [ "$VERBOSE" = 1 ] && info "$@" || true; }

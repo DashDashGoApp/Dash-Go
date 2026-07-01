@@ -87,6 +87,58 @@ func toTempGo(v any, unit, target string) any {
 	}
 	return f
 }
+
+// precipitationMMGo converts a provider precipitation quantity to the
+// dashboard's canonical daily-total unit: millimetres of liquid water.
+// Adapters must convert at their boundary so weather blending never mixes
+// inches, centimetres, and millimetres.
+func precipitationMMGo(v any, unit string) any {
+	f, ok := toFloatGo(v)
+	if !ok || f < 0 {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(unit)) {
+	case "mm", "millimeter", "millimeters", "millimetre", "millimetres":
+		return f
+	case "cm", "centimeter", "centimeters", "centimetre", "centimetres":
+		return f * 10
+	case "in", "inch", "inches":
+		return f * 25.4
+	default:
+		return nil
+	}
+}
+
+// precipitationSumMMGo sums fields that a provider already documents as
+// millimetres (for example separate rain and snow liquid-water fields).
+func precipitationSumMMGo(values ...any) any {
+	sum := 0.0
+	found := false
+	for _, value := range values {
+		f, ok := toFloatGo(value)
+		if !ok || f < 0 {
+			continue
+		}
+		sum += f
+		found = true
+	}
+	if !found {
+		return 0.0
+	}
+	return sum
+}
+
+// googlePrecipitationMMGo respects the unit supplied beside Google's qpf
+// quantity and uses the requested unit system only when a response omits it.
+func googlePrecipitationMMGo(v any, fallbackUnit string) any {
+	qpf := anyMap(v)
+	unit := strings.TrimSpace(fmt.Sprint(qpf["unit"]))
+	if unit == "" || unit == "<nil>" {
+		unit = fallbackUnit
+	}
+	return precipitationMMGo(qpf["quantity"], unit)
+}
+
 func toWindGo(v any, unit, target string) any {
 	f, ok := toFloatGo(v)
 	if !ok {

@@ -33,7 +33,7 @@ func fetchWeatherAPIGo(ctx context.Context, cfg Config) (map[string]any, error) 
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(choice(unit == "c", day["maxtemp_c"], day["maxtemp_f"]), unit, cfg.TempUnit))
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(choice(unit == "c", day["mintemp_c"], day["mintemp_f"]), unit, cfg.TempUnit))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], nil)
-		d["precipitation_sum"] = append(d["precipitation_sum"], day["totalprecip_in"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(day["totalprecip_mm"], "mm"))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], day["daily_chance_of_rain"])
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(day["maxwind_mph"], "mph", cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], day["uv"])
@@ -71,7 +71,7 @@ func fetchOpenWeatherGo(ctx context.Context, cfg Config) (map[string]any, error)
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], temp["max"])
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], temp["min"])
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], xOr(feels["day"], feels["max"]))
-		d["precipitation_sum"] = append(d["precipitation_sum"], xOr(x["rain"], x["snow"]))
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationSumMMGo(x["rain"], x["snow"]))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], mult100(x["pop"]))
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["wind_speed"], choice(units == "metric", "ms", "mph").(string), cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvi"])
@@ -112,7 +112,7 @@ func fetchGoogleWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], degreesGo(x["maxTemperature"]))
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], degreesGo(x["minTemperature"]))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], degreesGo(x["feelsLikeMaxTemperature"]))
-		d["precipitation_sum"] = append(d["precipitation_sum"], anyMap(anyMap(day["precipitation"])["qpf"])["quantity"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], googlePrecipitationMMGo(anyMap(day["precipitation"])["qpf"], choice(units == "METRIC", "mm", "in").(string)))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], anyMap(anyMap(day["precipitation"])["probability"])["percent"])
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], googleWindGo(day["wind"], cfg))
 		d["uv_index_max"] = append(d["uv_index_max"], day["uvIndex"])
@@ -143,7 +143,7 @@ func fetchTomorrowGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], v["temperatureMax"])
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], v["temperatureMin"])
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], v["temperatureApparentMax"])
-		d["precipitation_sum"] = append(d["precipitation_sum"], v["precipitationAccumulationSum"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(v["precipitationAccumulationSum"], choice(units == "metric", "mm", "in").(string)))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], v["precipitationProbabilityMax"])
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(v["windSpeedMax"], choice(units == "metric", "ms", "mph").(string), cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], v["uvIndexMax"])
@@ -178,7 +178,7 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], x["tempmax"])
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], x["tempmin"])
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], x["feelslikemax"])
-		d["precipitation_sum"] = append(d["precipitation_sum"], x["precip"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precip"], choice(unit == "metric", "mm", "in").(string)))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["precipprob"])
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windspeed"], "mph", cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvindex"])
@@ -191,10 +191,9 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 
 func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("weatherbit", cfg)
-	units := "I"
-	if cfg.TempUnit == "celsius" {
-		units = "M"
-	}
+	// Request Weatherbit in metric units regardless of display preference so
+	// daily precipitation has one unambiguous adapter boundary: millimetres.
+	units := "M"
 	base := "https://api.weatherbit.io/v2.0"
 	cur, err := fetchJSONGo(ctx, base+"/current?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units}))
 	if err != nil {
@@ -210,19 +209,19 @@ func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) 
 		w := anyMap(x["weather"])
 		d["time"] = append(d["time"], x["valid_date"])
 		d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(w["description"], w["code"])))
-		d["temperature_2m_max"] = append(d["temperature_2m_max"], x["max_temp"])
-		d["temperature_2m_min"] = append(d["temperature_2m_min"], x["min_temp"])
-		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], x["app_max_temp"])
-		d["precipitation_sum"] = append(d["precipitation_sum"], x["precip"])
+		d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["max_temp"], "c", cfg.TempUnit))
+		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["min_temp"], "c", cfg.TempUnit))
+		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(x["app_max_temp"], "c", cfg.TempUnit))
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precip"], "mm"))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["wind_spd"], choice(units == "M", "ms", "mph").(string), cfg.WindUnit))
+		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["wind_spd"], "ms", cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uv"])
 		d["sunrise"] = append(d["sunrise"], nil)
 		d["sunset"] = append(d["sunset"], nil)
 	}
 	c := firstMap(jsonutil.List(cur["data"]))
 	cw := anyMap(c["weather"])
-	return weatherOKGo("weatherbit", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["app_temp"], "weather_code": textCodeGo(xOr(cw["description"], cw["code"])), "wind_speed_10m": toWindGo(c["wind_spd"], choice(units == "M", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": c["rh"]}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("weatherbit", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(c["temp"], "c", cfg.TempUnit), "apparent_temperature": toTempGo(c["app_temp"], "c", cfg.TempUnit), "weather_code": textCodeGo(xOr(cw["description"], cw["code"])), "wind_speed_10m": toWindGo(c["wind_spd"], "ms", cfg.WindUnit), "relative_humidity_2m": c["rh"]}, "daily": d, "hourly": nil}), nil
 }
 
 func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
@@ -244,7 +243,7 @@ func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], xOr(x["temperatureHigh"], x["temperatureMax"]))
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], xOr(x["temperatureLow"], x["temperatureMin"]))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], xOr(x["apparentTemperatureHigh"], x["apparentTemperatureMax"]))
-		d["precipitation_sum"] = append(d["precipitation_sum"], x["precipAccumulation"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precipAccumulation"], choice(units == "si", "cm", "in").(string)))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], mult100(x["precipProbability"]))
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windSpeed"], choice(units == "si", "ms", "mph").(string), cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvIndex"])

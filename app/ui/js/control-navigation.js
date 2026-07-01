@@ -73,8 +73,11 @@ function renderCtrlScreenSettings(){
   }
 }
 function openDefaultCtrlSection(page){
-  // Intentionally no-op: Dashboard Control opens calm/collapsed. Sections load
-  // only after the user expands a card, keeping first paint stable on Pi Zero.
+  const target=page||document.querySelector(".ctrlpage.show");
+  if(!target||ctrlPageName(target)!=="overview")return null;
+  const status=target.querySelector('details.ctrlsec[data-default-open="true"]');
+  if(status)status.open=true;
+  return status||null;
 }
 const CTRL_LAST_OPEN_SECTION=new Map();
 function ctrlPageName(page){return page&&page.id?String(page.id).replace("ctrlpage-",""):"";}
@@ -90,7 +93,7 @@ function ctrlForgetLastOpenSection(d){
 }
 function ctrlClosePageSectionsForSession(page,preserveLast){
   if(!page)return;
-  page.querySelectorAll("details.ctrlsec, details.actiondrawer, details.ctrlbackupcard").forEach(d=>{
+  page.querySelectorAll("details.ctrlsec, details.ctrlbackupcard").forEach(d=>{
     if(preserveLast)d._ctrlPreserveLastOpen=true;
     d.open=false;
   });
@@ -175,7 +178,8 @@ function switchCtrlPage(name,opts){
   // Prepare the requested card while its page is still hidden. This removes the
   // Lite-only all-collapsed paint that contextual “Open …” buttons exposed.
   collapseCtrlPageSections(page);
-  restoreCtrlLastOpenSection(page,requested);
+  const restored=restoreCtrlLastOpenSection(page,requested);
+  if(!restored&&!requested&&name==="overview")openDefaultCtrlSection(page);
   if(requested)requested.open=true;
   // Paint the target tab before cancellation/hibernate work. The old page owns
   // only its own requests, so rapid taps leave the final selected page alone.
@@ -278,7 +282,7 @@ function initCtrlLazySections(){
   });
 }
 function bindCtrlSummaryTaps(){
-  document.querySelectorAll("#ctrl details.ctrlsec > summary, #ctrl details.actiondrawer > summary").forEach(s=>{
+  document.querySelectorAll("#ctrl details.ctrlsec > summary").forEach(s=>{
     if(s._fastSummaryBound) return;
     s._fastSummaryBound=true;
     bindTap(s,()=>{

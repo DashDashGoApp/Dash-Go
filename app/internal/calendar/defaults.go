@@ -1,6 +1,7 @@
 package calendar
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -82,19 +83,26 @@ func (s *Service) GenerateDefaults(refreshIndexes bool) (map[string]any, error) 
 	}
 
 	if values["DEFAULT_MOON_PHASES"] == "1" {
+		moon := map[string]any{}
 		if s.generateMoon != nil {
-			s.generateMoon(true)
+			moon = s.generateMoon(true)
 		}
-		written = append(written, "moon.slate.ics")
+		if ok, _ := moon["ok"].(bool); ok {
+			written = append(written, "moon.violet.ics")
+		} else {
+			detail := strings.TrimSpace(fmt.Sprint(moon["error"]))
+			if detail == "" || detail == "<nil>" {
+				detail = "moon generator unavailable"
+			}
+			s.appendLog("calendar-defaults.log", fmt.Sprintf("%s: moon phases were not generated (%s)\n", s.now().Format(time.ANSIC), detail))
+		}
 	} else {
+		remove("moon.violet.ics")
+		// Retire the historical incorrect filename if it exists from an older build.
 		remove("moon.slate.ics")
 	}
 	if values["DEFAULT_SEASONS"] == "1" {
-		events := []Event{}
-		for _, year := range years {
-			events = append(events, AllDayEvent(year, 3, 20, "Spring begins", "spring"), AllDayEvent(year, 6, 20, "Summer begins", "summer"), AllDayEvent(year, 9, 22, "Autumn begins", "autumn"), AllDayEvent(year, 12, 21, "Winter begins", "winter"))
-		}
-		write("seasons.gold.holiday.ics", "Seasons", events)
+		write("seasons.gold.holiday.ics", "Seasons", SeasonEvents(years))
 	} else {
 		remove("seasons.gold.holiday.ics")
 	}
@@ -125,7 +133,11 @@ func (s *Service) GenerateDefaults(refreshIndexes bool) (map[string]any, error) 
 	write("trash.amber.ics", "Trash Pickup", feeds["trash"])
 	write("recycling.teal.ics", "Recycling Pickup", feeds["recycling"])
 	write("payday.violet.pay.ics", "Paydays", feeds["payday"])
-	write("celebrations.gold.ics", "Celebrations", CelebrationICSEvents(s.celebrationsFile, years, rangeStart, rangeEnd))
+	celebrations, celebrationNotes := celebrationICSEvents(s.celebrationsFile, years, rangeStart, rangeEnd)
+	for _, note := range celebrationNotes {
+		s.appendLog("calendar-defaults.log", fmt.Sprintf("%s: celebration %s\n", s.now().Format(time.ANSIC), note))
+	}
+	write("celebrations.gold.ics", "Celebrations", celebrations)
 	if writeErr != nil {
 		s.mu.Unlock()
 		return nil, writeErr

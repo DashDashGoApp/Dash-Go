@@ -1,51 +1,62 @@
 /* Dashboard Control information architecture and count-aware feature grids. */
-#ctrl .ctrltabs{grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;}
-#ctrl .ctrltabs .cbtn{min-width:0;padding-inline:8px;}
 #ctrlpage-system.ctrlpage.show,#ctrlpage-control.ctrlpage.show{display:block;}
-#ctrlpage-system .ctrlstack,#ctrlpage-control .ctrlstack{display:flex;flex-direction:column;gap:10px;width:100%;}
+#ctrlpage-system .ctrlstack,#ctrlpage-control .ctrlstack{display:flex;flex-direction:column;gap:var(--ctrl-gap);width:100%;}
 #ctrlpage-system .ctrlstack>.ctrlsec,#ctrlpage-control .ctrlstack>.ctrlsec,#ctrlpage-control .ctrlstack>.ctrlcardrow{width:100%;margin:0;box-sizing:border-box;}
-/* Short sibling groups use the recovered horizontal room as content at desktop widths.
-   They remain a single vertical flow below the 1280px two-up threshold. */
-#ctrl .ctrlcardrow{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;width:100%;box-sizing:border-box;}
+#ctrl .ctrlcardrow{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--ctrl-gap);width:100%;box-sizing:border-box;}
 #ctrl .ctrlcardrow>.ctrlsec,#ctrl .ctrlcardrow>.actiongroup{min-width:0;}
 @media(min-width:1280px){
-  /* Security/Location remain independent natural-height cards. */
   #ctrlpage-control .ctrlcardrow-control-secondary{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;}
-
-  /* These paired action surfaces are visual peers. Both outer panels and their
-     action grids share one deliberate desktop height when copy wraps or the
-     action count differs. Their one-column flow below 1280px keeps natural
-     content height. */
   #ctrlscreensettings .ctrlcardrow-screen,#ctrldiag .ctrlcardrow-doctor{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
   #ctrlscreensettings .ctrlcardrow-screen>.actiongroup,#ctrldiag .ctrlcardrow-doctor>.actiongroup{display:flex;flex-direction:column;min-height:0;}
   #ctrlscreensettings .ctrlcardrow-screen>.actiongroup>.actiongroup-grid,#ctrldiag .ctrlcardrow-doctor>.actiongroup>.actiongroup-grid{flex:1 1 auto;min-height:0;}
 }
 #ctrlpage-system .ctrltable{min-width:620px;}
-/* System page is the ordinary root. Only explicit .ctrloutputconsole pre blocks
-   and .ctrltable-scroll wrappers retain their own bounded scroll behavior. */
 #ctrlpage-system .actionhistory{max-height:none;overflow:visible;padding-right:0;}
 #ctrlpage-system .ctrlsec-maintenance[open] .ctrlsecbody,#ctrlpage-system .ctrlsec-systemupdate[open] .ctrlsecbody{max-height:none;overflow:visible;}
-#ctrlactions.actiongrid,#ctrlpoweractions{display:flex;flex-direction:column;gap:10px;align-items:stretch;}
-#ctrlpage-overview .actiongroup-common{border-color:var(--line-soft);background:rgba(255,255,255,.028);}#ctrlpage-overview .actiongroup-common .actiongroup-detail{display:none;}#ctrlpage-overview .actiongroup-common .actiongroup-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}#ctrlpage-overview .actiongroup-common .cbtn.actionbtn{min-height:72px;padding:12px 13px;background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.16);box-shadow:none;}
-.actiongroup-danger{border-color:var(--ctrl-danger-border);background:var(--ctrl-danger-bg);}.actiongroup-danger .actiongroup-title{color:var(--ctrl-danger-fg);}.actiongroup-danger .cbtn.actionbtn{min-height:76px;}
-#ctrlpage-display .displaygroup{padding:10px 11px;}#ctrlpage-display .displaygroup .actiongroup-head{margin-bottom:8px;}#ctrlpage-display .displaygroup .actiongroup-title{font-size:12px;letter-spacing:.07em;}#ctrlpage-display .displaygroup .actiongroup-detail{margin-top:2px;font-size:12px;line-height:1.28;}
-#ctrlpage-display .displaygroup .actiongroup-grid,#ctrlscreensettings .displaygroup .actiongroup-grid{display:grid;gap:10px;}#ctrlpage-display .displaygroup .cbtn.actionbtn,#ctrlscreensettings .displaygroup .cbtn.actionbtn{min-height:64px;padding:10px 11px;text-align:left;}#ctrlpage-display .displaygroup .cbtn.actionbtn .bt,#ctrlscreensettings .displaygroup .cbtn.actionbtn .bt{font-size:15px;line-height:1.12;}#ctrlpage-display .displaygroup .cbtn.actionbtn .bd,#ctrlscreensettings .displaygroup .cbtn.actionbtn .bd{font-size:12px;line-height:1.2;margin-top:3px;}
-.grid-4-dashboard .actiongroup-grid,.grid-4-screen .actiongroup-grid{grid-template-columns:repeat(4,minmax(0,1fr));}.grid-3-screen .actiongroup-grid,.grid-3-provider .actiongroup-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
-/* A single feature action is intentional: it fills the stable Display rail instead of leaving an orphan button. */
+.actiongroup-danger{border-color:var(--ctrl-danger-border);background:var(--ctrl-danger-bg);}
+.actiongroup-danger .actiongroup-title{color:var(--ctrl-danger-fg);}
+.actiongroup-danger .cbtn.actionbtn{min-height:var(--ctrl-action-min-lg);}
+#ctrlpage-display .displaygroup{padding:var(--ctrl-space-3);}
+#ctrlpage-display .displaygroup .actiongroup-head{margin-bottom:var(--ctrl-gap-compact);}
+.grid-3-screen .actiongroup-grid,.grid-3-provider .actiongroup-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
 #ctrlpage-display .grid-1-feature .actiongroup-grid{grid-template-columns:minmax(0,1fr);width:100%;margin-inline:0;}
 #ctrlpage-display .grid-1-feature .actiongroup-grid>.cbtn.actionbtn{width:100%;max-width:none;justify-self:stretch;}
-/* Wide card roots share one centered measure. Individual two-action buttons cap
-   inside their grid tracks, preventing both slab buttons and one-sided rail gaps. */
-#ctrldashboarddisplay,#ctrlweatheralerts,#ctrlscreensettings,#ctrlhealth,#ctrldiag{width:min(100%,var(--ctrl-editor-max));box-sizing:border-box;margin-inline:auto;}
 #ctrlpage-display .grid-2-feature .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));width:100%;justify-content:stretch;margin-inline:0;}
 #ctrlhealth .doctor-overview-actions,#ctrldiag .doctor-actiongroup{width:100%;box-sizing:border-box;margin-inline:0;}
 #ctrlhealth .doctor-overview-actions .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 #ctrldiag .doctor-actiongroup-repair .actiongroup-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
 #ctrldiag .doctor-actiongroup-support .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 #ctrlpage-display .grid-2-feature .actiongroup-grid>.cbtn.actionbtn,#ctrlhealth .doctor-overview-actions .actiongroup-grid>.cbtn.actionbtn,#ctrldiag .doctor-actiongroup .actiongroup-grid>.cbtn.actionbtn{width:100%;max-width:var(--ctrl-action-button-max);justify-self:center;}
-#ctrlhealth .doctor-overview-actions .cbtn.actionbtn,#ctrldiag .doctor-actiongroup .cbtn.actionbtn{min-height:82px;padding:12px 13px;}
-#ctrldiag{display:flex;flex-direction:column;gap:12px;}
-.weatherhealthsummary{display:flex;flex-direction:column;gap:10px;}.weatherhealthhead{display:flex;align-items:center;justify-content:space-between;gap:10px;}.weatherhealthtitle{font-weight:850;font-size:15px;}.weatherhealthgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}.weatherhealthrow{min-height:60px;padding:10px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.035);}.weatherhealthrow.ok{border-color:rgba(120,190,140,.35);}.weatherhealthrow.bad{border-color:rgba(220,150,110,.40);}.wxhealthname{font-weight:800;font-size:.94rem;}.wxhealthdetail{margin-top:3px;opacity:.82;font-size:.82rem;line-height:1.25;}
-.mapprewarm{display:block;width:100%;min-height:56px;margin-top:10px;}.mapmaintenance{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}.mapmaintenance .cbtn{min-height:56px;}.mapcachesummary{display:flex;flex-direction:column;gap:8px;margin-top:10px;}.mapcachesummary-title{font-size:13px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--dimmer);}.mapcacheprimarygrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}.mapcachemetric,.mapproviderrow{padding:10px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(255,255,255,.035);font-size:13px;line-height:1.35;}.mapcachedetails{margin-top:10px;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;}.mapcachedetails>summary{min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:800;}.mapcachedetails-body{display:flex;flex-direction:column;gap:8px;padding:0 12px 12px;}.mapproviderlist{display:grid;gap:8px;}
-@media(max-width:1100px){#ctrl .ctrltabs{grid-template-columns:repeat(3,minmax(0,1fr));}#ctrlpage-overview .actiongroup-common .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.grid-4-dashboard .actiongroup-grid,.grid-4-screen .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));}#ctrlpage-display .grid-2-feature .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));width:100%;max-width:none;margin-inline:0;justify-content:stretch;}.weatherhealthgrid{grid-template-columns:repeat(2,minmax(0,1fr));}.mapmaintenance{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media(max-width:760px){#ctrl .ctrltabs{grid-template-columns:repeat(2,minmax(0,1fr));}#ctrl .ctrltabs .cbtn{min-height:48px;font-size:14px;}#ctrlpage-system .ctrltable{min-width:560px;}.actiongroup-danger .actiongroup-grid{grid-template-columns:1fr;}.grid-3-screen .actiongroup-grid,#ctrlpage-display .grid-2-feature .actiongroup-grid,.weatherhealthgrid,.mapcacheprimarygrid,#ctrlhealth .doctor-overview-actions .actiongroup-grid,#ctrldiag .doctor-actiongroup-repair .actiongroup-grid,#ctrldiag .doctor-actiongroup-support .actiongroup-grid{grid-template-columns:1fr;}.weatherhealthhead{align-items:flex-start;flex-direction:column;}.mapmaintenance{grid-template-columns:1fr;}}
+#ctrlhealth .doctor-overview-actions .cbtn.actionbtn,#ctrldiag .doctor-actiongroup .cbtn.actionbtn{min-height:var(--ctrl-action-min-lg);padding:var(--ctrl-space-3);}
+#ctrldiag{display:flex;flex-direction:column;gap:var(--ctrl-gap);}
+.weatherhealthsummary{display:flex;flex-direction:column;gap:var(--ctrl-gap);}
+.weatherhealthhead{display:flex;align-items:center;justify-content:space-between;gap:var(--ctrl-gap);}
+.weatherhealthtitle{font-weight:850;font-size:15px;}
+.weatherhealthgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--ctrl-gap);}
+.weatherhealthrow{min-height:60px;padding:var(--ctrl-space-3);border:1px solid var(--ctrl-line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);}
+.weatherhealthrow.ok{border-color:var(--ctrl-state-ok-border);background:var(--ctrl-state-ok-bg);}
+.weatherhealthrow.bad{border-color:var(--ctrl-state-bad-border);background:var(--ctrl-state-bad-bg);}
+.wxhealthname{font-weight:800;font-size:.94rem;}
+.wxhealthdetail{margin-top:3px;opacity:.82;font-size:.82rem;line-height:1.25;}
+.mapprewarm{display:block;width:100%;min-height:56px;margin-top:var(--ctrl-gap);}
+.mapmaintenance{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--ctrl-gap);}
+.mapmaintenance .cbtn{min-height:56px;}
+.mapcachesummary{display:flex;flex-direction:column;gap:var(--ctrl-gap-compact);margin-top:var(--ctrl-gap);}
+.mapcachesummary-title{font-size:13px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--dimmer);}
+.mapcacheprimarygrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--ctrl-gap);}
+.mapcachemetric,.mapproviderrow{padding:var(--ctrl-space-3);border:1px solid var(--ctrl-line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);font-size:13px;line-height:1.35;}
+.mapcachedetails{margin-top:var(--ctrl-gap);border:1px solid var(--ctrl-line-soft);border-radius:var(--ctrl-radius-md);overflow:hidden;}
+.mapcachedetails>summary{min-height:var(--ctrl-tap-min);display:flex;align-items:center;padding:0 var(--ctrl-space-3);cursor:pointer;font-weight:800;}
+.mapcachedetails-body{display:flex;flex-direction:column;gap:var(--ctrl-gap-compact);padding:0 var(--ctrl-space-3) var(--ctrl-space-3);}
+.mapproviderlist{display:grid;gap:var(--ctrl-gap-compact);}
+@media(max-width:1100px){
+  #ctrlpage-display .grid-2-feature .actiongroup-grid{grid-template-columns:repeat(2,minmax(0,1fr));width:100%;max-width:none;margin-inline:0;justify-content:stretch;}
+  .weatherhealthgrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .mapmaintenance{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:760px){
+  #ctrlpage-system .ctrltable{min-width:560px;}
+  .actiongroup-danger .actiongroup-grid,.grid-3-screen .actiongroup-grid,#ctrlpage-display .grid-2-feature .actiongroup-grid,.weatherhealthgrid,.mapcacheprimarygrid,#ctrlhealth .doctor-overview-actions .actiongroup-grid,#ctrldiag .doctor-actiongroup-repair .actiongroup-grid,#ctrldiag .doctor-actiongroup-support .actiongroup-grid{grid-template-columns:1fr;}
+  .weatherhealthhead{align-items:flex-start;flex-direction:column;}
+  .mapmaintenance{grid-template-columns:1fr;}
+}

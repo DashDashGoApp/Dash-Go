@@ -9,6 +9,28 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
+func (a *app) pinLockoutResponse(w http.ResponseWriter, wait int) {
+	a.json(w, map[string]any{
+		"error":            fmt.Sprintf("too many wrong passcode attempts; try again in %ss", strconv.Itoa(wait)),
+		"lockout":          true,
+		"lockoutRemaining": wait,
+		"retryAfter":       wait,
+		"detail":           fmt.Sprintf("Try again in %d seconds.", wait),
+	}, http.StatusTooManyRequests)
+}
+
+func (a *app) pinFailureResponse(w http.ResponseWriter) {
+	if wait := a.recordPinFailure(); wait > 0 {
+		a.pinLockoutResponse(w, wait)
+		return
+	}
+	a.err(w, "wrong passcode", http.StatusUnauthorized)
+}
+
+func (a *app) pinConfigurationUnavailable(w http.ResponseWriter) {
+	a.err(w, "PIN protection configuration is unavailable; use local recovery.", http.StatusServiceUnavailable)
+}
+
 func (a *app) handlePublicPost(w http.ResponseWriter, r *http.Request, path string, body map[string]any) bool {
 	if a.handleFontPost(w, r, path, body) {
 		return true
@@ -38,35 +60,53 @@ func (a *app) handlePublicPost(w http.ResponseWriter, r *http.Request, path stri
 		}
 		warningSilences, err := a.setHealthWarningSilence(jsonutil.BodyString(body, "key"), minutes, time.Now())
 		if err != nil {
-			a.err(w, err.Error(), 400)
+			a.err(w, err.Error(), http.StatusBadRequest)
 			return true
 		}
 		a.json(w, map[string]any{"ok": true, "warningSilences": warningSilences})
 		return true
 	case "/api/lock/unlock":
-		wait := a.pinLockoutRemaining()
-		if wait > 0 {
-			a.json(w, map[string]any{"error": fmt.Sprintf("too many wrong passcode attempts; try again in %ss", strconv.Itoa(wait)), "lockout": true, "lockoutRemaining": wait, "retryAfter": wait, "detail": fmt.Sprintf("Try again in %d seconds.", wait)}, 429)
+		if !a.lockConfigAvailable() {
+			a.pinConfigurationUnavailable(w)
+			return true
+		}
+		cfg := a.lockConfig()
+		if cfg["enabled"] != true {
+			a.err(w, "PIN lock is not enabled", http.StatusBadRequest)
+			return true
+		}
+		if wait := a.pinLockoutRemaining(); wait > 0 {
+			a.pinLockoutResponse(w, wait)
 			return true
 		}
 		if a.verifyPin(jsonutil.BodyString(body, "pin")) {
 			a.clearPinFailures()
-			cfg := a.lockConfig()
 			a.json(w, map[string]any{"ok": true, "token": a.issueToken(), "timeout": cfg["timeout"], "timeoutLabel": cfg["timeoutLabel"], "ttl": cfg["ttl"]})
 			return true
 		}
-		a.recordPinFailure()
-		a.err(w, "wrong passcode", 401)
+		a.pinFailureResponse(w)
 		return true
 	case "/api/lock/revoke":
 		a.revoke(r.Header.Get("X-Dashboard-Token"))
 		a.json(w, map[string]any{"ok": true})
 		return true
 	case "/api/lock/message-action":
+		if !a.lockConfigAvailable() {
+			a.pinConfigurationUnavailable(w)
+			return true
+		}
+		if a.lockConfig()["enabled"] != true {
+			a.err(w, "PIN lock is not enabled", http.StatusBadRequest)
+			return true
+		}
 		target := jsonutil.BodyString(body, "path")
 		allowed := map[string]bool{"/api/compliments/defaults/toggle": true, "/api/message-sources/item/delete": true, "/api/compliments/delete": true, "/api/temporary-messages/delete": true, "/api/scheduled-messages/delete": true}
 		if !allowed[target] {
-			a.err(w, "message action is not allowed", 400)
+			a.err(w, "message action is not allowed", http.StatusBadRequest)
+			return true
+		}
+		if wait := a.pinLockoutRemaining(); wait > 0 {
+			a.pinLockoutResponse(w, wait)
 			return true
 		}
 		if a.verifyPin(jsonutil.BodyString(body, "pin")) {
@@ -74,21 +114,26 @@ func (a *app) handlePublicPost(w http.ResponseWriter, r *http.Request, path stri
 			a.json(w, map[string]any{"ok": true, "token": a.issueOneShot(target), "path": target, "ttl": int(oneShotTTL.Seconds())})
 			return true
 		}
-		a.recordPinFailure()
-		a.err(w, "wrong passcode", 401)
+		a.pinFailureResponse(w)
 		return true
 	case "/api/lock/set":
-		if a.lockConfig()["enabled"] == false {
-			cfg, err := a.setPin(jsonutil.BodyString(body, "pin"), body["timeout"])
-			if err != nil {
-				a.err(w, err.Error(), 400)
-				return true
-			}
-			cfg["ok"] = true
-			cfg["token"] = a.issueToken()
-			a.json(w, cfg)
+		if !a.lockConfigAvailable() {
+			a.pinConfigurationUnavailable(w)
 			return true
 		}
+		if a.lockConfig()["enabled"] == true {
+			a.err(w, "PIN lock is already enabled; use Change PIN with the current PIN.", http.StatusConflict)
+			return true
+		}
+		cfg, err := a.setPin(jsonutil.BodyString(body, "pin"), body["timeout"])
+		if err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		cfg["ok"] = true
+		cfg["token"] = a.issueToken()
+		a.json(w, cfg)
+		return true
 	}
 	return false
 }

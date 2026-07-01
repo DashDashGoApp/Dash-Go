@@ -41,7 +41,6 @@
 #ctrlstatus{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--ctrl-space-2);}
 #ctrlstatus .stat{background:rgba(255,255,255,0.04);border:1px solid var(--line-soft);
   border-radius:8px;padding:8px 12px;}
-#ctrlstatus .stat.wide{grid-column:span 2;}   /* IP address: one unbroken line */
 #ctrlstatus .stat .k{font-size:13px;color:var(--dimmer);text-transform:uppercase;letter-spacing:0.06em;}
 #ctrlstatus .stat .v{font-family:var(--mono);font-size:16px;color:var(--fg);margin-top:2px;
   overflow-wrap:anywhere;line-height:1.25;}   /* IP addresses etc. wrap, never clip */
@@ -55,7 +54,6 @@
 .cbtn:active{background:rgba(255,255,255,0.22);}  /* immediate press feedback */
 .cbtn.danger{border-color:var(--ctrl-danger-border);color:var(--ctrl-danger-fg);}
 .cbtn.armed{background:var(--ctrl-danger-armed-bg);color:var(--ctrl-danger-armed-fg);border-color:var(--ctrl-danger-border);}
-.cbtn.on{background:rgba(127,214,168,0.16);border-color:var(--accent);}
 #ctrlpanel select{
   background:var(--panel);color:var(--fg);border:1px solid var(--line);
   border-radius:9px;padding:10px 12px;font-size:17px;min-height:var(--ctrl-tap-min);
@@ -92,8 +90,6 @@
   padding:var(--ctrl-space-3) var(--ctrl-space-4);font-family:var(--mono);font-size:13px;line-height:1.45;
   white-space:pre-wrap;color:var(--dim);
 }
-.ctrltabs{display:flex;gap:var(--ctrl-space-2);margin:12px 0 10px;position:sticky;top:0;z-index:2;background:var(--bg);padding:4px 0 8px;}
-.ctrltabs .cbtn{flex:1;min-height:var(--ctrl-tap-min);}
 .ctrlpage{display:none;}
 .ctrlpage.show{display:block;}
 .ctrlsec{border:1px solid var(--line-soft);border-radius:10px;margin:10px 0;background:rgba(255,255,255,0.025);overflow:hidden;}

@@ -1,26 +1,4 @@
-/* 1.2.1-beta.7: Dashboard Control visual-state consistency pass.
-   Keep one small token set for corners, borders, and selected/pressed states. */
-:root{
-  --ctrl-radius-sm:10px;
-  --ctrl-radius-md:14px;
-  --ctrl-radius-lg:18px;
-  --ctrl-radius-pill:999px;
-  --ctrl-line:rgba(255,255,255,0.14);
-  --ctrl-line-soft:rgba(255,255,255,0.10);
-  --ctrl-fill:rgba(255,255,255,0.045);
-  --ctrl-fill-quiet:rgba(255,255,255,0.030);
-  --ctrl-accent-bg:rgba(127,214,168,0.16);
-  --ctrl-accent-bg-strong:rgba(127,214,168,0.22);
-  --ctrl-accent-border:rgba(127,214,168,0.52);
-  --ctrl-danger-fg:var(--sun);
-  --ctrl-danger-bg:color-mix(in srgb,var(--sun) 12%,var(--panel));
-  --ctrl-danger-border:color-mix(in srgb,var(--sun) 48%,var(--line));
-  --ctrl-danger-armed-bg:color-mix(in srgb,var(--sun) 34%,var(--bg));
-  --ctrl-danger-armed-fg:var(--fg);
-  --ctrl-warn-fg:var(--today);
-  --ctrl-warn-bg:color-mix(in srgb,var(--today) 16%,var(--panel));
-  --ctrl-warn-border:color-mix(in srgb,var(--today) 48%,var(--line));
-}
+/* Dashboard Control visual-state consistency. Shared token values live in tokens.css. */
 #ctrl .cbtn,
 #ctrl button.cbtn{
   border-color:var(--ctrl-line);
@@ -28,21 +6,23 @@
   background:var(--ctrl-fill);
   box-shadow:none;
 }
-#ctrl .cbtn.on,
-#ctrl .cbtn.primary,
-#ctrl .cbtn[aria-pressed="true"],
-#ctrl .ctrltabs .cbtn.on,
-#ctrl .profileoption.on,
-#ctrl .oskkey.on{
+#ctrl .ctrlpage .cbtn.on,
+#ctrl .ctrlpage .cbtn.primary,
+#ctrl .ctrlpage .cbtn[aria-pressed="true"],
+#ctrl #ctrlmain [data-ctrlpage].on,
+#ctrl .ctrlpage .profileoption.on,
+#osk .oskkey.on{
   color:var(--fg);
   background:var(--ctrl-accent-bg);
   border-color:var(--ctrl-accent-border);
   box-shadow:none;
 }
-#ctrl .cbtn.tapdown,
-#ctrl .cbtn:active,
-#ctrl .ctrltabs .cbtn.tapdown,
-#ctrl .oskkey:active{
+#ctrl .ctrlpage .cbtn.tapdown,
+#ctrl .ctrlpage .cbtn:active,
+#ctrl #ctrlmain [data-ctrlpage].tapdown,
+#ctrl #ctrlmain [data-ctrlpage]:active,
+#osk .oskkey.tapdown,
+#osk .oskkey:active{
   color:var(--fg);
   background:var(--ctrl-accent-bg-strong);
   border-color:var(--ctrl-accent-border);
@@ -57,9 +37,9 @@
 #ctrl .cbtn.danger,#ctrl .cbtn.requiresconfirm{color:var(--ctrl-danger-fg);}
 #ctrl .cbtn.armed{color:var(--ctrl-danger-armed-fg);background:var(--ctrl-danger-armed-bg);}
 /* Safe Doctor repairs are maintenance with a confirmation step, not destructive danger. */
-#ctrl .cbtn.doctor-safe-repair{border-color:rgba(255,205,126,0.48);background:rgba(255,205,126,0.08);color:var(--fg);}
+#ctrl .cbtn.doctor-safe-repair{border-color:var(--ctrl-safe-repair-border);background:var(--ctrl-safe-repair-bg);color:var(--fg);}
 #ctrl .cbtn.doctor-safe-repair .bd{color:var(--dimmer);}
-#ctrl .cbtn.doctor-safe-repair.armed{border-color:rgba(255,205,126,0.82);background:rgba(255,188,92,0.22);color:var(--fg);}
+#ctrl .cbtn.doctor-safe-repair.armed{border-color:var(--ctrl-safe-repair-armed-border);background:var(--ctrl-safe-repair-armed-bg);color:var(--fg);}
 #ctrl .cbtn.doctor-safe-repair.armed .bd{color:var(--fg);}
 /* One durable text-entry surface for every Control OSK field. Page-specific
    classes may add layout only; color, radius, focus, and touch geometry live here. */
@@ -69,7 +49,7 @@
   width:100%;
   min-height:52px;
   border:1px solid var(--line);
-  border-radius:12px;
+  border-radius:var(--ctrl-radius-sm);
   background:var(--panel);
   color:var(--fg);
   -webkit-text-fill-color:var(--fg);
@@ -86,19 +66,6 @@
 #ctrl .oskfield.oskfocus,
 .people-text-input:focus-visible,
 .people-text-input.oskfocus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:3px;}
-#ctrl .ctrltabs{
-  border-color:var(--ctrl-line-soft);
-  border-radius:var(--ctrl-radius-lg);
-  background:var(--bg);
-}
-#ctrl .ctrltabs .cbtn{
-  border-radius:var(--ctrl-radius-md);
-  border-color:var(--ctrl-line);
-}
-body.ctrl-lite #ctrl .ctrltabs,
-body.ctrl-lite #ctrl .ctrltabs .cbtn{
-  border-radius:var(--ctrl-radius-md);
-}
 #ctrl .ctrlsec,
 #ctrl .actiongroup,
 #ctrl .displaygroup,
@@ -118,21 +85,8 @@ body.ctrl-lite #ctrl .ctrltabs .cbtn{
   box-shadow:none;
 }
 #ctrl details.ctrlsec > summary:after,
-#ctrl details.actiondrawer > summary:after,
 #ctrl .ctrloutputclose{
   border-radius:var(--ctrl-radius-sm);
-}
-#ctrlpage-control .actiondrawer{
-  border-color:var(--ctrl-line-soft);
-  background:var(--ctrl-fill-quiet);
-  border-radius:var(--ctrl-radius-md);
-}
-#ctrlpage-control .actiondrawer > summary{color:var(--fg);}
-.profilebadge,
-.ctrlpill,
-.calbadge,
-.actionbadge{
-  border-radius:var(--ctrl-radius-pill);
 }
 #ctrlprofile .profilebadge{
   border-color:var(--ctrl-accent-border);
@@ -165,12 +119,11 @@ body.ctrl-lite #ctrl .ctrltabs .cbtn{
 }
 #ctrluisettings .settingbuttons .cbtn{
   font-size:19px;
-  background:rgba(255,255,255,0.035);
+  background:var(--ctrl-fill-quiet);
 }
 /* Beta.18: semantic group classes in 06-control-information-architecture.css own Display and Screen grid cardinality. */
 
 body.ctrl-lite #ctrl .ctrlsec,
-body.ctrl-lite #ctrl .actiondrawer,
 body.ctrl-lite #ctrl .actiongroup,
 body.ctrl-lite #ctrl .ctrlstate,
 body.ctrl-lite #ctrl .ctrlgrid .stat,
@@ -306,7 +259,7 @@ body.ctrl-lite #ctrlcals .calchip{
 #ctrl .cbtn.actionbtn{min-height:48px;}
 #ctrl .ctrlrow.compact .cbtn:not(.actionbtn){min-height:48px;}
 #ctrl .actiongroup-grid,#ctrl .ctrlrow.compact{gap:8px;}
-#ctrl details.ctrlsec > summary,#ctrl details.actiondrawer > summary{min-height:48px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+#ctrl details.ctrlsec > summary{min-height:48px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 
 /* 1.4.3-beta.33: ownership-aware Calendar Manager. It is intentionally a
    bounded Control-card section, not a fullscreen file browser. */
@@ -330,7 +283,7 @@ body.ctrl-lite #ctrlcals .calchip{
 #ctrlcals .calmanager-actions .cbtn.actionbtn .bd{font-size:12px;line-height:1.22;}
 #ctrlcals .calmanager-actions .calmanager-stop{border-color:rgba(255,213,138,.34);}
 #ctrlcals .caltrash{display:grid;gap:10px;padding-top:2px;}
-#ctrlcals .caltrash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px dashed var(--line-soft);border-radius:13px;background:rgba(255,255,255,.025);}
+#ctrlcals .caltrash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px dashed var(--line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);}
 #ctrlcals .caltrash-copy{display:grid;gap:4px;min-width:0;}
 #ctrlcals .caltrash-copy strong{overflow-wrap:anywhere;font-size:15px;}
 #ctrlcals .caltrash-copy span{color:var(--dim);font-size:12px;line-height:1.25;}

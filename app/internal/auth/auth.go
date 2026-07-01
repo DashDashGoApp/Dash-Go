@@ -17,10 +17,13 @@ import (
 )
 
 const (
-	DefaultTimeout     = "1800"
-	EveryOpenActiveTTL = 365 * 24 * time.Hour
-	RefreshGrace       = 60 * time.Second
-	OneShotTTL         = 2 * time.Minute
+	DefaultTimeout       = "1800"
+	EveryOpenActiveTTL   = 90 * time.Second
+	RefreshGrace         = 60 * time.Second
+	OneShotTTL           = 2 * time.Minute
+	DefaultPINIterations = 200000
+	MinPINIterations     = 100000
+	MaxPINIterations     = 1000000
 )
 
 type TimeoutOption struct {
@@ -72,6 +75,9 @@ func TimeoutInfo(raw string) TimeoutOption {
 }
 
 func ValidPIN(pin string) bool {
+	// Four-to-eight digit PINs remain accepted for compatibility with existing
+	// kiosk installations. Persistent escalating lockout protects the lower end
+	// of that range without silently invalidating an installed household PIN.
 	ok, _ := regexp.MatchString(`^\d{4,8}$`, pin)
 	return ok
 }
@@ -113,7 +119,7 @@ func NewPINPayload(pin string, timeout any) (map[string]string, error) {
 	}
 	salt := make([]byte, 16)
 	_, _ = rand.Read(salt)
-	iterations := 200000
+	iterations := DefaultPINIterations
 	digest := pbkdf2Key([]byte(pin), salt, iterations, 32, sha256.New)
 	payload := map[string]string{
 		"DASH_CONTROL_PIN_ENABLED":    "1",
@@ -133,7 +139,7 @@ func VerifyPIN(pin, saltEncoded, hashEncoded string, iterations int) bool {
 	}
 	salt, saltErr := decode(saltEncoded)
 	want, hashErr := decode(hashEncoded)
-	if saltErr != nil || hashErr != nil || len(want) == 0 || iterations <= 0 {
+	if saltErr != nil || hashErr != nil || len(want) == 0 || iterations < MinPINIterations || iterations > MaxPINIterations {
 		return false
 	}
 	got := pbkdf2Key([]byte(pin), salt, iterations, len(want), sha256.New)

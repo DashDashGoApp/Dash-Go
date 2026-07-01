@@ -3,6 +3,8 @@
    retired hard-fix stack and keeps structural rules together without cascade escalation. */
 #ctrl{
   --ctrl-gap:var(--ctrl-space-3);
+  --ctrl-scroll-inset:4px;
+  --ctrl-scrollbar-space:10px;
 }
 
 /* Fixed Control shell: header and tabs stay stable while only the active
@@ -62,7 +64,11 @@
   min-height:0;
   overflow-y:auto;
   overflow-x:hidden;
-  padding-right:4px;
+  /* Reserve the actual scrollbar edge, then give the left edge the same visual
+     gutter. This keeps card bodies centered whether the page is short or long. */
+  padding-right:var(--ctrl-scroll-inset);
+  padding-left:calc(var(--ctrl-scroll-inset) + var(--ctrl-scrollbar-space));
+  scrollbar-gutter:stable;
   overscroll-behavior:contain;
   touch-action:pan-y;
   -webkit-overflow-scrolling:touch;
@@ -106,14 +112,12 @@
   display:grid;grid-template-columns:minmax(0,1fr);gap:var(--ctrl-gap);
   width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box;
 }
-#ctrl .ctrlsec>summary,
-#ctrl .actiondrawer>summary{
+#ctrl .ctrlsec>summary{
   min-height:var(--ctrl-summary-min);display:flex;align-items:center;
   justify-content:space-between;gap:var(--ctrl-space-3);
   padding-inline:var(--ctrl-space-4);box-sizing:border-box;
 }
-#ctrl .ctrlsec>summary:after,
-#ctrl .actiondrawer>summary:after{float:none;margin-left:var(--ctrl-space-3);flex:0 0 auto;}
+#ctrl .ctrlsec>summary:after{float:none;margin-left:var(--ctrl-space-3);flex:0 0 auto;}
 #ctrl .ctrlsecbody,#ctrl .ctrlsec .ctrlsecbody{width:100%;box-sizing:border-box;overflow:visible;}
 #ctrl .ctrlsec-maintenance[open] .ctrlsecbody,
 #ctrl .ctrlsec-systemupdate[open] .ctrlsecbody{max-height:none;overflow:visible;}
@@ -127,15 +131,84 @@
 #ctrl :is(.cbtn,.themebtn,.pinbtn,.oskkey,.inline-time-editor .cbtn,.comprow .cbtn){min-height:var(--ctrl-tap-min);}
 #ctrl .cbtn.actionbtn{min-height:var(--ctrl-action-min);}
 #ctrl .actiongroup-danger .cbtn.actionbtn,
-#ctrl .actiondrawer .cbtn.actionbtn,
 #ctrl #ctrlhealth .doctor-overview-actions .cbtn.actionbtn,
 #ctrl #ctrldiag .doctor-actiongroup .cbtn.actionbtn{min-height:var(--ctrl-action-min-lg);}
 #ctrl .comprow .cbtn{padding:var(--ctrl-space-2) var(--ctrl-space-3);}
 #ctrl .ctrlsecbody{padding:0 var(--ctrl-space-4) var(--ctrl-space-4);}
-#ctrl .ctrltabs{gap:var(--ctrl-space-2);margin:var(--ctrl-space-3) 0 var(--ctrl-space-2);padding:var(--ctrl-space-1) 0 var(--ctrl-space-2);}
-#ctrl .ctrltabs .cbtn{min-height:var(--ctrl-tap-min);}
+#ctrl .ctrltabs{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:var(--ctrl-gap-compact);
+  margin:var(--ctrl-space-3) 0 var(--ctrl-space-2);
+  padding:var(--ctrl-gap-compact);
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-md);
+  background:var(--ctrl-fill);
+  overflow:hidden;
+  box-sizing:border-box;
+}
+#ctrl .ctrltabs .cbtn{
+  min-width:0;
+  min-height:var(--ctrl-tab-min);
+  padding:var(--ctrl-space-2) var(--ctrl-space-3);
+  border-radius:var(--ctrl-radius-sm);
+  font-size:15px;
+  font-weight:800;
+  letter-spacing:.01em;
+  white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+}
 #ctrl .ctrltabs .cbtn.on{position:relative;}
 #ctrl .ctrltabs .cbtn.on:after{content:"";position:absolute;left:22%;right:22%;bottom:5px;height:2px;border-radius:999px;background:var(--accent);}
+
+
+/* A single card-body rail keeps wide Control pages aligned instead of letting
+   selected lazy roots drift between a 1190px editor and the full panel width. */
+#ctrl .ctrlsecbody>div:not(.ctrloutputconsole){
+  width:min(100%,var(--ctrl-editor-max,1190px));
+  box-sizing:border-box;
+  margin-inline:auto;
+}
+
+/* Unified Control surfaces: card radius 14, direct controls radius 10, compact
+   spacing 8, normal section rhythm 12. */
+#ctrl :is(.ctrlsec,.actiongroup,.settingcard,.mapcachemetric,.mapproviderrow,.weatherhealthrow,.wxhealthrow,.backupitem,.actionitem,.ctrlstickyactions,.ctrlstate,.doctorcard,.terminaltop){
+  border-radius:var(--ctrl-radius-md);
+}
+#ctrl :is(.cbtn,.themebtn,.pinbtn,.oskkey,.backupbtn,.ctrloutputclose){border-radius:var(--ctrl-radius-sm);}
+#ctrl .actiongroup{
+  border:1px solid var(--ctrl-line-soft);
+  background:var(--ctrl-fill-quiet);
+  padding:var(--ctrl-space-3);
+}
+#ctrl .actiongroup-head{display:flex;align-items:flex-start;justify-content:flex-start;gap:var(--ctrl-gap);margin:0 0 var(--ctrl-gap-compact);}
+#ctrl .actiongroup-title{font-size:14px;font-weight:850;text-transform:uppercase;letter-spacing:.075em;color:var(--fg);}
+#ctrl .actiongroup-detail{max-width:none;text-align:left;font-size:13px;line-height:1.32;color:var(--dim);}
+#ctrl .actiongroup-grid{display:grid;gap:var(--ctrl-gap);align-items:stretch;}
+#ctrl .ctrlpage .cbtn.actionbtn{min-height:var(--ctrl-action-min);padding:var(--ctrl-space-3);justify-content:flex-start;text-align:left;}
+#ctrl .ctrlpage .cbtn.actionbtn .bt{font-size:16px;line-height:1.15;font-weight:850;}
+#ctrl .ctrlpage .cbtn.actionbtn .bd{font-size:13px;line-height:1.3;color:var(--dim);margin-top:4px;}
+#ctrl .ctrl-action-feedback[hidden]{display:none;}
+#ctrl .ctrl-action-feedback{
+  margin-top:var(--ctrl-gap-compact);
+  padding:var(--ctrl-space-2) var(--ctrl-space-3);
+  border:1px solid var(--ctrl-line-soft);
+  border-radius:var(--ctrl-radius-sm);
+  background:var(--ctrl-fill);
+  color:var(--fg);
+  font-size:13px;
+  line-height:1.35;
+}
+
+/* Device status is grouped for scanning. Lower-signal details remain available
+   on demand without turning Overview into an unbroken telemetry wall. */
+#ctrlstatus.ctrlstatus-sections{display:flex;flex-direction:column;gap:var(--ctrl-gap);}
+#ctrlstatus .ctrlstatus-group{display:grid;gap:var(--ctrl-gap-compact);}
+#ctrlstatus .ctrlstatus-group-title{font-size:12px;font-weight:850;letter-spacing:.075em;text-transform:uppercase;color:var(--dimmer);}
+#ctrlstatus .ctrlstatus-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--ctrl-metric-min)),1fr));gap:var(--ctrl-gap-compact);}
+#ctrlstatus .ctrlstatus-more{border:1px solid var(--ctrl-line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);overflow:hidden;}
+#ctrlstatus .ctrlstatus-more>summary{min-height:var(--ctrl-tap-min);display:flex;align-items:center;padding:0 var(--ctrl-space-3);cursor:pointer;font-weight:850;color:var(--fg);}
+#ctrlstatus .ctrlstatus-more-body{padding:0 var(--ctrl-space-3) var(--ctrl-space-3);}
 
 /* Default to intrinsic grids instead of repeated breakpoint-specific column
    declarations. Feature editors with true day/month/pin matrices retain their
@@ -161,14 +234,7 @@
 
 /* Overview and Control keep their deliberate concise, grouped action language. */
 #ctrl #ctrlactions.actiongrid,#ctrl #ctrlpoweractions{display:flex;flex-direction:column;gap:var(--ctrl-gap);align-items:stretch;}
-#ctrl #ctrlpage-overview .actiongroup-common,#ctrl #ctrlpage-control .actiongroup-common{border-color:var(--line-soft);background:rgba(255,255,255,.028);}
-#ctrl #ctrlpage-overview .actiongroup-common .actiongroup-detail,#ctrl #ctrlpage-control .actiongroup-common .actiongroup-detail{display:none;}
-#ctrl #ctrlpage-overview .actiongroup-common .actiongroup-grid,#ctrl #ctrlpage-control .actiongroup-common .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));}
-#ctrl #ctrlpage-control .actiondrawer{width:100%;box-sizing:border-box;border:1px solid var(--ctrl-danger-border);border-radius:14px;background:var(--ctrl-danger-bg);overflow:hidden;}
-#ctrl #ctrlpage-control .actiondrawer>summary{color:var(--ctrl-danger-fg);font-weight:850;text-transform:uppercase;letter-spacing:.075em;font-size:13px;}
-#ctrl #ctrlpage-control .actiondrawer>summary small{font-family:var(--sans);font-size:12px;text-transform:none;letter-spacing:0;color:var(--dim);font-weight:700;}
-#ctrl #ctrlpage-control .actiondrawer-body{padding:0 var(--ctrl-space-3) var(--ctrl-space-3);}
-#ctrl #ctrlpage-control .actiondrawer .actiongroup-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));}
+#ctrl #ctrlpage-overview .actiongroup-common{border-color:var(--ctrl-line-soft);background:var(--ctrl-fill-quiet);}
 
 /* Three shared layout tiers. CSS custom properties document the scale; media
    queries use the same fixed boundaries because custom properties cannot be

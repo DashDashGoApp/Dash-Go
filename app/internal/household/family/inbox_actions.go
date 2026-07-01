@@ -155,14 +155,18 @@ func (s *Service) UnlockInbox(personID, pin string) (map[string]any, *ActionErro
 	if !ok {
 		return nil, actionError(404, "personal inbox is unavailable")
 	}
-	if wait := s.LockoutRemaining(personID); wait > 0 {
-		return nil, &ActionError{Status: 429, Message: fmt.Sprintf("too many wrong inbox PIN attempts; try again in %ds", wait), Lockout: true, RetryAfter: wait}
+	if s.PinConfigured(personID) {
+		if wait := s.LockoutRemaining(personID); wait > 0 {
+			return nil, &ActionError{Status: 429, Message: fmt.Sprintf("too many wrong inbox PIN attempts; try again in %ds", wait), Lockout: true, RetryAfter: wait}
+		}
+		if !s.VerifyPIN(personID, pin) {
+			if wait := s.RecordPINFailure(personID); wait > 0 {
+				return nil, &ActionError{Status: 429, Message: fmt.Sprintf("too many wrong inbox PIN attempts; try again in %ds", wait), Lockout: true, RetryAfter: wait}
+			}
+			return nil, actionError(401, "wrong inbox PIN")
+		}
+		s.ClearPINFailures(personID)
 	}
-	if !s.VerifyPIN(personID, pin) {
-		s.RecordPINFailure(personID)
-		return nil, actionError(401, "wrong inbox PIN")
-	}
-	s.ClearPINFailures(personID)
 	return map[string]any{
 		"ok": true, "inboxToken": s.IssueSession(personID),
 		"ttl":    int(InboxSessionTTL.Seconds()),

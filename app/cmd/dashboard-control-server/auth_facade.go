@@ -37,6 +37,7 @@ func (a *app) authService() *controlauth.Service {
 }
 
 func (a *app) lockConfig() map[string]any { return a.authService().Config().Payload() }
+func (a *app) lockConfigAvailable() bool  { return a.authService().Config().Available }
 func (a *app) pinStatus(token string) map[string]any {
 	return a.authService().PinStatus(token)
 }
@@ -45,7 +46,7 @@ func (a *app) setPin(pin string, timeout any) (map[string]any, error) {
 	return a.authService().SetPIN(pin, timeout)
 }
 func (a *app) setPinTimeout(timeout string) error { return a.authService().SetTimeout(timeout) }
-func (a *app) removePin() map[string]any          { return a.authService().RemovePIN() }
+func (a *app) removePin() (map[string]any, error) { return a.authService().RemovePIN() }
 func (a *app) issueToken() string                 { return a.authService().IssueToken() }
 func (a *app) tokenOK(token string) bool          { return a.authService().TokenOK(token) }
 func (a *app) sessionTTL(token string) int        { return a.authService().SessionTTL(token) }
@@ -58,7 +59,7 @@ func (a *app) consumeOneShot(token, path string) bool {
 	return a.authService().ConsumeOneShot(token, path)
 }
 func (a *app) pinLockoutRemaining() int { return a.authService().PINLockoutRemaining() }
-func (a *app) recordPinFailure()        { a.authService().RecordPINFailure() }
+func (a *app) recordPinFailure() int    { return a.authService().RecordPINFailure() }
 func (a *app) clearPinFailures()        { a.authService().ClearPINFailures() }
 
 // Keep pure token and ternary helpers at the core adapter layer for unrelated

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -44,15 +43,25 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 	if a.handleHouseholdPeopleNotificationPost(w, r, path, body) {
 		return
 	}
+	if a.handleCalendarPost(w, r, path, body) {
+		return
+	}
 	switch path {
 	case "/api/lock/config":
 		cfg := a.lockConfig()
+		if cfg["available"] != true {
+			a.pinConfigurationUnavailable(w)
+			return
+		}
 		if cfg["enabled"] == false {
-			a.err(w, "PIN lock is not enabled", 400)
+			a.err(w, "PIN lock is not enabled", http.StatusBadRequest)
 			return
 		}
 		timeout := normalizeTimeout(body["timeout"])
-		_ = a.setPinTimeout(timeout)
+		if err := a.setPinTimeout(timeout); err != nil {
+			a.err(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		ref := a.refreshSession(r.Header.Get("X-Dashboard-Token"), timeout)
 		out := a.lockConfig()
 		for k, v := range ref {
@@ -62,29 +71,54 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 			out["token"] = r.Header.Get("X-Dashboard-Token")
 		}
 		a.json(w, out)
-	case "/api/lock/set", "/api/lock/change":
-		cur := jsonutil.BodyString(body, "currentPin")
-		if path == "/api/lock/change" && !a.verifyPin(cur) {
-			a.recordPinFailure()
-			a.err(w, "wrong passcode", 401)
+	case "/api/lock/heartbeat":
+		cfg := a.lockConfig()
+		if cfg["available"] != true {
+			a.pinConfigurationUnavailable(w)
+			return
+		}
+		ref := a.refreshSession(r.Header.Get("X-Dashboard-Token"), fmt.Sprint(cfg["timeout"]))
+		if ref["sessionRefreshed"] != true {
+			a.err(w, "locked", http.StatusUnauthorized)
+			return
+		}
+		a.json(w, ref)
+	case "/api/lock/set":
+		// A pre-existing session may not rotate a credential through the setup
+		// route. Only /api/lock/change accepts an enabled lock, and it proves the
+		// current PIN before replacing it.
+		a.err(w, "PIN lock is already enabled; use Change PIN with the current PIN.", http.StatusConflict)
+	case "/api/lock/change":
+		if wait := a.pinLockoutRemaining(); wait > 0 {
+			a.pinLockoutResponse(w, wait)
+			return
+		}
+		if !a.verifyPin(jsonutil.BodyString(body, "currentPin")) {
+			a.pinFailureResponse(w)
 			return
 		}
 		cfg, err := a.setPin(jsonutil.BodyString(body, "pin"), body["timeout"])
 		if err != nil {
-			a.err(w, err.Error(), 400)
+			a.err(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		tok := a.issueToken()
 		cfg["ok"] = true
-		cfg["token"] = tok
+		cfg["token"] = a.issueToken()
 		a.json(w, cfg)
 	case "/api/lock/remove":
-		if !a.verifyPin(jsonutil.BodyString(body, "currentPin")) {
-			a.recordPinFailure()
-			a.err(w, "wrong passcode", 401)
+		if wait := a.pinLockoutRemaining(); wait > 0 {
+			a.pinLockoutResponse(w, wait)
 			return
 		}
-		cfg := a.removePin()
+		if !a.verifyPin(jsonutil.BodyString(body, "currentPin")) {
+			a.pinFailureResponse(w)
+			return
+		}
+		cfg, err := a.removePin()
+		if err != nil {
+			a.err(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		cfg["ok"] = true
 		a.json(w, cfg)
 	case "/api/settings":
@@ -141,22 +175,6 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 		a.json(w, payload)
-	case "/api/household-schedules":
-		result, err := a.saveHouseholdSchedules(body)
-		if err != nil {
-			a.err(w, err.Error(), 400)
-			return
-		}
-		a.recordAction("calendars", "Save household schedules", "success", "Paydays and pickup calendars refreshed", nil)
-		a.json(w, result)
-	case "/api/household-schedules/override":
-		result, err := a.saveHouseholdScheduleOverride(body)
-		if err != nil {
-			a.err(w, err.Error(), 400)
-			return
-		}
-		a.recordAction("calendars", "Adjust household schedule", "success", "One scheduled occurrence updated", nil)
-		a.json(w, result)
 	case "/api/chalkboard":
 		if err := validateChalkboardPayload(body); err != nil {
 			a.err(w, "request fields exceed supported limits", http.StatusBadRequest)
@@ -348,35 +366,6 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 		a.handleCompliments(w, path, body)
 	case "/api/message-sources", "/api/message-sources/refresh", "/api/message-sources/item/delete", "/api/message-sources/item/update", "/api/temporary-messages/add", "/api/temporary-messages/delete", "/api/scheduled-messages/add", "/api/scheduled-messages/update", "/api/scheduled-messages/delete":
 		a.handleMessages(w, path, body)
-	case "/api/birthdays/add", "/api/birthdays/update", "/api/birthdays/delete", "/api/celebrations/add", "/api/celebrations/update", "/api/celebrations/delete":
-		a.handleSpecialDates(w, path, body)
-	case "/api/location":
-		lat, lon := anyFloat(body["lat"]), anyFloat(body["lon"])
-		city := jsonutil.BodyString(body, "city")
-		if _, err := writeConfigLocation(a.configLocal, lat, lon, city); err != nil {
-			a.err(w, err.Error(), 400)
-			return
-		}
-		moon := a.generateMoonCalendar(true)
-		a.json(w, map[string]any{"ok": true, "lat": lat, "lon": lon, "city": city, "moon": moon, "generator": "go"})
-	case "/api/calendars/toggle":
-		a.handleCalendarToggle(w, body)
-	case "/api/calendars/manage/delete", "/api/calendars/manage/restore", "/api/calendars/manage/app-output", "/api/calendars/manage/repair":
-		a.handleCalendarManagementPost(w, path, body)
-	case "/api/moon/update":
-		moon := a.generateMoonCalendar(true)
-		sky := a.generateStaticSkyCalendars()
-		a.writeSkyStatus(map[string]any{"ok": true, "updatedAt": time.Now().Unix(), "moon": moon, "sky": sky, "generator": "go"})
-		a.recordAction("settings", "Update moon/sky calendars", "success", fmt.Sprintf("%v moon events", moon["eventCount"]), nil)
-		a.json(w, map[string]any{"ok": true, "moon": moon, "sky": sky, "generator": "go"})
-	case "/api/calendars/sync":
-		res, err := a.generateDefaultCalendars(true)
-		if err != nil {
-			a.err(w, "calendar sync failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("calendars", "Sync calendars", "success", "Go calendar generators refreshed", nil)
-		a.json(w, res)
 	case "/api/maps/prewarm":
 		a.json(w, a.startMapPrewarm(body))
 	case "/api/maps/cleanup":

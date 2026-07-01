@@ -42,7 +42,7 @@ func fetchXWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["maxTempF"], "f", cfg.TempUnit))
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["minTempF"], "f", cfg.TempUnit))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(xOr(x["feelslikeF"], x["maxFeelslikeF"]), "f", cfg.TempUnit))
-		d["precipitation_sum"] = append(d["precipitation_sum"], x["precipIN"])
+		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precipIN"], "in"))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windSpeedMPH"], "mph", cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvi"])

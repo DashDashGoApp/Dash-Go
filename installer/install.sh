@@ -62,6 +62,9 @@ SETTINGS_FILE="$CONFIG_DIR/settings.json"
 CAL_DIR="$DASH/calendars"
 CACHE_DIR="$DASH/cache"
 LOG_DIR="$DASH/logs"
+# Repair archives live outside the application tree they are protecting.
+DASHGO_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dash-go"
+REPAIR_BACKUP_DIR="$DASHGO_STATE_DIR/repair-backups"
 FONT_DIR="$DASH/ui/fonts"
 RUNTIME_FONT_DIR="$DASH/fonts"
 BASE_DIR="$DASH/base"
@@ -468,35 +471,40 @@ prompt_demo_mode_reset(){
   [ "$REMOVE_MODE" = "1" ] && return 0
   [ "$HELP_MODE" = "1" ] && return 0
   dashboard_demo_mode_detected || return 0
-  echo
-  warn "This dashboard is currently in DEMO MODE."
-  echo "Demo Mode uses Chicago sample calendars, demo messages, and key-free weather settings."
-  echo "  1) Remove all Demo Mode data (including calendar data and demo messages), then run fresh setup"
-  echo "  2) Completely remove Dash-Go (same flow as install.sh --remove), then restart"
-  echo "  3) Exit"
-  read -rp "Choose [1/2/3, Enter=1]: " dmode
-  dmode="${dmode:-1}"
-  case "$dmode" in
-    1)
-      DEMO_RESET_REQUESTED=1
-      DEMO_WIPE_CALENDARS_REQUESTED=1
-      warn "All Demo Mode data, demo messages, and calendar data will be removed before setup continues"
-      ;;
-    2)
-      REMOVE_MODE=1
-      DEMO_FULL_REMOVE_REQUESTED=1
-      warn "Dash-Go full removal selected; this will use the install.sh --remove flow"
-      ;;
-    3|q|Q|quit|exit)
-      ok "installer closed without changing Demo Mode"
-      exit 0
-      ;;
-    *)
-      DEMO_RESET_REQUESTED=1
-      DEMO_WIPE_CALENDARS_REQUESTED=1
-      warn "All Demo Mode data, demo messages, and calendar data will be removed before setup continues"
-      ;;
-  esac
+  while :; do
+    echo
+    warn "This dashboard is currently in DEMO MODE."
+    echo "Demo Mode uses Chicago sample calendars, demo messages, and key-free weather settings."
+    echo "  1) Keep Demo Mode and continue to the selected installer action (default)"
+    echo "  2) Remove all Demo Mode data (including calendar data and demo messages), then run fresh setup"
+    echo "  3) Completely remove Dash-Go (same flow as install.sh --remove), then restart"
+    echo "  4) Exit"
+    read -rp "Choose [1/2/3/4, Enter=1]: " dmode
+    dmode="${dmode:-1}"
+    case "$dmode" in
+      1)
+        ok "Keeping Demo Mode; continuing to the selected installer action"
+        return 0
+        ;;
+      2)
+        DEMO_RESET_REQUESTED=1
+        DEMO_WIPE_CALENDARS_REQUESTED=1
+        warn "All Demo Mode data, demo messages, and calendar data will be removed before setup continues"
+        return 0
+        ;;
+      3)
+        REMOVE_MODE=1
+        DEMO_FULL_REMOVE_REQUESTED=1
+        warn "Dash-Go full removal selected; this will use the install.sh --remove flow"
+        return 0
+        ;;
+      4|q|Q|quit|exit)
+        ok "installer closed without changing Demo Mode"
+        exit 0
+        ;;
+      *) warn "Choose 1, 2, 3, or 4. No Demo Mode data was changed.";;
+    esac
+  done
 }
 
 run_demo_mode_cli_for_installer(){
@@ -633,9 +641,9 @@ Usage:
   ./install.sh                         Open the interactive setup menu
   ./install.sh --help                  Show this help and exit
 
-Common commands:
+Update, repair, and health commands:
   ./install.sh --update                Update within the saved beta/stable track
-  ./install.sh --update --latest       Same as --update
+  ./install.sh --update --latest       Alias for --update
   ./install.sh --update --track beta   Explicitly use and save the beta track
   ./install.sh --update --track stable Explicitly use and save the stable track
   ./install.sh --repair                Restore the exact installed release while preserving personal settings and calendars
@@ -650,23 +658,24 @@ Common commands:
   ./install.sh --doctor                Quiet scan, then offer Fix all
   ./install.sh --doctor --full         Detailed scan with individual fixes
   ./install.sh --bundle-info           Inspect this extracted local release bundle; changes nothing
+
+Removal commands:
   ./install.sh --remove                Offline Dash-Go uninstall (interactive)
   ./install.sh --remove --dry-run      Show project-owned artifacts; change nothing
   ./install.sh --remove --preserve     Require a verified private recovery archive
-
-Interactive menu:
-  Option 24: Notifications (Apprise-Go)
-                                       Configure private outbound delivery routes through SSH.
-                                       Destination URLs never appear in Dashboard Control or normal logs.
   ./install.sh --remove --purge        Confirm removal of Dash-Go data/credentials
   ./install.sh --remove --keep-installer
                                        Leave ~/install.sh after a successful uninstall
   ./install.sh --remove --reboot       Reboot after verified teardown
-  Interactive option 20              Enable Demo Mode with Chicago sample data
 
 Interactive menu:
   Run ./install.sh with no command. The menu is safe to re-run and includes
-  an Exit option (option 23) at the main menu.
+  focused actions for updates, dashboard setup, Control PIN, remote access,
+  notifications, terminal access, Demo Mode, and Exit. Type q, quit, or exit
+  at the main menu to leave without changes.
+
+  Notifications (Apprise-Go) configure private outbound delivery routes through
+  SSH. Destination URLs never appear in Dashboard Control or normal logs.
 
 Environment variables:
   DASH_TRACK      beta or stable; defaults to the installed/default stable track.
@@ -1305,9 +1314,23 @@ current_control_pin_timeout(){
   fi
 }
 
+control_pin_timeout_choice(){
+  case "${1:-1800}" in
+    every_open|0) printf '1';;
+    60) printf '2';;
+    300) printf '3';;
+    900) printf '4';;
+    1800|"") printf '5';;
+    3600) printf '6';;
+    until_reboot) printf '7';;
+    *) printf '5';;
+  esac
+}
+
 prompt_control_pin_timeout(){
-  local cur choice val
+  local cur choice default_choice val
   cur="$(current_control_pin_timeout)"
+  default_choice="$(control_pin_timeout_choice "$cur")"
   echo >&2
   echo "How long should the control panel stay unlocked after a correct PIN?" >&2
   echo "  1) Every dashboard control open" >&2
@@ -1318,8 +1341,8 @@ prompt_control_pin_timeout(){
   echo "  6) 1 hour" >&2
   echo "  7) Until reboot / dashboard-server restart" >&2
   echo "Current/default: $(control_pin_timeout_label "$cur")" >&2
-  read -rp "  Choose [1-7, Enter=5]: " choice
-  choice="${choice:-5}"
+  read -rp "  Choose [1-7, Enter=${default_choice}]: " choice
+  choice="${choice:-$default_choice}"
   case "$choice" in
     1) val="every_open";;
     2) val="60";;
@@ -1328,7 +1351,7 @@ prompt_control_pin_timeout(){
     5) val="1800";;
     6) val="3600";;
     7) val="until_reboot";;
-    *) printf '\033[1;33m!! invalid choice; using 30 minutes\033[0m\n' >&2; val="1800";;
+    *) printf '\033[1;33m!! invalid choice; keeping %s\033[0m\n' "$(control_pin_timeout_label "$cur")" >&2; val="$cur";;
   esac
   printf '%s' "$val"
 }
@@ -1532,7 +1555,6 @@ WELCOME
 echo
 echo "This installs the dashboard into: $DASH"
 echo "Updates resolve only the canonical Dash-Go GitHub Releases (track: $RELEASE_TRACK)."
-prompt_demo_mode_reset
 
 # --- Persist only the release track -------------------------------------
 # Older updater records can contain retired connection material.
@@ -1737,7 +1759,7 @@ install_azure_cli_for_todo_registration(){
       reported_arch="$(dpkg --print-architecture 2>/dev/null || uname -m 2>/dev/null || echo unknown)"
       warn "Azure CLI is not installed, and Dash-Go cannot safely install it on architecture: $reported_arch"
       warn "The documented Azure CLI apt packages are amd64/arm64; this commonly affects 32-bit Raspberry Pi images."
-      warn "Use Microsoft To Do / Graph setup option 2 with a client ID created on another computer, or choose the registration guide."
+      warn "Use Microsoft To Do / Graph setup with a client ID created on another computer, or choose the registration guide."
       return 2
     fi
     if ! command -v apt-get >/dev/null 2>&1; then
@@ -1932,7 +1954,7 @@ TODO_AZ_MANIFEST
     if ! write_todo_app_settings microsoft "$todo_client_id"; then
       warn "The private app was created, but Dash-Go could not save its client ID."
       warn "Application (client) ID: $todo_client_id"
-      warn "Copy it and use Microsoft To Do / Graph setup option 2 after resolving the settings-file issue."
+      warn "Copy it and use Microsoft To Do / Graph setup after resolving the settings-file issue."
       exit 1
     fi
     say "Microsoft To Do app registration complete"
@@ -1941,7 +1963,7 @@ TODO_AZ_MANIFEST
     echo
     echo "   Next steps"
     echo "   1. Choose 5 to return to the installer, then finish installation."
-    echo "   2. On the dashboard, open Dashboard Control > Control > Lists / optional Microsoft To Do."
+    echo "   2. On the dashboard, open Dashboard Control > Settings > Lists / optional Microsoft To Do."
     echo "   3. Select Link Microsoft account and complete the device-code sign-in on a phone or computer."
     echo "   4. Refresh Microsoft lists, then choose the To Do and Grocery destinations you want to mirror."
     echo
@@ -1983,7 +2005,7 @@ Manual private-registration path
    - profile
 5. Do not create or save a client secret. Dash-Go uses device-code sign-in.
 6. Copy the Application (client) ID.
-7. Re-run ~/install.sh, choose Microsoft To Do / Graph setup (option 12), then
+7. Re-run ~/install.sh, choose Microsoft To Do / Graph setup, then
    choose Optional Microsoft To Do sync and enter that client ID. On the dashboard open Dashboard Control >
    Lists / optional Microsoft To Do and choose Link Microsoft account. Complete
    the code on the phone or computer signed into the same Microsoft To Do account.
@@ -2050,7 +2072,7 @@ configure_app_setup(){
           warn "That does not look like an Application (client) ID UUID. Nothing changed."
         elif write_todo_app_settings microsoft "$todo_client_id"; then
           ok "Optional Microsoft To Do sync is prepared."
-          echo "   Next: Dashboard Control > Lists / optional Microsoft To Do > Link Microsoft account."
+          echo "   Next: Dashboard Control > Settings > Lists / optional Microsoft To Do > Link Microsoft account."
           echo "   Then refresh Microsoft lists and map each launcher icon as desired."
         else
           warn "Could not safely write Microsoft To Do settings."
@@ -2917,12 +2939,24 @@ install_local_release_bundle(){
   rm -rf "$work"; return 1
 }
 
+repair_bundle_recovery_recipe(){
+  local target="${1:-latest}" version_hint
+  version_hint="$target"
+  [ "$version_hint" = latest ] && version_hint="the matching current ${RELEASE_TRACK} release version"
+  warn "Repair recovery when the dashboard control server is missing, corrupted, or wrong for this device:"
+  warn "1) On another computer, download Dash-Go_<version>_release.tar.gz and SHA256SUMS from the same Dash-Go GitHub Release (${version_hint})."
+  warn "2) Copy both files to this device, then run: sha256sum -c SHA256SUMS --ignore-missing"
+  warn "3) Extract the verified release, change into its extracted directory, and run: ./install.sh --repair"
+  warn "The bundle installer supplies its own verified payload, so it can repair the server required by normal release resolution."
+}
+
 download_app_files(){
   local target="${1:-latest}"
   RELEASE_PAYLOAD_FATAL=0
   if install_local_release_bundle "$target"; then return 0; fi
   download_release_payload "$target" && return 0
   warn "GitHub Release update failed; staged verification did not complete and the running dashboard was left unchanged"
+  [ "$REPAIR_MODE" = "1" ] && repair_bundle_recovery_recipe "$target"
   return 1
 }
 
@@ -3619,11 +3653,12 @@ PYSTATUS
 }
 
 make_repair_backup(){
-  mkdir -p "$CACHE_DIR/repair-backups" "$LOG_DIR" "$DASH"
+  mkdir -p "$REPAIR_BACKUP_DIR" "$LOG_DIR" "$DASH" || return 1
+  chmod 700 "$DASHGO_STATE_DIR" "$REPAIR_BACKUP_DIR" 2>/dev/null || true
   local ts tmp backup
   ts="$(date +%Y%m%d-%H%M%S)"
-  tmp="$(mktemp -d "$DASH/.repair-backup.XXXXXX")" || return 1
-  backup="$CACHE_DIR/repair-backups/dashboard-repair-${ts}.tar.gz"
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/dash-go-repair-backup.XXXXXX")" || return 1
+  backup="$REPAIR_BACKUP_DIR/dashboard-repair-${ts}.tar.gz"
   mkdir -p "$tmp/dashboard" "$tmp/home"
 
   [ -d "$CONFIG_DIR" ] && cp -a "$CONFIG_DIR" "$tmp/dashboard/config" 2>/dev/null || true
@@ -3655,7 +3690,8 @@ make_repair_backup(){
   "contents": ["config including local To Do/Grocery caches", "calendars", "VERSION", "manifest.json", "calendar preference files", "dashboard environment credentials, Microsoft To Do token, and PIN configuration", "optional Dash-Go system wiring snapshot"]
 }
 EOFREPAIRBACKUP
-  if ( cd "$tmp" && tar -czf "$backup" . ); then
+  if ( umask 077; cd "$tmp" && tar -czf "$backup" . ); then
+    chmod 600 "$backup" 2>/dev/null || true
     rm -rf "$tmp"
     printf '%s\n' "$backup"
     return 0
@@ -3667,7 +3703,7 @@ EOFREPAIRBACKUP
 restore_repair_user_data(){
   local backup="$1" tmp old_settings
   [ -n "$backup" ] && [ -f "$backup" ] || return 1
-  tmp="$(mktemp -d "$DASH/.repair-restore.XXXXXX")" || return 1
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/dash-go-repair-restore.XXXXXX")" || return 1
   if ! tar -xzf "$backup" -C "$tmp"; then
     rm -rf "$tmp"
     return 1
@@ -3675,9 +3711,8 @@ restore_repair_user_data(){
 
   mkdir -p "$CONFIG_DIR" "$CAL_DIR" "$CACHE_DIR" "$LOG_DIR"
 
-  # Restore user config files. New app defaults still live in the app code;
-  # settings.json is merged with the current server defaults below so new keys
-  # get default values instead of disappearing after repair.
+  # Restore user config files exactly as backed up. New app defaults belong in
+  # runtime defaulting; repair must not rewrite user-owned settings state.
   for name in config.local.js compliments.json message-sources.json message-cache.json message-cache-overrides.json temp-messages.json scheduled-messages.json map-provider.json notification-preferences.json; do
     if [ -f "$tmp/dashboard/config/$name" ]; then
       cp -p "$tmp/dashboard/config/$name" "$CONFIG_DIR/$name" 2>/dev/null || true
@@ -3768,6 +3803,9 @@ repair_newest_valid_candidate(){
 
 discover_best_preferences(){
   local current="$1" found
+  found="$(repair_newest_valid_candidate "$REPAIR_BACKUP_DIR/dashboard-repair-*.tar.gz" || true)"
+  [ -n "$found" ] && [ "$found" != "$current" ] && { printf '%s\n' "$found"; return 0; }
+  # Compatibility fallback for archives made before the state-directory move.
   found="$(repair_newest_valid_candidate "$CACHE_DIR/repair-backups/dashboard-repair-*.tar.gz" || true)"
   [ -n "$found" ] && [ "$found" != "$current" ] && { printf '%s\n' "$found"; return 0; }
   found="$(repair_newest_valid_candidate "$CACHE_DIR/config-backups/dashboard-config-*.zip" || true)"
@@ -3779,7 +3817,7 @@ discover_best_preferences(){
 
 repair_restore_missing_from_tar(){
   local archive="$1" tmp
-  tmp="$(mktemp -d "$DASH/.repair-fallback.XXXXXX")" || return 1
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/dash-go-repair-fallback.XXXXXX")" || return 1
   tar -xzf "$archive" -C "$tmp" || { rm -rf "$tmp"; return 1; }
   for f in settings.json compliments.json message-sources.json message-cache-overrides.json temp-messages.json scheduled-messages.json chalkboard.json map-provider.json; do
     # Older archives are only a recovery source after their JSON has been
@@ -3874,6 +3912,7 @@ restore_candidate_kind(){
 
 list_restore_candidates(){
   {
+    find "$REPAIR_BACKUP_DIR" -maxdepth 1 -type f -name 'dashboard-repair-*.tar.gz' 2>/dev/null
     find "$CACHE_DIR/repair-backups" -maxdepth 1 -type f -name 'dashboard-repair-*.tar.gz' 2>/dev/null
     find "$CACHE_DIR/config-backups" -maxdepth 1 -type f -name 'dashboard-config-*.zip' 2>/dev/null
     find "$HOME" -maxdepth 5 -type f \( \
@@ -4381,44 +4420,49 @@ if [ "$UPDATE_MODE" = "1" ]; then
   exit 0
 fi
 
-# --- Pre-flight checks (plain-English failures, before anything runs) ---
-say "Checking this device is ready"
-echo "Detected platform: $PLATFORM_LABEL"
-PREFLIGHT_OK=1
-for tool in curl python3 crontab; do
-  if command -v "$tool" >/dev/null 2>&1; then
-    ok "$tool found"
+# --- Pre-flight checks (plain-English failures, after workflow selection) ---
+# Purely local actions such as Exit, Feature tour, Doctor, and administrator
+# toggles return before this runs, so opening the menu never waits on a weather
+# endpoint merely to quit or inspect a local system.
+run_interactive_preflight(){
+  say "Checking this device is ready"
+  echo "Detected platform: $PLATFORM_LABEL"
+  PREFLIGHT_OK=1
+  for tool in curl python3 crontab; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      ok "$tool found"
+    else
+      case "$tool" in
+        crontab) warn "crontab is missing — install it with: sudo apt install cron";;
+        *)       warn "$tool is missing — install it with: sudo apt install $tool";;
+      esac
+      PREFLIGHT_OK=0
+    fi
+  done
+  # Internet: needed for downloads, weather, and calendar sync.
+  if curl -fsSL --max-time 8 -A "$UA" "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m" >/dev/null 2>&1; then
+    ok "internet connection works"
   else
-    case "$tool" in
-      crontab) warn "crontab is missing — install it with: sudo apt install cron";;
-      *)       warn "$tool is missing — install it with: sudo apt install $tool";;
-    esac
-    PREFLIGHT_OK=0
+    warn "couldn't reach the internet. Check WiFi/network and try again."
+    if [ "$IS_PI" = "1" ]; then warn "On Raspberry Pi OS: sudo raspi-config > System > Wireless LAN may help."; fi
+    warn "Continuing anyway in case only that one site is down."
   fi
-done
-# Internet: needed for downloads, weather, and calendar sync.
-if curl -fsSL --max-time 8 -A "$UA" "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m" >/dev/null 2>&1; then
-  ok "internet connection works"
-else
-  warn "couldn't reach the internet. Check WiFi/network and try again."
-  if [ "$IS_PI" = "1" ]; then warn "On Raspberry Pi OS: sudo raspi-config > System > Wireless LAN may help."; fi
-  warn "Continuing anyway in case only that one site is down."
-fi
-# Disk space: a full install + system update wants a bit of headroom.
-FREE_MB="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
-if [ -n "$FREE_MB" ] && [ "$FREE_MB" -lt 500 ]; then
-  warn "only ${FREE_MB}MB free on the SD card — a full system update may fail."
-  warn "Consider freeing space first (sudo apt clean) or skip the update step."
-else
-  ok "disk space OK (${FREE_MB:-?}MB free)"
-fi
-[ "$PREFLIGHT_OK" = "1" ] || { warn "Fix the missing tools above, then re-run:  ~/install.sh"; exit 1; }
+  # Disk space: a full install + system update wants a bit of headroom.
+  FREE_MB="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
+  if [ -n "$FREE_MB" ] && [ "$FREE_MB" -lt 500 ]; then
+    warn "only ${FREE_MB}MB free on the SD card — a full system update may fail."
+    warn "Consider freeing space first (sudo apt clean) or skip the update step."
+  else
+    ok "disk space OK (${FREE_MB:-?}MB free)"
+  fi
+  [ "$PREFLIGHT_OK" = "1" ] || { warn "Fix the missing tools above, then re-run:  ~/install.sh"; exit 1; }
 
-# On a fresh install, optionally restore a previous dashboard config/calendar
-# backup before the setup questions run. App files still install first; the
-# restore is applied immediately after file download so the fresh server code is
-# present for settings merge/rebuild behavior.
-prompt_fresh_restore_if_needed
+  # On a fresh install, optionally restore a previous dashboard config/calendar
+  # backup before the setup questions run. App files still install first; the
+  # restore is applied immediately after file download so the fresh server code is
+  # present for settings merge/rebuild behavior.
+  prompt_fresh_restore_if_needed
+}
 
 # Notifications are SSH/terminal-owned because Apprise destination URLs are
 # secrets. Dashboard Control exposes only per-person delivery preferences.
@@ -4550,85 +4594,104 @@ configure_terminal_access(){
 # Each task can be turned on/off. Presets cover common cases; "Custom"
 # lets you pick. On a first install choose Full; on later runs pick a
 # targeted task (e.g. just re-pull the app files, or just change settings).
+# Keep all top-level identities here so displayed order, dispatch, and later
+# user-facing guidance cannot drift apart during a future menu change.
+OPT_FULL=1
+OPT_UPDATE=2
+OPT_UPDATE_RECONFIGURE=3
+OPT_RECONFIGURE=4
+OPT_WEATHER_DISPLAY=5
+OPT_WEATHER_SOURCES=6
+OPT_RADAR=7
+OPT_CALENDARS=8
+OPT_ICAL=9
+OPT_VDIR=10
+OPT_MESSAGES=11
+OPT_TODO=12
+OPT_THEME=13
+OPT_SEASONAL=14
+OPT_PIN=15
+OPT_SERVICE=16
+OPT_SSH=17
+OPT_DOCTOR=18
+OPT_TOUR=19
+OPT_DEMO=20
+OPT_CUSTOM=21
+OPT_REMOVE=22
+OPT_NOTIFICATIONS=23
+OPT_TERMINAL=24
+OPT_EXIT=25
+
 DO_SYSTEM=0 DO_PKGS=0 DO_FILES=0 DO_FONTS=0 DO_CUSTOM=0 DO_WEATHER=0 DO_RADAR=0 DO_WEATHER_DISPLAY=0 DO_MESSAGE_SOURCES=0 DO_APP_SETUP=0 DO_ICAL=0 DO_VDIR=0 DO_SERVICE=0 DO_AUTOLOGIN=0 DO_AUTOSTART=0 DO_CALENDARS=0 DO_PIN=0 DO_SSH=0 DOC_AT_END=0 DO_DEMO=0
 # Detect whether this looks like a first install and default accordingly,
 # so a brand-new user can just press Enter at the menu.
-if [ -f "$DASH/index.html" ]; then DEFMODE=2; DEFHINT="files are already installed"; else DEFMODE=1; DEFHINT="first install detected"; fi
+if [ -f "$DASH/index.html" ]; then DEFMODE="$OPT_UPDATE"; DEFHINT="files are already installed"; else DEFMODE="$OPT_FULL"; DEFHINT="first install detected"; fi
 echo
-echo "What do you want to do?  (${DEFHINT}; press Enter for option $DEFMODE)"
+echo "What do you want to do?  (${DEFHINT}; press Enter for the suggested action)"
 echo
 echo "  INSTALL & UPDATE"
-echo "   1) Full install            everything, start to finish (first time)"
-echo "   2) Update the app          re-download files + restart the web server"
-echo "   3) Update + reconfigure    new files, then re-answer setup questions"
+echo "  ${OPT_FULL}) Full install            everything, start to finish (first time)"
+echo "  ${OPT_UPDATE}) Update the app          re-download files + restart the web server"
+echo "  ${OPT_UPDATE_RECONFIGURE}) Update + reconfigure    new files, then re-answer setup questions"
 echo
 echo "  SETTINGS"
-echo "   4) Reconfigure all         profile, location, display, weather,"
+echo "  ${OPT_RECONFIGURE}) Reconfigure all         profile, location, display, weather,"
 echo "                              messages, theme, birthdays"
-echo "   5) Weather display         units, days shown, refresh, alert severity"
-echo "   6) Weather sources         guided toggle menu for free/keyed providers"
-echo "   7) Weather radar           choose provider + optional protected key"
-echo "   8) Built-in calendars      holidays, sky calendars, celebrations, pickup"
-echo "   9) Add iCal URL calendar   Google/Outlook/Nextcloud/webcal .ics links"
-echo "  10) Add CalDAV calendar     vdirsyncer/iCloud/CalDAV setup"
-echo "  11) Message sources         quotes, jokes, facts, prompts, API refresh"
+echo "  ${OPT_WEATHER_DISPLAY}) Weather display         units, days shown, refresh, alert severity"
+echo "  ${OPT_WEATHER_SOURCES}) Weather sources         guided toggle menu for free/keyed providers"
+echo "  ${OPT_RADAR}) Weather radar           choose provider + optional protected key"
+echo "  ${OPT_CALENDARS}) Built-in calendars      holidays, sky calendars, celebrations, pickup"
+echo "  ${OPT_ICAL}) Add iCal URL calendar   Google/Outlook/Nextcloud/webcal .ics links"
+echo "  ${OPT_VDIR}) Add CalDAV calendar     vdirsyncer/iCloud/CalDAV setup"
+echo "  ${OPT_MESSAGES}) Message sources         quotes, jokes, facts, prompts, API refresh"
 echo "                              optional keys saved in ~/.dashboard-message.env"
-echo "  12) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup"
-echo "  13) Theme                   pick from built-in color schemes"
-echo "  14) Seasonal themes         holiday auto-theming on or off"
+echo "  ${OPT_TODO}) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup"
+echo "  ${OPT_THEME}) Theme                   pick from built-in color schemes"
+echo "  ${OPT_SEASONAL}) Seasonal themes         holiday auto-theming on or off"
 echo
 echo "  SECURITY"
-echo "  15) Control PIN             set/reset/disable passcode + unlock duration"
+echo "  ${OPT_PIN}) Control PIN             set/reset/disable passcode + unlock duration"
 echo
 echo "  SYSTEM"
-echo "  16) System pieces           web server + on-screen control panel,"
-echo "                              autologin, autostart, scheduled tasks"
-echo "  17) Remote access (SSH)     manage the dashboard from another computer"
+echo "  ${OPT_SERVICE}) Dashboard service       web server + on-screen control panel"
+echo "  ${OPT_SSH}) Remote access (SSH)     manage the dashboard from another computer"
 echo
-echo "  HELP & CHECKUP"
-echo "  18) Health check            verify everything is running (doctor)"
-echo "  19) Feature tour            what this dashboard can do, in plain words"
-echo "  20) Demo mode               seed Chicago sample calendars/messages"
+echo "  HELP & ADMIN"
+echo "  ${OPT_DOCTOR}) Health check            verify everything is running (doctor)"
+echo "  ${OPT_TOUR}) Feature tour            what this dashboard can do, in plain words"
+echo "  ${OPT_DEMO}) Demo mode               seed Chicago sample calendars/messages"
 echo "                              with a clear DEMO MODE badge"
-echo "  21) Custom                  hand-pick exactly which tasks to run"
-echo "  22) Uninstall Dash-Go       offline project uninstall (verified archive optional)"
-echo "  23) Exit installer          close without changing anything"
+echo "  ${OPT_CUSTOM}) Custom                  choose a focused set of setup/system tasks"
+echo "  ${OPT_REMOVE}) Uninstall Dash-Go       offline project uninstall (verified archive optional)"
+echo "  ${OPT_NOTIFICATIONS}) Notifications (Apprise-Go) configure private outbound delivery routes"
+echo "  ${OPT_TERMINAL}) Terminal access         toggle Dashboard Control Terminal card"
+echo "  ${OPT_EXIT}) Exit installer          close without changing anything"
 echo
-echo "  MORE"
-echo "  24) Notifications (Apprise-Go) configure private outbound delivery routes"
-echo "  25) Terminal access         toggle Dashboard Control Terminal card"
-echo
-read -rp "  Choose [1-25; Enter=$DEFMODE]: " MODE
+read -rp "  Choose [1-25, q=exit; Enter=$DEFMODE]: " MODE
 MODE="${MODE:-$DEFMODE}"
 case "$MODE" in
- 24) configure_apprise_notifications; exit $?;;
- 25) configure_terminal_access; exit $?;;
- 23)
-     ok "installer closed without making changes"
-     exit 0;;
- 22) run_remove_install; exit $?;;
-  1) DO_SYSTEM=1; DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_CALENDARS=1; DO_PIN=1; DO_SSH=1;;
-  2) DO_FILES=1;;
-  3) DO_FILES=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
-  4) DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
-  5) DO_WEATHER_DISPLAY=1;;
-  6) DO_WEATHER=1;;
-  7) DO_RADAR=1;;
-  8) DO_CALENDARS=1;;
-  9) DO_ICAL=1;;
- 10) DO_VDIR=1;;
- 11) DO_MESSAGE_SOURCES=1;;
- 12) DO_APP_SETUP=1;;
- 13) # Theme-only: hand off to the deployed set-theme.sh (interactive) and exit.
+  "$OPT_FULL") DO_SYSTEM=1; DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_CALENDARS=1; DO_PIN=1; DO_SSH=1; DOC_AT_END=1;;
+  "$OPT_UPDATE") DO_FILES=1;;
+  "$OPT_UPDATE_RECONFIGURE") DO_FILES=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
+  "$OPT_RECONFIGURE") DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
+  "$OPT_WEATHER_DISPLAY") DO_WEATHER_DISPLAY=1;;
+  "$OPT_WEATHER_SOURCES") DO_WEATHER=1;;
+  "$OPT_RADAR") DO_RADAR=1;;
+  "$OPT_CALENDARS") DO_CALENDARS=1;;
+  "$OPT_ICAL") DO_ICAL=1;;
+  "$OPT_VDIR") DO_VDIR=1;;
+  "$OPT_MESSAGES") DO_MESSAGE_SOURCES=1;;
+  "$OPT_TODO") DO_APP_SETUP=1;;
+  "$OPT_THEME") # Theme-only: hand off to the deployed set-theme.sh (interactive) and exit.
      if [ -x "$BIN_DIR/set-theme.sh" ]; then
        "$BIN_DIR/set-theme.sh"
        exit $?
      fi
-     warn "set-theme.sh not found in $DASH. Run option 2 (Update the app) first."
+     warn "set-theme.sh not found in $DASH. Run Update the app first."
      exit 1;;
- 14) # Seasonal themes: show the current state, offer to flip it, and exit.
+  "$OPT_SEASONAL") # Seasonal themes: show the current state, offer to flip it, and exit.
      if [ ! -x "$BIN_DIR/seasonal-themes.sh" ]; then
-       warn "seasonal-themes.sh not found in $DASH. Run option 2 (Update the app) first."
+       warn "seasonal-themes.sh not found in $DASH. Run Update the app first."
        exit 1
      fi
      if crontab -l 2>/dev/null | grep -q "seasonal-themes.sh apply"; then
@@ -4651,7 +4714,17 @@ case "$MODE" in
        fi
      fi
      exit 0;;
- 19) # Feature tour: a plain-language overview, then exit.
+  "$OPT_PIN") DO_PIN=1;;
+  "$OPT_SERVICE") DO_SERVICE=1;;
+  "$OPT_SSH") DO_SSH=1;;
+  "$OPT_DOCTOR") # Doctor: run the deployed health-check script and exit.
+     if [ -x "$BIN_DIR/doctor.sh" ]; then
+       bash "$BIN_DIR/doctor.sh"; exit $?
+     else
+       warn "doctor.sh not found in $DASH. Run Update the app first."
+       exit 1
+     fi;;
+  "$OPT_TOUR") # Feature tour: a plain-language overview, then exit.
      cat <<'TOUR'
 
 ============================ FEATURE TOUR =============================
@@ -4664,19 +4737,45 @@ case "$MODE" in
      their own; tap for details, or HIDE to dock them to a corner tab.
 
  THE ON-SCREEN CONTROL PANEL  (the big one to remember)
-   * TRIPLE-TAP the moon to open it. Triple-tap current weather to open radar when enabled. From there you can:
+   * TRIPLE-TAP the moon-phase icon next to the weather to open it.
+     Triple-tap current weather to open radar when enabled. From there you can:
      update the dashboard to the newest version, restart the browser,
      reboot or shut down, sync calendars, rebuild the event cache, view
      logs, export diagnostics, run a health check, switch themes instantly,
-     toggle calendars on/off, change location, switch 12/24-hour time, hide clock seconds, set °F/°C, adjust UI density,
-     control display sleep/night dimming/burn-in protection, preview the
-     weather banner, and turn the screen off (touch wakes it).
-   * Optional PIN lock and unlock duration: manage it from installer option 15.
+     adjust performance, edit your location, and manage People, lists,
+     routines, and household schedules.
+   * Optional PIN lock and unlock duration: manage it from Control PIN.
 
- FROM ANOTHER COMPUTER (SSH)
-   * ~/dashboard/bin/compliments.sh      add/edit the rotating messages
-                                     (run with no arguments for menus)
-   * ~/dashboard/bin/set-theme.sh        change the theme (applies live)
+ CALENDARS
+   * Subscribe to public .ics URLs (Google, Outlook, Nextcloud, school,
+     work) or set up CalDAV/vdirsyncer, then see all events in one view.
+   * Built-in holidays, sky events, celebrations, pickup schedules, and
+     birthdays can be turned on/off separately. Drag/drop .ics files works too.
+
+ WEATHER & MAPS
+   * Pick a simple free forecast, a US blend, or an optional provider mix.
+   * Radar is on-demand — it never polls or runs in the background.
+   * Static event maps remain lightweight; interactive maps are optional on
+     capable profiles.
+
+ HOUSEHOLD TOOLS
+   * Local To Do, Grocery, Routines, Chore Wheel, Maintenance, Family Board,
+     and People remain useful offline. Microsoft To Do and notifications are
+     opt-in enhancements, never required for normal household use.
+
+ MAINTENANCE
+   * Update the app keeps your saved settings/calendars. Doctor explains
+     what is wrong and can offer the smallest safe repair. Backups are local
+     and can be exported before larger repair or removal work.
+
+ ADMINISTRATOR TOOLS
+   * Notifications (Apprise-Go) are set up from SSH/terminal so destination
+     URLs stay private. Terminal access can be shown or hidden in Dashboard
+     Control without changing SSH.
+
+ FILES YOU MAY WANT
+   * ~/dashboard/config/             your settings, local app data, secrets
+   * ~/dashboard/calendars/          local .ics calendars
    * ~/dashboard/bin/seasonal-themes.sh  holiday auto-theming
    * ~/dashboard/bin/doctor.sh           quiet health scan and fix-all prompt
    * ~/dashboard/bin/doctor.sh --full    detailed health report
@@ -4690,16 +4789,10 @@ case "$MODE" in
 =======================================================================
 TOUR
      exit 0;;
- 18) # Doctor: run the deployed health-check script and exit.
-     if [ -x "$BIN_DIR/doctor.sh" ]; then
-       bash "$BIN_DIR/doctor.sh"; exit $?
-     else
-       warn "doctor.sh not found in $DASH. Run option 2 (Update the app) first."
-       exit 1
-     fi;;
- 20) DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_DEMO=1;;
- 21) echo
-     echo "Custom mode — answer y to each task you want, Enter to skip."
+  "$OPT_DEMO") DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_DEMO=1;;
+  "$OPT_CUSTOM") echo
+     echo "Custom mode — choose the core setup and system tasks you want."
+     echo "Theme, Seasonal themes, Demo Mode, Notifications, and Terminal access each have their own focused menu action."
      echo "(Tasks run in the order shown; each is safe to re-run.)"
      ask(){ read -rp "  $1? [y/N] " a; [ "$a" = "y" ] || [ "$a" = "Y" ]; }
      ask "System update / optional platform trim (slow; rarely needed twice)" && DO_SYSTEM=1
@@ -4716,7 +4809,7 @@ TOUR
      ask "Add iCal URL calendar"                                    && DO_ICAL=1
      ask "Add CalDAV/vdirsyncer calendar"                           && DO_VDIR=1
      ask "Control-panel PIN lock (set/reset/disable/duration)"       && DO_PIN=1
-     ask "Web server + on-screen control panel (service, permissions)" && DO_SERVICE=1
+     ask "Dashboard service (web server + on-screen control panel)" && DO_SERVICE=1
      ask "Boot straight into the dashboard (graphical autologin)"    && DO_AUTOLOGIN=1
      ask "Autostart + scheduled tasks (holidays, event cache, housekeeping, restart)" && DO_AUTOSTART=1
      ask "Enable SSH for remote administration"                      && DO_SSH=1
@@ -4726,10 +4819,27 @@ TOUR
        echo "   reboot permission, nightly restart — as they run)"
      fi
      ;;
-  *) warn "invalid choice"; exit 1;;
+  "$OPT_REMOVE") run_remove_install; exit $?;;
+  "$OPT_NOTIFICATIONS") configure_apprise_notifications; exit $?;;
+  "$OPT_TERMINAL") configure_terminal_access; exit $?;;
+  "$OPT_EXIT"|q|Q|quit|exit)
+     ok "installer closed without making changes"
+     exit 0;;
+  *) warn "Choose a listed action or q to exit."; exit 1;;
 esac
+
+# A detected Demo Mode is actionable only after the user has chosen an actual
+# installer workflow. Health, tour, Exit, notifications, and terminal actions
+# already returned above, so they are never blocked by a destructive prompt.
+[ "$MODE" = "$OPT_DEMO" ] || prompt_demo_mode_reset
+if [ "$REMOVE_MODE" = "1" ]; then
+  run_remove_install
+  exit $?
+fi
+run_interactive_preflight
+
 # Full install also installs packages + fonts; presets assume those exist.
-[ "$MODE" = "1" ] && DO_PKGS=1
+[ "$MODE" = "$OPT_FULL" ] && DO_PKGS=1
 
 if [ "${RESTORE_FROM_BACKUP:-0}" = "1" ]; then
   echo
@@ -5198,19 +5308,22 @@ PYWXEXIST
   if [ "$sel_openmeteo$sel_nws$sel_weatherapi$sel_openweather$sel_googleweather$sel_tomorrow$sel_visualcrossing$sel_weatherbit$sel_pirateweather$sel_accuweather$sel_xweather$sel_custom" = "000000000000" ]; then sel_openmeteo=1; fi
 
   show_weather_choice(){ [ "$1" = "1" ] && printf '[x]' || printf '[ ]'; }
+  # The printed ordering is deliberate: every group uses sequential numeric
+  # selections so a user can choose by its visible number without translating
+  # the provider’s historical registry position.
   toggle_weather_choice(){
     case "$1" in
       1) [ "$sel_openmeteo" = "1" ] && sel_openmeteo=0 || sel_openmeteo=1;;
       2) [ "$sel_nws" = "1" ] && sel_nws=0 || sel_nws=1;;
       3) [ "$sel_weatherapi" = "1" ] && sel_weatherapi=0 || sel_weatherapi=1;;
-      4) [ "$sel_openweather" = "1" ] && sel_openweather=0 || sel_openweather=1;;
-      5) [ "$sel_googleweather" = "1" ] && sel_googleweather=0 || sel_googleweather=1;;
-      6) [ "$sel_tomorrow" = "1" ] && sel_tomorrow=0 || sel_tomorrow=1;;
-      7) [ "$sel_visualcrossing" = "1" ] && sel_visualcrossing=0 || sel_visualcrossing=1;;
-      8) [ "$sel_weatherbit" = "1" ] && sel_weatherbit=0 || sel_weatherbit=1;;
-      9) [ "$sel_pirateweather" = "1" ] && sel_pirateweather=0 || sel_pirateweather=1;;
-      10) [ "$sel_accuweather" = "1" ] && sel_accuweather=0 || sel_accuweather=1;;
-      11) [ "$sel_xweather" = "1" ] && sel_xweather=0 || sel_xweather=1;;
+      4) [ "$sel_tomorrow" = "1" ] && sel_tomorrow=0 || sel_tomorrow=1;;
+      5) [ "$sel_visualcrossing" = "1" ] && sel_visualcrossing=0 || sel_visualcrossing=1;;
+      6) [ "$sel_weatherbit" = "1" ] && sel_weatherbit=0 || sel_weatherbit=1;;
+      7) [ "$sel_pirateweather" = "1" ] && sel_pirateweather=0 || sel_pirateweather=1;;
+      8) [ "$sel_xweather" = "1" ] && sel_xweather=0 || sel_xweather=1;;
+      9) [ "$sel_openweather" = "1" ] && sel_openweather=0 || sel_openweather=1;;
+      10) [ "$sel_googleweather" = "1" ] && sel_googleweather=0 || sel_googleweather=1;;
+      11) [ "$sel_accuweather" = "1" ] && sel_accuweather=0 || sel_accuweather=1;;
       12) [ "$sel_custom" = "1" ] && sel_custom=0 || sel_custom=1;;
     esac
   }
@@ -5283,25 +5396,33 @@ PYWXEXIST
          echo
          echo "  Free key sources"
          echo "  $(show_weather_choice "$sel_weatherapi")  3) WeatherAPI.com    free key · 100K/month · 3-day free forecast"
-         echo "  $(show_weather_choice "$sel_tomorrow")  6) Tomorrow.io       free key · 500/day, 25/hour cap · ~5-day"
-         echo "  $(show_weather_choice "$sel_visualcrossing")  7) Visual Crossing   free key · 1,000 records/day · attribution required · 15-day"
-         echo "  $(show_weather_choice "$sel_weatherbit")  8) Weatherbit        free key · 50/day · NON-COMMERCIAL · 7-day"
-         echo "  $(show_weather_choice "$sel_pirateweather")  9) Pirate Weather    free key · 10,000/month · 8-day"
-         echo "  $(show_weather_choice "$sel_xweather") 11) Xweather          free/trial/metered · conservative 9K/month cap · US/CA · 15-day"
+         echo "  $(show_weather_choice "$sel_tomorrow")  4) Tomorrow.io       free key · 500/day, 25/hour cap · ~5-day"
+         echo "  $(show_weather_choice "$sel_visualcrossing")  5) Visual Crossing   free key · 1,000 records/day · attribution required · 15-day"
+         echo "  $(show_weather_choice "$sel_weatherbit")  6) Weatherbit        free key · 50/day · NON-COMMERCIAL · 7-day"
+         echo "  $(show_weather_choice "$sel_pirateweather")  7) Pirate Weather    free key · 10,000/month · 8-day"
+         echo "  $(show_weather_choice "$sel_xweather")  8) Xweather          free/trial/metered · conservative 9K/month cap · US/CA · 15-day"
          echo
          echo "  Billable / trial / paid sources"
-         echo "  $(show_weather_choice "$sel_openweather")  4) OpenWeather       free allowance · 1,000/day then BILLABLE · 8-day"
-         echo "  $(show_weather_choice "$sel_googleweather")  5) Google Weather    PAID · Google Maps Platform billing · no normal free tier · 10-day"
-         echo "  $(show_weather_choice "$sel_accuweather") 10) AccuWeather       14-DAY TRIAL then paid · 500/day during trial · 5-day"
+         echo "  $(show_weather_choice "$sel_openweather")  9) OpenWeather       free allowance · 1,000/day then BILLABLE · 8-day"
+         echo "  $(show_weather_choice "$sel_googleweather") 10) Google Weather    PAID · Google Maps Platform billing · no normal free tier · 10-day"
+         echo "  $(show_weather_choice "$sel_accuweather") 11) AccuWeather       14-DAY TRIAL then paid · 500/day during trial · 5-day"
          echo "  $(show_weather_choice "$sel_custom") 12) Custom Open-Meteo  compatible endpoint / API key"
          echo
-         echo "  Type a number to toggle it. Use R=review, A=all, N=none, S=save, Q=cancel."
+         echo "  Type a number to toggle it. Use R=review, A=all (asks before paid), N=none, S=save, Q=cancel."
          read -rp "  Selection action [S]: " ans; ans="${ans:-S}"
          case "$ans" in
            [sS]) break;;
            [rR]) weather_review;;
            [qQ]) warn "weather source changes cancelled"; WEATHER_PROVIDERS="$existing"; WEATHER_KEYS_JS="{}"; return 0;;
-           [aA]) sel_openmeteo=1; sel_nws=1; sel_weatherapi=1; sel_openweather=1; sel_googleweather=1; sel_tomorrow=1; sel_visualcrossing=1; sel_weatherbit=1; sel_pirateweather=1; sel_accuweather=1; sel_xweather=1;;
+           [aA])
+             read -rp "  Enable every listed provider, including paid/trial sources? [y/N] " enable_all
+             if [ "$enable_all" = "y" ] || [ "$enable_all" = "Y" ]; then
+               sel_openmeteo=1; sel_nws=1; sel_weatherapi=1; sel_openweather=1; sel_googleweather=1; sel_tomorrow=1; sel_visualcrossing=1; sel_weatherbit=1; sel_pirateweather=1; sel_accuweather=1; sel_xweather=1
+               echo "  All listed provider sources are selected. Custom Open-Meteo remains opt-in."
+             else
+               echo "  Left provider selections unchanged."
+             fi
+             ;;
            [nN]) sel_openmeteo=0; sel_nws=0; sel_weatherapi=0; sel_openweather=0; sel_googleweather=0; sel_tomorrow=0; sel_visualcrossing=0; sel_weatherbit=0; sel_pirateweather=0; sel_accuweather=0; sel_xweather=0; sel_custom=0;;
            1|2|3|4|5|6|7|8|9|10|11|12) toggle_weather_choice "$ans";;
            *) warn "choose a number, R, A, N, S, or Q";;
@@ -5549,7 +5670,7 @@ prompt_message_sources(){
   fi
   server="$BIN_DIR/dashboard-control-server"
   if [ ! -x "$server" ]; then
-    mark_install_step_failed "Message-source configuration" "Go helper is missing; run option 2 (Update the app), then option 11 again"
+    mark_install_step_failed "Message-source configuration" "Go helper is missing; choose Update the app, then Message sources again"
     return 1
   fi
   list_file="$(mktemp "${TMPDIR:-/tmp}/dash-go-message-sources.XXXXXX")" || {
@@ -5634,7 +5755,8 @@ prompt_message_sources(){
   fi
 }
 
-if [ "$DO_CUSTOM" = "1" ]; then
+run_customization(){
+while :; do
 say "Customization"
 echo "Weather location — enter a place name to look up, or coordinates directly."
 
@@ -5676,7 +5798,8 @@ for r in d.get("results",[]):
   read -rp "  Choose a match [1-$((i-1))], or 0 to search again: " pick
   # numeric only — anything else re-prompts the search
   printf '%s' "$pick" | grep -qE '^[0-9]+$' || return 1
-  if [ "$pick" = "0" ] || [ -z "${GLAT[$pick]:-}" ]; then return 1; fi
+  [ "$pick" = "0" ] && return 2
+  [ -z "${GLAT[$pick]:-}" ] && return 1
   LAT="${GLAT[$pick]}"; LON="${GLON[$pick]}"; LOCNAME="${GLAB[$pick]}"
   return 0
 }
@@ -5865,11 +5988,17 @@ while true; do
       ;;
     1)
       read -rp "  City name: " PLACE
-      if geocode "$PLACE"; then
+      geocode "$PLACE"
+      geocode_status=$?
+      if [ "$geocode_status" = "0" ]; then
         ok "  Using: $LOCNAME ($LAT, $LON)"
         break
       fi
-      warn "  No match found (or lookup failed). Try again or enter coordinates."
+      if [ "$geocode_status" = "2" ]; then
+        echo "  Search again selected."
+      else
+        warn "  No match found (or lookup failed). Try again or enter coordinates."
+      fi
       ;;
     2)
       while true; do
@@ -5902,10 +6031,10 @@ fi
 
 echo
 echo "Theme (color scheme) — choose from built-in palettes. Change anytime later with:"
-echo "  $BIN_DIR/set-theme.sh        (and option 13 of this installer)"
+echo "  $BIN_DIR/set-theme.sh        (or choose Theme from this installer)"
 THEME_CATALOG="$DASH/themes.list"
 if [ ! -r "$THEME_CATALOG" ]; then
-  warn "theme catalog not found in $DASH. Run option 2 (Update the app) first."
+  warn "theme catalog not found in $DASH. Run Update the app first."
   exit 1
 fi
 mapfile -t THEME_OPTIONS < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$THEME_CATALOG")
@@ -5960,6 +6089,10 @@ while true; do
     [ -z "$ODATE" ] && break
     valid_mmdd "$ODATE" && break; warn "    Use MM-DD format, e.g. 10-04."
   done
+  if [ -z "$ODATE" ]; then
+    warn "  Skipped $ONAME — no birthday date given."
+    continue
+  fi
   add_bday "$ONAME" "$ODATE"
 done
 
@@ -5973,13 +6106,14 @@ echo "  Theme    : ${THEME:-basic}"
 echo "  Profile  : ${PROFILE:-balanced} (${PROFILE_LABEL:-})"
 echo "  Display  : seconds=${SHOWSECS:-true}, compliments=${COMPSEC:-18}s, events/day=${MAXEVENTS:-8}, agenda=${AGENDADAYS:-14}d, weather=${WEATHERDAYS:-14}d, past=${WEEKSABOVE:-2}w, future=${WEEKSBELOW:-10}w, start=$(first_day_label), layout=${LAYOUTPROFILE:-auto}"
 echo "  Weather  : sources=${WEATHER_PROVIDERS:-openmeteo} (keys in ~/.dashboard-weather.env)"
-  echo "  Radar    : ${RADAR_PROVIDER:-rainviewer} (keys in ~/.dashboard-radar.env)"
+echo "  Radar    : ${RADAR_PROVIDER:-rainviewer} (keys in ~/.dashboard-radar.env)"
 echo "  Messages : sources/config in ~/dashboard/config; optional keys in ~/.dashboard-message.env"
 echo "  Birthdays: ${BDAY_JSON:-none}"
 read -rp "Look right? [Y/n] " confirm
 if [ "$confirm" = "n" ] || [ "$confirm" = "N" ]; then
-  warn "Settings NOT saved. Re-run the installer and choose option 4 to redo them."
-else
+  warn "Settings were not written. Let's walk through customization again."
+  continue
+fi
 
 say "Writing per-device settings (config.local.js)"
 {
@@ -6024,8 +6158,13 @@ PYPROVIDERS
   echo "};"
 } > "$CONFIG_DIR/config.local.js"
 ok "wrote config/config.local.js"
-fi  # end settings-confirm
-fi  # end DO_CUSTOM
+return 0
+done
+}
+
+if [ "$DO_CUSTOM" = "1" ]; then
+  run_customization
+fi
 
 if [ "$DO_WEATHER_DISPLAY" = "1" ] && [ "$DO_CUSTOM" != "1" ]; then
   say "Weather display configuration"
@@ -6092,12 +6231,20 @@ ok "calendars.json initialized (add your own .ics files, see README)"
 
 if [ "$DO_ICAL" = "1" ]; then
   say "iCal URL calendar setup"
-  [ -x "$BIN_DIR/setup-ical-urls.sh" ] && "$BIN_DIR/setup-ical-urls.sh" || warn "setup-ical-urls.sh missing"
+  if [ -x "$BIN_DIR/setup-ical-urls.sh" ]; then
+    "$BIN_DIR/setup-ical-urls.sh"
+  else
+    warn "iCal URL setup is unavailable. Run Update the app first, then try again."
+  fi
 fi
 
 if [ "$DO_VDIR" = "1" ]; then
   say "CalDAV/vdirsyncer calendar setup"
-  [ -x "$BIN_DIR/setup-vdirsyncer.sh" ] && "$BIN_DIR/setup-vdirsyncer.sh" || warn "setup-vdirsyncer.sh missing"
+  if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
+    "$BIN_DIR/setup-vdirsyncer.sh"
+  else
+    warn "CalDAV/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+  fi
 fi
 
 if [ "$DO_CALENDARS" = "1" ]; then
@@ -6332,8 +6479,20 @@ while true; do
   echo "  3) Continue / don't add another calendar"
   read -rp "  Choose [1/2/3]: " calmethod
   case "$calmethod" in
-    1) [ -x "$BIN_DIR/setup-ical-urls.sh" ] && "$BIN_DIR/setup-ical-urls.sh" || warn "setup-ical-urls.sh missing";;
-    2) [ -x "$BIN_DIR/setup-vdirsyncer.sh" ] && "$BIN_DIR/setup-vdirsyncer.sh" || warn "setup-vdirsyncer.sh missing";;
+    1)
+      if [ -x "$BIN_DIR/setup-ical-urls.sh" ]; then
+        "$BIN_DIR/setup-ical-urls.sh"
+      else
+        warn "iCal URL setup is unavailable. Run Update the app first, then try again."
+      fi
+      ;;
+    2)
+      if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
+        "$BIN_DIR/setup-vdirsyncer.sh"
+      else
+        warn "CalDAV/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+      fi
+      ;;
     3) ok "Calendar sync setup finished."; break;;
     *) warn "  Please choose 1, 2, or 3.";;
   esac
@@ -6349,7 +6508,7 @@ if ! provision_dashboard_service; then
 fi
 
 # --- On-screen control overlay: reboot permission ---------------------
-# The overlay (triple-tap the clock or the moon on the touchscreen) can restart
+# The overlay (triple-tap the moon-phase icon next to the weather) can restart
 # the browser and change themes as the normal user, but reboot/shutdown needs
 # root. This grants exactly ONE command — /sbin/reboot — nothing else.
 echo
@@ -6647,14 +6806,14 @@ elif [ "$DO_DEMO" = "1" ]; then
   echo "   * Demo Mode was requested but did not finish; update app files, then choose Demo Mode again."
 fi
 if [ "$DO_SERVICE" = "1" ] && [ "$SERVICE_CONFIRMED_OK" = "1" ]; then
-  echo "   * Web server + control panel installed. Check any time with option 16."
+  echo "   * Web server + control panel installed. Check it any time with Dashboard service."
 elif [ "$DO_SERVICE" = "1" ]; then
   echo "   * Web server setup was attempted, but live server confirmation did not pass."
 fi
 [ "$DO_CALENDARS" = "1" ] && echo "   * Calendars configured — events appear within a few minutes."
-[ "$DO_PIN" = "1" ]       && echo "   * Control-panel PIN setting updated. Manage it anytime with option 15."
+[ "$DO_PIN" = "1" ]       && echo "   * Control-panel PIN setting updated. Manage it any time with Control PIN."
 [ "$DO_SSH" = "1" ]       && echo "   * SSH enabled — connect with: ssh $USER_NAME@$(hostname 2>/dev/null || echo '<device>')"
-echo "   * Tip: TRIPLE-TAP the clock on the dashboard for the control panel."
+echo "   * Tip: TRIPLE-TAP the moon-phase icon next to the weather to open Dashboard Control."
 [ "$DOC_AT_END" = "1" ] && [ -x "$BIN_DIR/doctor.sh" ] && { echo; bash "$BIN_DIR/doctor.sh"; }
 
 # The full first-boot guide only matters when boot/system pieces were touched.
@@ -6691,7 +6850,7 @@ vary by image and carry display risk — do these manually and reboot after):
 
 IF SOMETHING LOOKS WRONG:
   * Black screen at boot      -> check step 1 above (display driver)
-  * Dashboard but no events   -> re-run installer, option 8 (built-in calendars)
+  * Dashboard but no events   -> re-run installer, choose Built-in calendars
   * No weather                -> check WiFi/network; weather retries automatically
   * Want to change anything   -> just re-run:  ~/install.sh
 
@@ -6710,7 +6869,7 @@ DEBIAN x86 / NON-PI NOTES:
     fallback/full-desktop session. Package setup installs the needed pieces on
     Debian x86/Trixie if they were missing.
   * If the device boots to a different desktop or Wayland session, choose the
-    dashboard-openbox or Openbox session in LightDM once, or re-run installer option 16.
+    dashboard-openbox or Openbox session in LightDM once, or re-run Dashboard service from the installer.
   * Add calendars by dropping .ics files in $CAL_DIR and running:
         $BIN_DIR/gen-calendars.sh
 
@@ -6718,7 +6877,7 @@ IF SOMETHING LOOKS WRONG:
   * Login screen appears      -> check /etc/lightdm/lightdm.conf autologin lines
   * Desktop appears instead   -> check ~/.config/lxsession/*/autostart and
                                  ~/.config/autostart/dashboard-kiosk.desktop
-  * Dashboard but no events   -> re-run installer, option 8 (built-in calendars)
+  * Dashboard but no events   -> re-run installer, choose Built-in calendars
   * No weather                -> check network; weather retries automatically
 
 Then reboot (sudo reboot). The dashboard should come up fullscreen.

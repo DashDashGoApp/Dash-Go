@@ -92,7 +92,7 @@ function ensureCtrlOutputConsole(id,label,target){
 function ctrlShowOutputConsole(id,label,text,target){
   const c=ensureCtrlOutputConsole(id,label,target);
   if(!c) return;
-  document.querySelectorAll(".ctrlsecbody.hasoutputconsole,.actiondrawer-body.hasoutputconsole").forEach(n=>n.classList.remove("hasoutputconsole"));
+  document.querySelectorAll(".ctrlsecbody.hasoutputconsole").forEach(n=>n.classList.remove("hasoutputconsole"));
   c.wrap.style.display="block";
   c.pre.style.display="block";
   c.pre.textContent=text||"";
@@ -112,19 +112,19 @@ function ctrlHideOutputConsole(id){
 }
 function ctrlHideAllOutputConsoles(){
   ["ctrldoctor","ctrlupdatelog","ctrlsystemupdatelog","ctrlmemory"].forEach(ctrlHideOutputConsole);
-  document.querySelectorAll(".ctrlsecbody.hasoutputconsole,.actiondrawer-body.hasoutputconsole").forEach(n=>n.classList.remove("hasoutputconsole"));
+  document.querySelectorAll(".ctrlsecbody.hasoutputconsole").forEach(n=>n.classList.remove("hasoutputconsole"));
 }
 function ctrlEvictPage(page,reason){
   if(!page)return;
-  page.querySelectorAll("details.ctrlsec, details.actiondrawer").forEach(d=>{d.open=false;if(d.dataset&&d.dataset.lazy)d.dataset.loaded="0";});
-  page.querySelectorAll(".ctrlsecbody [id], .actiondrawer-body [id]").forEach(ctrlClearNode);
+  page.querySelectorAll("details.ctrlsec").forEach(d=>{d.open=false;if(d.dataset&&d.dataset.lazy)d.dataset.loaded="0";});
+  page.querySelectorAll(".ctrlsecbody [id]").forEach(ctrlClearNode);
   if(reason!=="tab"){const doctor=$("#ctrldoctor");if(doctor)ctrlClearNode(doctor);}
 }
 function cleanupCtrlPage(page,reason){
   if(!page)return;
   if(reason==="tab"){
     if(typeof ctrlClosePageSectionsForSession==="function")ctrlClosePageSectionsForSession(page,true);
-    else page.querySelectorAll("details.ctrlsec, details.actiondrawer, details.ctrlbackupcard").forEach(d=>d.open=false);
+    else page.querySelectorAll("details.ctrlsec, details.ctrlbackupcard").forEach(d=>d.open=false);
     if(typeof ctrlRememberHibernatedPage==="function")ctrlRememberHibernatedPage(page);
     return;
   }

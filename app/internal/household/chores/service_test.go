@@ -141,3 +141,26 @@ func TestCalendarCheckboxCannotReopenSkippedAssignment(t *testing.T) {
 		t.Fatalf("skipped reopen err=%v", err)
 	}
 }
+
+func TestEveryNDaysCadenceUsesCivilDatesAcrossSpringDST(t *testing.T) {
+	original := time.Local
+	location, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Local = location
+	defer func() { time.Local = original }()
+
+	now := time.Date(2026, time.March, 1, 12, 0, 0, 0, location)
+	weekly := map[string]any{"cadence": map[string]any{"type": "days", "every": 7, "anchorDate": "2026-03-01"}}
+	if !Due(weekly, "2026-03-15", now) {
+		t.Fatal("every-7-days chore was not due one civil week after the DST transition")
+	}
+	if Due(weekly, "2026-03-14", now) {
+		t.Fatal("every-7-days chore became due on the wrong civil day after DST")
+	}
+	alternate := map[string]any{"cadence": map[string]any{"type": "days", "every": 2, "anchorDate": "2026-03-01"}}
+	if !Due(alternate, "2026-03-09", now) || Due(alternate, "2026-03-10", now) {
+		t.Fatal("every-2-days cadence did not preserve its civil-day parity across DST")
+	}
+}

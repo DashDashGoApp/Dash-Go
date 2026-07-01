@@ -1,4 +1,35 @@
-function ctrlMsg(t){ const m=$("#ctrlmsg"); if(m) m.textContent=t||""; }
+let CTRL_ACTION_FEEDBACK_TARGET=null;
+function ctrlFeedbackRegionFor(target){
+  if(!target||!target.querySelector)return null;
+  let region=target.querySelector(".ctrl-action-feedback");
+  if(region)return region;
+  region=el("div","ctrl-action-feedback");
+  region.hidden=true;
+  region.setAttribute("role","status");
+  region.setAttribute("aria-live","polite");
+  target.appendChild(region);
+  return region;
+}
+function ctrlSetActionFeedbackTarget(control){
+  if(!control||!control.closest)return null;
+  const target=control.closest(".actiongroup")||control.closest(".ctrlsecbody");
+  CTRL_ACTION_FEEDBACK_TARGET=target||null;
+  return target?ctrlFeedbackRegionFor(target):null;
+}
+function ctrlResetActionFeedback(){
+  CTRL_ACTION_FEEDBACK_TARGET=null;
+  document.querySelectorAll("#ctrl .ctrl-action-feedback").forEach(region=>{region.textContent="";region.hidden=true;});
+}
+function ctrlMsg(t){
+  const message=t||"";
+  const top=$("#ctrlmsg");
+  if(top)top.textContent=message;
+  const target=CTRL_ACTION_FEEDBACK_TARGET;
+  if(target&&target.isConnected){
+    const local=ctrlFeedbackRegionFor(target);
+    if(local){local.textContent=message;local.hidden=!message;}
+  }
+}
 
 function ctrlStateCard(kind,title,detail,actions){
   const card=el("div","ctrlstate "+(kind||"info"));
@@ -124,7 +155,10 @@ function ctrlUpdateSettingCard(key,opts){
 function cbtn(label,cls,fn){
   const b=el("button","cbtn"+(cls?" "+cls:""),label);
   b.type="button";
-  bindTap(b,fn);
+  bindTap(b,async()=>{
+    if(b.classList.contains("actionbtn"))ctrlSetActionFeedbackTarget(b);
+    if(typeof fn==="function")return await fn();
+  });
   return b;
 }
 function caction(label,desc,cls,fn){
@@ -134,10 +168,19 @@ function caction(label,desc,cls,fn){
 }
 function actionGroup(title,detail,cls){
   const group=el("div","actiongroup"+(cls?" "+cls:""));
-  group.innerHTML=`<div class="actiongroup-head"><div class="actiongroup-title">${escapeHTML(title)}</div>${detail?`<div class="actiongroup-detail">${escapeHTML(detail)}</div>`:""}</div>`;
+  if(title||detail){
+    const head=el("div","actiongroup-head");
+    if(title)head.appendChild(el("div","actiongroup-title",title));
+    if(detail)head.appendChild(el("div","actiongroup-detail",detail));
+    group.appendChild(head);
+  }
   const grid=el("div","actiongroup-grid");
-  group.appendChild(grid);
-  return {group,grid};
+  const feedback=el("div","ctrl-action-feedback");
+  feedback.hidden=true;
+  feedback.setAttribute("role","status");
+  feedback.setAttribute("aria-live","polite");
+  group.append(grid,feedback);
+  return {group,grid,feedback};
 }
 function confirmAction(label,desc,armedLabel,fn){
   const b=confirmBtn(label,armedLabel,fn);

@@ -79,7 +79,15 @@ function renderCtrlDashboardTypography(){
   editor.appendChild(dashboardTypographyOptionGroup(CTRL_DASHBOARD_TYPOGRAPHY_TARGET,"weight","Weight",active.weights));
   editor.appendChild(dashboardTypographyOptionGroup(CTRL_DASHBOARD_TYPOGRAPHY_TARGET,"font","Font",DASHBOARD_TYPOGRAPHY_FONT_CHOICES));
   const note=CTRL_DASHBOARD_TYPOGRAPHY_TARGET==="messages"?"Long messages still fit to the fixed footer safely; larger choices are applied when the available space permits.":active.detail;
-  editor.appendChild(el("div","dashboard-typography-note",note)); wrap.appendChild(editor);
+  editor.appendChild(el("div","dashboard-typography-note",note));
+  if(CTRL_DASHBOARD_TYPOGRAPHY_TARGET==="messages"){
+    const fit=typeof complimentFitDiagnostics==="function"?complimentFitDiagnostics():null;
+    if(fit){
+      const label=fit.clipped?`${fit.clipped} message${fit.clipped===1?"":"s"} used the final safe clip this session.`:"No message fits have required the final safe clip this session.";
+      editor.appendChild(el("div","dashboard-typography-note dashboard-typography-fit-health",`${label} ${fit.corrected} rendered fit correction${fit.corrected===1?"":"s"}.`));
+    }
+  }
+  wrap.appendChild(editor);
 }
 function openDashboardTypographyTarget(target){
   CTRL_DASHBOARD_TYPOGRAPHY_TARGET=DASHBOARD_TYPOGRAPHY_TARGETS[target]?target:"calendar";

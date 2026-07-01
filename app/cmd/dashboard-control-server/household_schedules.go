@@ -79,7 +79,7 @@ func (a *app) saveHouseholdScheduleOverride(body map[string]any) (map[string]any
 	if change.RuleID == "" {
 		return nil, fmt.Errorf("schedule rule is required")
 	}
-	saved, err := a.calendarService().SetHouseholdScheduleOverride(change)
+	result, err := a.calendarService().SetHouseholdScheduleOverrideWithResult(change)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +90,12 @@ func (a *app) saveHouseholdScheduleOverride(body map[string]any) (map[string]any
 	if err != nil {
 		return nil, err
 	}
-	payload["schedules"] = saved
+	payload["schedules"] = result.Schedules
+	payload["adjustment"] = map[string]any{
+		"ruleId":      result.RuleID,
+		"nominalDate": result.NominalDate,
+		"actualDate":  result.ActualDate,
+		"collision":   result.Collision,
+	}
 	return payload, nil
 }

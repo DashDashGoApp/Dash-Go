@@ -55,8 +55,8 @@ func TestFamilyBoardInboxPINVerifierIsPrivateAndRemovable(t *testing.T) {
 	if err := a.removeFamilyBoardInboxPIN("sam"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.verifyFamilyBoardInboxPIN("sam", "anything") {
-		t.Fatal("removed PIN must leave inbox available until a new PIN is set")
+	if a.verifyFamilyBoardInboxPIN("sam", "anything") {
+		t.Fatal("removed PIN must not masquerade as a verified credential")
 	}
 }
 

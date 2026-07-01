@@ -1,7 +1,8 @@
 package calendar
 
 import (
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"regexp"
@@ -29,24 +30,6 @@ func execOutput(name string, args ...string) (string, error) {
 	return string(body), err
 }
 
-func PickupEvents(dayKey, title, uid string, every int, start, end time.Time, holidays map[string]bool, values map[string]string) []Event {
-	weekday := weekdayIndex(dayKey)
-	if weekday < 0 {
-		return nil
-	}
-	day := start
-	for int(day.Weekday()+6)%7 != weekday {
-		day = day.AddDate(0, 0, 1)
-	}
-	out := []Event{}
-	for day.Before(end) {
-		shifted := MaybeShiftPickup(day, holidays, values)
-		out = append(out, Event{Date: shifted, Summary: title, UID: uid})
-		day = day.AddDate(0, 0, 7*every)
-	}
-	return out
-}
-
 func weekdayIndex(value string) int {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "mon", "monday":
@@ -68,64 +51,21 @@ func weekdayIndex(value string) int {
 	}
 }
 
-func MaybeShiftPickup(day time.Time, holidays map[string]bool, values map[string]string) time.Time {
-	if values["PICKUP_HOLIDAY_SHIFT"] != "1" || len(holidays) == 0 {
-		return day
-	}
-	days := atoiClamp(values["PICKUP_SHIFT_DAYS"], 1, 1, 7)
-	weekStart := day.AddDate(0, 0, -((int(day.Weekday()) + 6) % 7))
-	for raw := range holidays {
-		holiday, err := time.Parse("20060102", raw)
-		if err != nil {
-			continue
-		}
-		if !holiday.Before(weekStart) && !holiday.After(day) {
-			if strings.HasPrefix(strings.ToLower(values["PICKUP_SHIFT"]), "back") {
-				return day.AddDate(0, 0, -days)
-			}
-			return day.AddDate(0, 0, days)
-		}
-	}
-	return day
-}
-
-func PaydayEvents(values map[string]string, years []int, start, end time.Time) []Event {
-	out := []Event{}
-	mode := strings.ToLower(values["PAYDAY_MODE"])
-	if mode == "weekly" || mode == "biweekly" {
-		day, err := time.Parse("2006-01-02", values["PAYDAY_START"])
-		if err != nil {
-			return out
-		}
-		step := 7
-		if mode == "biweekly" {
-			step = 14
-		}
-		for day.Before(start) {
-			day = day.AddDate(0, 0, step)
-		}
-		for day.Before(end) {
-			out = append(out, Event{Date: day, Summary: "Payday", UID: "payday"})
-			day = day.AddDate(0, 0, step)
-		}
-	} else if mode == "monthly" {
-		day := atoiClamp(values["PAYDAY_DAY"], 1, 1, 28)
-		for _, year := range years {
-			for month := time.January; month <= time.December; month++ {
-				out = append(out, Event{Date: DateOnly(year, month, day), Summary: "Payday", UID: "payday"})
-			}
-		}
-	}
-	return out
-}
-
+// CelebrationICSEvents converts the small local celebration file into stable
+// all-day events. February 29 entries are observed on February 28 in
+// non-leap years so a family birthday never silently disappears.
 func CelebrationICSEvents(path string, years []int, start, end time.Time) []Event {
+	events, _ := celebrationICSEvents(path, years, start, end)
+	return events
+}
+
+func celebrationICSEvents(path string, years []int, start, end time.Time) ([]Event, []string) {
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	out := []Event{}
-	for index, raw := range strings.Split(string(body), "\n") {
+	out, notes := []Event{}, []string{}
+	for _, raw := range strings.Split(string(body), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "|") {
 			continue
@@ -138,20 +78,43 @@ func CelebrationICSEvents(path string, years []int, start, end time.Time) []Even
 		if reMonthDay.MatchString(datePart) {
 			month, _ := strconv.Atoi(datePart[:2])
 			day, _ := strconv.Atoi(datePart[3:5])
+			if !validCelebrationMonthDay(month, day) {
+				continue
+			}
 			for _, year := range years {
-				value := DateOnly(year, time.Month(month), day)
-				if int(value.Month()) == month && value.Day() == day {
-					out = append(out, Event{Date: value, Summary: label, UID: fmt.Sprintf("celebration-%d", index+1)})
+				value, description := DateOnly(year, time.Month(month), day), ""
+				if month == int(time.February) && day == 29 && !isLeapYear(year) {
+					value = DateOnly(year, time.February, 28)
+					description = "Observed February 28 in this non-leap year."
+					notes = append(notes, label+" (02-29) observed February 28 in "+strconv.Itoa(year))
+				}
+				if !value.Before(start) && value.Before(end) {
+					out = append(out, Event{Date: value, Summary: label, Description: description, UID: celebrationUID("celebration", datePart, label)})
 				}
 			}
 		} else if reISODate.MatchString(datePart) {
 			value, err := time.Parse("2006-01-02", datePart)
 			if err == nil && !value.Before(start) && value.Before(end) {
-				out = append(out, Event{Date: value, Summary: label, UID: fmt.Sprintf("special-%d", index+1)})
+				out = append(out, Event{Date: value, Summary: label, UID: celebrationUID("special", datePart, label)})
 			}
 		}
 	}
-	return out
+	return out, notes
+}
+
+func validCelebrationMonthDay(month, day int) bool {
+	if month < int(time.January) || month > int(time.December) || day < 1 {
+		return false
+	}
+	value := DateOnly(2000, time.Month(month), day)
+	return int(value.Month()) == month && value.Day() == day
+}
+
+func isLeapYear(year int) bool { return year%4 == 0 && (year%100 != 0 || year%400 == 0) }
+
+func celebrationUID(kind, datePart, label string) string {
+	sum := sha256.Sum256([]byte(kind + "|" + strings.TrimSpace(datePart) + "|" + strings.TrimSpace(label)))
+	return kind + "-" + hex.EncodeToString(sum[:8])
 }
 
 func atoiClamp(value string, fallback, low, high int) int {

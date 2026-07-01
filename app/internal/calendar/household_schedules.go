@@ -68,6 +68,16 @@ type ScheduleOverride struct {
 	ActualDate  string `json:"actualDate,omitempty"`
 }
 
+// ScheduleOverrideResult gives the HTTP layer the resolved safety outcome
+// without making the browser reverse-engineer generated calendar feeds.
+type ScheduleOverrideResult struct {
+	Schedules   HouseholdSchedules
+	RuleID      string
+	NominalDate string
+	ActualDate  string
+	Collision   bool
+}
+
 type HolidayLayer struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -252,19 +262,46 @@ func normalizeOverrides(in []ScheduleOverride, known map[string]bool) ([]Schedul
 
 func scheduleDateKeyValid(value string) bool { _, ok := scheduleDate(value); return ok }
 
+// normalizeOverridesForLoad keeps strict shape validation but discards only
+// overrides whose rule no longer exists. A stale adjustment must not prevent
+// the complete generated-calendar job from loading its otherwise valid model.
+func normalizeOverridesForLoad(in []ScheduleOverride, known map[string]bool) ([]ScheduleOverride, []string, error) {
+	retained := make([]ScheduleOverride, 0, len(in))
+	dropped := []string{}
+	for _, row := range in {
+		ruleID := strings.ToLower(strings.TrimSpace(row.RuleID))
+		if !known[ruleID] {
+			dropped = append(dropped, strings.TrimSpace(row.RuleID)+"|"+strings.TrimSpace(row.NominalDate))
+			continue
+		}
+		retained = append(retained, row)
+	}
+	normalized, err := normalizeOverrides(retained, known)
+	return normalized, dropped, err
+}
+
 func normalizeHouseholdSchedules(in HouseholdSchedules) (HouseholdSchedules, error) {
+	normalized, _, err := normalizeHouseholdSchedulesForLoadPolicy(in, false)
+	return normalized, err
+}
+
+func normalizeHouseholdSchedulesForLoad(in HouseholdSchedules) (HouseholdSchedules, []string, error) {
+	return normalizeHouseholdSchedulesForLoadPolicy(in, true)
+}
+
+func normalizeHouseholdSchedulesForLoadPolicy(in HouseholdSchedules, dropOrphans bool) (HouseholdSchedules, []string, error) {
 	out := defaultHouseholdSchedules()
 	if in.Schema != 0 && in.Schema != HouseholdSchedulesSchema {
-		return out, fmt.Errorf("household schedules schema is not supported")
+		return out, nil, fmt.Errorf("household schedules schema is not supported")
 	}
 	known := map[string]bool{}
 	for _, rule := range in.Paydays {
 		next, err := normalizePaydayRule(rule)
 		if err != nil {
-			return out, err
+			return out, nil, err
 		}
 		if known[next.ID] {
-			return out, fmt.Errorf("schedule ids must be unique")
+			return out, nil, fmt.Errorf("schedule ids must be unique")
 		}
 		known[next.ID] = true
 		out.Paydays = append(out.Paydays, next)
@@ -272,26 +309,31 @@ func normalizeHouseholdSchedules(in HouseholdSchedules) (HouseholdSchedules, err
 	for _, rule := range in.Pickups {
 		next, err := normalizePickupRule(rule)
 		if err != nil {
-			return out, err
+			return out, nil, err
 		}
 		if known[next.ID] {
-			return out, fmt.Errorf("schedule ids must be unique")
+			return out, nil, fmt.Errorf("schedule ids must be unique")
 		}
 		known[next.ID] = true
 		out.Pickups = append(out.Pickups, next)
 	}
 	if len(out.Paydays) > 24 || len(out.Pickups) > 8 {
-		return out, fmt.Errorf("too many household schedule rules")
+		return out, nil, fmt.Errorf("too many household schedule rules")
 	}
 	var err error
-	out.Overrides, err = normalizeOverrides(in.Overrides, known)
+	dropped := []string{}
+	if dropOrphans {
+		out.Overrides, dropped, err = normalizeOverridesForLoad(in.Overrides, known)
+	} else {
+		out.Overrides, err = normalizeOverrides(in.Overrides, known)
+	}
 	if err != nil {
-		return out, err
+		return out, dropped, err
 	}
 	if len(out.Overrides) > 512 {
-		return out, fmt.Errorf("too many household schedule adjustments")
+		return out, dropped, fmt.Errorf("too many household schedule adjustments")
 	}
-	return out, nil
+	return out, dropped, nil
 }
 
 func legacyHouseholdSchedules(values map[string]string) HouseholdSchedules {
@@ -341,9 +383,12 @@ func (s *Service) loadHouseholdSchedulesLocked(values map[string]string) (Househ
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return HouseholdSchedules{}, false, fmt.Errorf("household schedules are malformed")
 	}
-	normalized, err := normalizeHouseholdSchedules(raw)
+	normalized, dropped, err := normalizeHouseholdSchedulesForLoad(raw)
 	if err != nil {
 		return HouseholdSchedules{}, false, err
+	}
+	if len(dropped) > 0 {
+		s.appendLog("household-schedules.log", fmt.Sprintf("%s: dropped orphaned one-time schedule adjustments: %s\n", s.now().Format(time.ANSIC), strings.Join(dropped, ", ")))
 	}
 	return normalized, false, nil
 }
@@ -490,21 +535,82 @@ func (s *Service) SaveHouseholdSchedules(input HouseholdSchedules) (HouseholdSch
 	return next, nil
 }
 
-func (s *Service) SetHouseholdScheduleOverride(change ScheduleOverride) (HouseholdSchedules, error) {
-	if s == nil {
-		return HouseholdSchedules{}, fmt.Errorf("household schedules unavailable")
+func scheduleGenerationWindow(now time.Time) (time.Time, time.Time) {
+	start := DateOnly(now.Year(), time.January, 1)
+	return start, DateOnly(now.Year()+3, time.January, 1)
+}
+
+func validateScheduleMove(change ScheduleOverride, start, end time.Time) (time.Time, error) {
+	nominal, nominalOK := scheduleDate(change.NominalDate)
+	actual, actualOK := scheduleDate(change.ActualDate)
+	if !nominalOK || !actualOK {
+		return time.Time{}, fmt.Errorf("moved schedule date is invalid")
 	}
+	if nominal.Before(start) || !nominal.Before(end) {
+		return time.Time{}, fmt.Errorf("scheduled occurrence is outside the generated calendar window")
+	}
+	if actual.Before(start) || !actual.Before(end) {
+		return time.Time{}, fmt.Errorf("moved date must remain inside the generated calendar window (%s through %s)", scheduleDateKey(start), scheduleDateKey(end.AddDate(0, 0, -1)))
+	}
+	days := int(actual.Sub(nominal) / (24 * time.Hour))
+	if days < -90 || days > 90 {
+		return time.Time{}, fmt.Errorf("move a scheduled occurrence no more than 90 days earlier or later")
+	}
+	return actual, nil
+}
+
+func scheduleOverrideCollides(next HouseholdSchedules, ruleID, nominalDate string, actual, start, end time.Time, holidays map[string]map[string]bool) bool {
+	for _, events := range householdScheduleFeeds(next, start, end, holidays) {
+		for _, event := range events {
+			if event.Meta["X-DASHGO-SCHEDULE-RULE-ID"] != ruleID || event.Meta["X-DASHGO-NOMINAL-DATE"] == nominalDate {
+				continue
+			}
+			if scheduleDateKey(event.Date) == scheduleDateKey(actual) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *Service) SetHouseholdScheduleOverride(change ScheduleOverride) (HouseholdSchedules, error) {
+	result, err := s.SetHouseholdScheduleOverrideWithResult(change)
+	if err != nil {
+		return HouseholdSchedules{}, err
+	}
+	return result.Schedules, nil
+}
+
+func (s *Service) SetHouseholdScheduleOverrideWithResult(change ScheduleOverride) (ScheduleOverrideResult, error) {
+	if s == nil {
+		return ScheduleOverrideResult{}, fmt.Errorf("household schedules unavailable")
+	}
+	change.RuleID = strings.ToLower(strings.TrimSpace(change.RuleID))
+	change.Action = strings.ToLower(strings.TrimSpace(change.Action))
+	change.NominalDate = strings.TrimSpace(change.NominalDate)
+	change.ActualDate = strings.TrimSpace(change.ActualDate)
+	result := ScheduleOverrideResult{RuleID: change.RuleID, NominalDate: change.NominalDate}
 	s.mu.Lock()
 	current, _, err := s.householdSchedulesLocked()
 	if err != nil {
 		s.mu.Unlock()
-		return HouseholdSchedules{}, err
+		return ScheduleOverrideResult{}, err
 	}
-	change.RuleID = strings.ToLower(strings.TrimSpace(change.RuleID))
-	change.Action = strings.ToLower(strings.TrimSpace(change.Action))
 	if !scheduleDateKeyValid(change.NominalDate) {
 		s.mu.Unlock()
-		return HouseholdSchedules{}, fmt.Errorf("scheduled date is invalid")
+		return ScheduleOverrideResult{}, fmt.Errorf("scheduled date is invalid")
+	}
+	start, end := scheduleGenerationWindow(s.now())
+	actual := time.Time{}
+	if change.Action == "move" {
+		actual, err = validateScheduleMove(change, start, end)
+		if err != nil {
+			s.mu.Unlock()
+			return ScheduleOverrideResult{}, err
+		}
+		result.ActualDate = scheduleDateKey(actual)
+	} else if change.Action == "clear" {
+		result.ActualDate = change.NominalDate
 	}
 	if change.Action == "clear" {
 		current.Overrides = slices.DeleteFunc(current.Overrides, func(row ScheduleOverride) bool {
@@ -524,14 +630,19 @@ func (s *Service) SetHouseholdScheduleOverride(change ScheduleOverride) (Househo
 		}
 	}
 	next, err := normalizeHouseholdSchedules(current)
+	if err == nil && change.Action == "move" {
+		holidays := s.HolidayDatesByLayer(nextHolidayLayers(next))
+		result.Collision = scheduleOverrideCollides(next, change.RuleID, change.NominalDate, actual, start, end, holidays)
+	}
 	if err == nil {
 		err = s.saveHouseholdSchedulesLocked(next)
 	}
 	s.mu.Unlock()
 	if err != nil {
-		return HouseholdSchedules{}, err
+		return ScheduleOverrideResult{}, err
 	}
-	return next, nil
+	result.Schedules = next
+	return result, nil
 }
 
 func (s *Service) AvailableHolidayLayers() []HolidayLayer {

@@ -6,13 +6,16 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 )
 
 // Config is the non-secret-facing projection of the Dashboard Control PIN
-// document. Its map representation remains compatible with the established
-// HTTP route payloads.
+// document. Credentials stay inside the auth service and are never serialized
+// into browser-facing API payloads.
 type Config struct {
 	Enabled    bool
+	Available  bool
 	Hash       string
 	Salt       string
 	Iterations int
@@ -22,14 +25,17 @@ type Config struct {
 	Options    []TimeoutOption
 }
 
-func readEnv(path string) map[string]string {
+func readEnv(path string) (map[string]string, error) {
 	out := map[string]string{}
 	if strings.TrimSpace(path) == "" {
-		return out
+		return nil, fmt.Errorf("Dashboard Control PIN path is unavailable")
 	}
 	body, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return out, nil
+	}
 	if err != nil {
-		return out
+		return nil, err
 	}
 	for _, line := range strings.Split(string(body), "\n") {
 		line = strings.TrimSpace(line)
@@ -40,14 +46,17 @@ func readEnv(path string) map[string]string {
 		value := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
 		out[strings.TrimSpace(parts[0])] = value
 	}
-	return out
+	return out, nil
 }
 
 func writeEnv(path string, updates map[string]string) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("Dashboard Control PIN path is unavailable")
 	}
-	values := readEnv(path)
+	values, err := readEnv(path)
+	if err != nil {
+		return fmt.Errorf("read Dashboard Control PIN configuration: %w", err)
+	}
 	for key, value := range updates {
 		values[key] = value
 	}
@@ -71,17 +80,14 @@ func writeEnv(path string, updates map[string]string) error {
 	for _, key := range keys {
 		fmt.Fprintf(&body, "%s=%s\n", key, values[key])
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(body.String()), 0600); err != nil {
-		return err
-	}
-	_ = os.Chmod(tmp, 0600)
-	return os.Rename(tmp, path)
+	return fileio.WriteAtomic(path, []byte(body.String()), 0600)
 }
 
-func (s *Service) Config() Config {
-	values := readEnv(s.envPath)
-	enabled := values["DASH_CONTROL_PIN_ENABLED"] == "1" && values["DASH_CONTROL_PIN_HASH"] != "" && values["DASH_CONTROL_PIN_SALT"] != ""
+func unavailableConfig() Config {
+	return Config{Enabled: true, Available: false, Timeout: DefaultTimeout, Label: TimeoutInfo(DefaultTimeout).Label, TTL: TimeoutInfo(DefaultTimeout).Seconds, Options: TimeoutOptions()}
+}
+
+func configFromValues(values map[string]string) Config {
 	timeout := values["DASH_CONTROL_PIN_TIMEOUT"]
 	if timeout == "" {
 		timeout = values["DASH_CONTROL_PIN_MODE"]
@@ -93,34 +99,70 @@ func (s *Service) Config() Config {
 		timeout = DefaultTimeout
 	}
 	info := TimeoutInfo(timeout)
-	iterations, _ := strconv.Atoi(values["DASH_CONTROL_PIN_ITERATIONS"])
-	if iterations <= 0 {
-		iterations = 200000
+	enabled := values["DASH_CONTROL_PIN_ENABLED"] == "1"
+	if !enabled {
+		return Config{Enabled: false, Available: true, Timeout: info.Value, Label: info.Label, TTL: info.Seconds, Options: TimeoutOptions()}
+	}
+
+	hash := values["DASH_CONTROL_PIN_HASH"]
+	salt := values["DASH_CONTROL_PIN_SALT"]
+	iterations := DefaultPINIterations
+	if raw := strings.TrimSpace(values["DASH_CONTROL_PIN_ITERATIONS"]); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < MinPINIterations || parsed > MaxPINIterations {
+			return unavailableConfig()
+		}
+		iterations = parsed
+	}
+	if hash == "" || salt == "" {
+		return unavailableConfig()
 	}
 	return Config{
-		Enabled: enabled, Hash: values["DASH_CONTROL_PIN_HASH"], Salt: values["DASH_CONTROL_PIN_SALT"],
-		Iterations: iterations, Timeout: info.Value, Label: info.Label, TTL: info.Seconds, Options: TimeoutOptions(),
+		Enabled: enabled, Available: true, Hash: hash, Salt: salt, Iterations: iterations,
+		Timeout: info.Value, Label: info.Label, TTL: info.Seconds, Options: TimeoutOptions(),
 	}
+}
+
+func (s *Service) configLocked() Config {
+	if s.recoveryErr != nil {
+		return unavailableConfig()
+	}
+	values, err := readEnv(s.envPath)
+	if err != nil {
+		return unavailableConfig()
+	}
+	return configFromValues(values)
+}
+
+func (s *Service) Config() Config {
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.configLocked()
 }
 
 func (c Config) Payload() map[string]any {
 	return map[string]any{
-		"enabled": c.Enabled, "hash": c.Hash, "salt": c.Salt, "iterations": c.Iterations,
+		"enabled": c.Enabled, "available": c.Available,
 		"timeout": c.Timeout, "timeoutLabel": c.Label, "ttl": c.TTL, "options": c.Options,
 	}
 }
 
 func (s *Service) PinStatus(token string) map[string]any {
 	config := s.Config()
-	unlocked := true
-	if config.Enabled {
+	unlocked := !config.Enabled && config.Available
+	if config.Enabled && config.Available {
 		unlocked = s.tokenOKEnabled(token)
 	}
-	return map[string]any{
-		"enabled": config.Enabled, "timeout": config.Timeout, "timeoutLabel": config.Label, "ttl": config.TTL,
+	payload := map[string]any{
+		"enabled": config.Enabled, "available": config.Available,
+		"timeout": config.Timeout, "timeoutLabel": config.Label, "ttl": config.TTL,
 		"sessionTtl": tern(unlocked, s.SessionTTL(token), 0), "options": config.Options, "unlocked": unlocked,
 		"lockoutRemaining": s.PINLockoutRemaining(),
 	}
+	if !config.Available {
+		payload["error"] = "PIN protection configuration is unavailable; use local recovery."
+	}
+	return payload
 }
 
 func tern[T any](condition bool, whenTrue, whenFalse T) T {
@@ -130,10 +172,12 @@ func tern[T any](condition bool, whenTrue, whenFalse T) T {
 	return whenFalse
 }
 
+// VerifyPIN answers only whether a configured credential matches. Disabled or
+// unavailable protection is not a successful identity verification.
 func (s *Service) VerifyPIN(pin string) bool {
 	config := s.Config()
-	if !config.Enabled {
-		return true
+	if !config.Available || !config.Enabled {
+		return false
 	}
 	return VerifyPIN(pin, config.Salt, config.Hash, config.Iterations)
 }
@@ -143,22 +187,48 @@ func (s *Service) SetPIN(pin string, timeout any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	if s.recoveryErr != nil {
+		return nil, fmt.Errorf("PIN protection configuration is unavailable; use local recovery")
+	}
 	if err := writeEnv(s.envPath, payload); err != nil {
 		return nil, err
 	}
+	config := s.configLocked()
+	if !config.Available || !config.Enabled {
+		return nil, fmt.Errorf("PIN protection configuration could not be verified after saving")
+	}
 	s.ClearPINFailures()
-	return s.Config().Payload(), nil
+	return config.Payload(), nil
 }
 
 func (s *Service) SetTimeout(timeout string) error {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	config := s.configLocked()
+	if !config.Available {
+		return fmt.Errorf("PIN protection configuration is unavailable; use local recovery")
+	}
+	if !config.Enabled {
+		return fmt.Errorf("PIN lock is not enabled")
+	}
 	return writeEnv(s.envPath, map[string]string{"DASH_CONTROL_PIN_TIMEOUT": NormalizeTimeout(timeout)})
 }
 
-func (s *Service) RemovePIN() map[string]any {
-	_ = writeEnv(s.envPath, map[string]string{"DASH_CONTROL_PIN_ENABLED": "0", "DASH_CONTROL_PIN_HASH": "", "DASH_CONTROL_PIN_SALT": ""})
+func (s *Service) RemovePIN() (map[string]any, error) {
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	config := s.configLocked()
+	if !config.Available {
+		return nil, fmt.Errorf("PIN protection configuration is unavailable; use local recovery")
+	}
+	if err := writeEnv(s.envPath, map[string]string{"DASH_CONTROL_PIN_ENABLED": "0", "DASH_CONTROL_PIN_HASH": "", "DASH_CONTROL_PIN_SALT": ""}); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	s.sessions = map[string]sessionMeta{}
-	s.failTimes = nil
 	s.mu.Unlock()
-	return s.Config().Payload()
+	s.ClearPINFailures()
+	return s.configLocked().Payload(), nil
 }

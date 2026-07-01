@@ -175,7 +175,7 @@ The installer guides the first configuration. Afterwards, open **Apps** from the
 - **Update / Backup / Restore** — updates, local configuration backups, restore, and concise update history.
 - **Diagnostics / Terminal** — Doctor evidence, memory inspection, repair planning, private diagnostics export, and the local maintenance terminal.
 
-Dashboard Control opens with all cards collapsed. Open only the section you need.
+Dashboard Control opens with **Device status** ready for a glance. All other cards stay collapsed and lazy until you open the section you need.
 
 ### Performance profiles
 
@@ -257,12 +257,21 @@ The optional Dashboard Control terminal card is managed from SSH. Check its curr
 ~/dashboard/bin/dashboard-terminal-access status
 ```
 
-To enable or disable the card, rerun the installer and choose **25) Terminal access**. Terminal access is intended for the local administrator; leave it disabled when the touchscreen should not offer a maintenance shell.
+To enable or disable the card, rerun the installer and choose **Terminal access**. Terminal access is intended for the local administrator; leave it disabled when the touchscreen should not offer a maintenance shell.
 
 ## Security and privacy
 
 - The dashboard control server binds to loopback by default. Do not expose it through a reverse proxy or public network binding.
-- An optional Control PIN protects sensitive writes and terminal access.
+- An optional Control PIN protects sensitive writes and terminal access. Control and personal-inbox PIN failures use a persistent escalating cooldown; browser-facing status does not expose PIN verifier material.
+- **Every control open** uses a short server-side session that is refreshed only while Dashboard Control remains open, rather than relying solely on browser close cleanup.
+- If the Control PIN is forgotten, a local administrator with SSH can create the one-shot reset flag and restart the service:
+
+  ```bash
+  touch ~/.dashboard-control-pin-reset
+  sudo systemctl restart dashboard-server
+  ```
+
+  The service consumes the flag once, disables only the Dashboard Control PIN, clears its lockout state, and removes the flag. It does not reset personal inbox PINs or other dashboard data.
 - Install Dash-Go only from the official [GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
 - Do not use an unsafe verification-bypass option for normal installation or updates.
 - Weather keys, calendar credentials, Microsoft refresh tokens, private Family Message Board records, and notification-route secrets remain outside served dashboard content.

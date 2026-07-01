@@ -26,6 +26,7 @@ func fetchOpenMeteoGo(ctx context.Context, id string, cfg Config) (map[string]an
 	q.Set("longitude", trimFloat(cfg.Lon))
 	q.Set("temperature_unit", cfg.TempUnit)
 	q.Set("wind_speed_unit", cfg.WindUnit)
+	q.Set("precipitation_unit", "mm")
 	q.Set("timezone", "auto")
 	q.Set("forecast_days", strconv.Itoa(clamp(cfg.Days, 1, 16)))
 	q.Set("current", "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m")

@@ -13,8 +13,11 @@ require(){ grep -Fq -- "$1" "$INSTALLER" || { echo "missing installer contract: 
 require '--message-sources --list'
 require '--message-sources --set'
 require '--update-message-feeds'
-require '22) Uninstall Dash-Go'
-require '12) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup'
+require 'OPT_REMOVE=22'
+require 'OPT_TODO=12'
+require 'OPT_PIN=15'
+require 'OPT_SERVICE=16'
+require 'OPT_SSH=17'
 if grep -Eq '[[:space:]][0-9]+[[:alpha:]]\)' "$INSTALLER"; then
   echo 'FAIL: installer retains a letter-suffixed main-menu choice' >&2; exit 1
 fi

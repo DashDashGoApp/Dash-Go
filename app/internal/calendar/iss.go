@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,8 +17,10 @@ import (
 )
 
 var (
-	reISSLatitude  = regexp.MustCompile(`lat\s*:\s*([-0-9.]+)`)
-	reISSLongitude = regexp.MustCompile(`lon\s*:\s*([-0-9.]+)`)
+	reISSLatitude     = regexp.MustCompile(`lat\s*:\s*([-0-9.]+)`)
+	reISSLongitude    = regexp.MustCompile(`lon\s*:\s*([-0-9.]+)`)
+	reISSLineComment  = regexp.MustCompile(`(?m)//[^\n]*`)
+	reISSBlockComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
 )
 
 func (s *Service) UpdateISSPasses() map[string]any {
@@ -64,11 +67,25 @@ func (s *Service) UpdateISSPasses() map[string]any {
 		return map[string]any{"ok": false, "error": err.Error(), "generator": "go"}
 	}
 	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode > 299 {
+		err := fmt.Errorf("ISS pass fetch failed: HTTP %d", response.StatusCode)
+		s.appendLog("iss-passes.log", s.now().Format(time.ANSIC)+": "+err.Error()+", kept previous file\n")
+		s.mu.Unlock()
+		return map[string]any{"ok": false, "error": err.Error(), "generator": "go"}
+	}
 	var data struct {
+		Info   json.RawMessage  `json:"info"`
+		Error  json.RawMessage  `json:"error"`
 		Passes []map[string]any `json:"passes"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&data); err != nil {
-		s.appendLog("iss-passes.log", s.now().Format(time.ANSIC)+": ISS pass fetch FAILED, bad payload\n")
+		s.appendLog("iss-passes.log", s.now().Format(time.ANSIC)+": ISS pass fetch FAILED, bad payload; kept previous file\n")
+		s.mu.Unlock()
+		return map[string]any{"ok": false, "error": err.Error(), "generator": "go"}
+	}
+	if !issEnvelopePresent(data.Info) || issEnvelopePresent(data.Error) {
+		err := fmt.Errorf("ISS pass fetch returned an error payload")
+		s.appendLog("iss-passes.log", s.now().Format(time.ANSIC)+": "+err.Error()+", kept previous file\n")
 		s.mu.Unlock()
 		return map[string]any{"ok": false, "error": err.Error(), "generator": "go"}
 	}
@@ -94,7 +111,11 @@ func (s *Service) UpdateISSPasses() map[string]any {
 		}
 		events = append(events, Event{Date: begins, Start: &begins, End: &ends, Summary: "ISS visible pass", Description: strings.Join(bits, "; "), UID: "iss"})
 	}
-	_ = WriteICSFile(destination, "ISS Visible Passes", events)
+	if err := WriteICSFile(destination, "ISS Visible Passes", events); err != nil {
+		s.appendLog("iss-passes.log", s.now().Format(time.ANSIC)+": ISS pass write FAILED, kept previous file ("+err.Error()+")\n")
+		s.mu.Unlock()
+		return map[string]any{"ok": false, "error": err.Error(), "generator": "go"}
+	}
 	s.appendLog("iss-passes.log", fmt.Sprintf("%s: ISS passes updated (%d events)\n", s.now().Format(time.ANSIC), len(events)))
 	s.mu.Unlock()
 	return map[string]any{"ok": true, "enabled": true, "eventCount": len(events), "generator": "go"}
@@ -105,11 +126,13 @@ func ReadLatLon(path string) (float64, float64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	text := string(body)
-	lat, lon := reISSLatitude.FindStringSubmatch(text), reISSLongitude.FindStringSubmatch(text)
-	if len(lat) < 2 || len(lon) < 2 {
+	text := reISSLineComment.ReplaceAllString(string(body), "")
+	text = reISSBlockComment.ReplaceAllString(text, "")
+	latitudes, longitudes := reISSLatitude.FindAllStringSubmatch(text, -1), reISSLongitude.FindAllStringSubmatch(text, -1)
+	if len(latitudes) == 0 || len(longitudes) == 0 {
 		return 0, 0, fmt.Errorf("lat/lon missing")
 	}
+	lat, lon := latitudes[len(latitudes)-1], longitudes[len(longitudes)-1]
 	latitude, firstErr := strconv.ParseFloat(lat[1], 64)
 	longitude, secondErr := strconv.ParseFloat(lon[1], 64)
 	if firstErr != nil {
@@ -118,7 +141,18 @@ func ReadLatLon(path string) (float64, float64, error) {
 	if secondErr != nil {
 		return 0, 0, secondErr
 	}
+	if math.IsNaN(latitude) || math.IsNaN(longitude) || math.IsInf(latitude, 0) || math.IsInf(longitude, 0) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 {
+		return 0, 0, fmt.Errorf("lat/lon are invalid")
+	}
+	if latitude == 0 && longitude == 0 {
+		return 0, 0, fmt.Errorf("lat/lon are not configured")
+	}
 	return latitude, longitude, nil
+}
+
+func issEnvelopePresent(raw json.RawMessage) bool {
+	value := strings.TrimSpace(string(raw))
+	return value != "" && value != "null" && value != "{}" && value != "[]"
 }
 
 func asFloat(value any) float64 {

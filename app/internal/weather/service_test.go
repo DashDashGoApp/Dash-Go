@@ -111,13 +111,15 @@ func formatAny(value any) string {
 	return string(body)
 }
 
-func TestTolerantWeatherBlendKeepsNumericCodesWithoutNilCategory(t *testing.T) {
+func TestWeatherSourcesPayloadPreservesNumericCodesWithoutNilCoercion(t *testing.T) {
 	sources := []any{
 		map[string]any{"current": map[string]any{"weather_code": nil}},
 		map[string]any{"current": map[string]any{"weather_code": 2}},
 	}
-	if got := modalWeatherCodeGo(sources, -1, "current"); got != 2 {
-		t.Fatalf("blended weather code = %#v, want numeric code 2", got)
+	payload := weatherSourcesPayloadGo(sources, nil, nil)
+	raw := payload["sources"].([]any)
+	if got := anyMap(anyMap(raw[1])["current"])["weather_code"]; got != 2 {
+		t.Fatalf("numeric source code = %#v, want numeric code 2", got)
 	}
 }
 

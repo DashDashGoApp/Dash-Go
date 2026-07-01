@@ -45,12 +45,15 @@ doctor_plan_action_ids(){
 }
 
 doctor_plan_selectable_numbers(){
-  local idx=0 class id title out=""
+  # Keep hint numbering in the exact class-grouped order shown by render().
+  local idx=0 class id title out="" wanted_class
   [ -f "${DOCTOR_PLAN_FILE:-}" ] || return 0
-  while IFS=$'\t' read -r class id title _; do
-    doctor_plan_selectable_class "$class" || continue
-    idx=$((idx+1)); out="${out}${out:+,}[${idx}] ${title}"
-  done < "$DOCTOR_PLAN_FILE"
+  for wanted_class in safe guided admin; do
+    while IFS=$'\t' read -r class id title _; do
+      [ "$class" = "$wanted_class" ] || continue
+      idx=$((idx+1)); out="${out}${out:+,}[${idx}] ${title}"
+    done < "$DOCTOR_PLAN_FILE"
+  done
   printf '%s\n' "$out"
 }
 
@@ -94,17 +97,18 @@ doctor_plan_render(){
 }
 
 doctor_plan_ids_from_numbers(){
-  # Maps comma/space separated visible repair numbers back to repair keys. Only
-  # safe/guided/admin items receive numbers, so the render and parser cannot
-  # drift into offering a manual or installer-only item as selectable.
-  local raw="$1" wanted="" n idx=0 class id
+  # Map numbers in the same safe→guided→admin order as the renderer. Walking
+  # discovery order here can run a different repair than the item displayed.
+  local raw="$1" wanted="" idx=0 class id wanted_class
   raw="$(printf '%s' "$raw" | tr ', ' '\n' | awk 'NF && $0 ~ /^[0-9]+$/ {print}' | sort -n -u | tr '\n' ' ')"
   [ -n "$raw" ] || return 1
-  while IFS=$'\t' read -r class id _; do
-    doctor_plan_selectable_class "$class" || continue
-    idx=$((idx+1))
-    case " $raw " in *" $idx "*) wanted="${wanted}${wanted:+,}${id}";; esac
-  done < "$DOCTOR_PLAN_FILE"
+  for wanted_class in safe guided admin; do
+    while IFS=$'\t' read -r class id _; do
+      [ "$class" = "$wanted_class" ] || continue
+      idx=$((idx+1))
+      case " $raw " in *" $idx "*) wanted="${wanted}${wanted:+,}${id}";; esac
+    done < "$DOCTOR_PLAN_FILE"
+  done
   [ -n "$wanted" ] || return 1
   printf '%s\n' "$wanted"
 }

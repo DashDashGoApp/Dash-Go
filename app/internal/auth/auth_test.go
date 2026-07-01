@@ -21,6 +21,9 @@ func TestTimeoutNormalizationAndPINPayload(t *testing.T) {
 	if auth.VerifyPIN("0000", payload["DASH_CONTROL_PIN_SALT"], payload["DASH_CONTROL_PIN_HASH"], 200000) {
 		t.Fatal("wrong PIN verified")
 	}
+	if auth.VerifyPIN("2468", payload["DASH_CONTROL_PIN_SALT"], payload["DASH_CONTROL_PIN_HASH"], auth.MaxPINIterations+1) {
+		t.Fatal("out-of-range iteration count verified")
+	}
 }
 
 func TestSessionExpiryModesAndTokens(t *testing.T) {
@@ -30,6 +33,9 @@ func TestSessionExpiryModesAndTokens(t *testing.T) {
 	}
 	if got := auth.SessionExpiry("60", now); got == nil || !got.Equal(now.Add(time.Minute)) {
 		t.Fatalf("60 second expiry = %v", got)
+	}
+	if got := auth.SessionExpiry("every_open", now); got == nil || !got.Equal(now.Add(auth.EveryOpenActiveTTL)) {
+		t.Fatalf("every-open expiry = %v", got)
 	}
 	if first, second := auth.NewToken(), auth.NewToken(); first == "" || first == second {
 		t.Fatalf("tokens not distinct: %q %q", first, second)

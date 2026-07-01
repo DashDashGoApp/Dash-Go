@@ -201,8 +201,13 @@ async function renderCtrlSecurity(){
   let st=CTRL_LOCK_STATUS;
   try{ st=await controlLockStatus(); }catch(_){ st={enabled:false}; }
   wrap.innerHTML="";
+  const unavailable=!!(st&&st.available===false);
   const enabled=!!(st&&st.enabled);
-  const unlocked=!enabled || !!CTRL_TOKEN || !!(st&&st.unlocked);
+  const unlocked=!unavailable&&(!enabled || !!CTRL_TOKEN || !!(st&&st.unlocked));
+  if(unavailable){
+    wrap.appendChild(ctrlStateCard("warn","PIN protection unavailable",st.error||"The local PIN configuration cannot be read. Use the documented local recovery flag, then restart the dashboard control server."));
+    return;
+  }
   wrap.appendChild(ctrlStateCard(enabled?"good":"info",
     "PIN protection: "+(enabled?"On":"Off"),
     enabled ? "Persistent chalkboard storage and Dashboard Control settings require an unlocked session. Locked users get a temporary scratch board only." :
@@ -234,6 +239,7 @@ async function renderCtrlSecurity(){
         if(r.token){ CTRL_TOKEN=r.token; SAFE_SESSION.set("dashboardControlToken",CTRL_TOKEN); }
         else if(r.sessionRefreshed && CTRL_TOKEN){ SAFE_SESSION.set("dashboardControlToken",CTRL_TOKEN); }
         CTRL_LOCK_STATUS={...(CTRL_LOCK_STATUS||{}),...r,unlocked:true};
+        if(typeof ctrlRefreshEveryOpenHeartbeat==="function")ctrlRefreshEveryOpenHeartbeat();
         ctrlMsg("PIN timing updated.");
         await renderCtrlSecurity();
       }catch(e){ ctrlMsg(e.message); }
@@ -298,6 +304,7 @@ function showPinLock(){
       if(panel) panel.classList.remove("pinlocked");
       setCtrlMainVisible(true);
       ctrlMsg(""); await renderCtrlAll();
+      if(typeof ctrlRefreshEveryOpenHeartbeat==="function")ctrlRefreshEveryOpenHeartbeat();
       if(typeof ctrlOpenPendingSection==="function")ctrlOpenPendingSection();
       if(typeof ctrlScheduleCacheBudgetProbe==="function")ctrlScheduleCacheBudgetProbe();
     }catch(e){
@@ -320,6 +327,11 @@ function showPinLock(){
   grid.appendChild(cbtn("0","pinbtn",()=>{ if(remaining()>0){ setLockout(remaining()); return; } if(val.length<8){ val+="0"; draw(); setNotice("",""); } }));
   grid.appendChild(cbtn("OK","pinbtn small on",submit));
   draw();
+  if(CTRL_LOCK_STATUS&&CTRL_LOCK_STATUS.available===false){
+    setButtonsDisabled(true);
+    setNotice(CTRL_LOCK_STATUS.error||"PIN protection configuration is unavailable. Use local recovery.","warn");
+    return;
+  }
   const wait=(CTRL_LOCK_STATUS&&CTRL_LOCK_STATUS.lockoutRemaining)||0;
   if(wait>0) setLockout(wait);
 }

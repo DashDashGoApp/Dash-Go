@@ -1,6 +1,11 @@
 package family
 
-import "time"
+import (
+	"os"
+	"time"
+
+	controlauth "github.com/DashDashGoApp/Dash-Go/app/internal/auth"
+)
 
 func (s *Service) IssueSession(personID string) string {
 	personID = PersonID(personID)
@@ -11,7 +16,7 @@ func (s *Service) IssueSession(personID string) string {
 		s.sessions = map[string]InboxSession{}
 	}
 	if s.failures == nil {
-		s.failures = map[string][]time.Time{}
+		s.failures = map[string]inboxPINLockout{}
 	}
 	s.sessions[token] = InboxSession{PersonID: personID, Exp: now.Add(InboxSessionTTL)}
 	s.pruneLocked(now)
@@ -72,50 +77,69 @@ func (s *Service) pruneLocked(now time.Time) {
 			delete(s.sessions, token)
 		}
 	}
-	for personID, attempts := range s.failures {
-		kept := attempts[:0]
-		for _, when := range attempts {
-			if now.Sub(when) <= time.Minute {
-				kept = append(kept, when)
-			}
-		}
-		if len(kept) == 0 {
-			delete(s.failures, personID)
-		} else {
-			s.failures[personID] = kept
-		}
-	}
 }
 
 func (s *Service) LockoutRemaining(personID string) int {
 	personID = PersonID(personID)
 	s.inboxMu.Lock()
 	defer s.inboxMu.Unlock()
-	now := s.Now()
-	s.pruneLocked(now)
-	attempts := s.failures[personID]
-	if len(attempts) < 8 {
-		return 0
-	}
-	remaining := int((time.Minute - now.Sub(attempts[0])).Seconds())
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
+	return s.inboxLockoutRemainingLocked(personID, s.Now())
 }
 
-func (s *Service) RecordPINFailure(personID string) {
+// RecordPINFailure persists a per-person escalating lockout. A failed inbox
+// PIN cannot regain a fresh eight-attempt window by restarting the server.
+func (s *Service) RecordPINFailure(personID string) int {
 	personID = PersonID(personID)
+	now := s.Now()
 	s.inboxMu.Lock()
+	defer s.inboxMu.Unlock()
 	if s.failures == nil {
-		s.failures = map[string][]time.Time{}
+		s.failures = map[string]inboxPINLockout{}
 	}
-	s.failures[personID] = append(s.failures[personID], s.Now())
-	s.inboxMu.Unlock()
+	if remaining := s.inboxLockoutRemainingLocked(personID, now); remaining > 0 {
+		return remaining
+	}
+	state := s.failures[personID]
+	if state.Failures < controlauth.MaxPersistentPINFailures {
+		state.Failures++
+	}
+	if duration := inboxLockoutDuration(state.Failures); duration > 0 {
+		state.LockedUntil = now.Add(duration).Unix()
+	} else {
+		state.LockedUntil = 0
+	}
+	s.failures[personID] = state
+	s.saveInboxLockoutsLocked()
+	return s.inboxLockoutRemainingLocked(personID, now)
+}
+
+func inboxLockoutDuration(failures int) time.Duration {
+	if failures < controlauth.MaxPINFailures {
+		return 0
+	}
+	steps := failures - controlauth.MaxPINFailures
+	duration := controlauth.InitialPINLockout
+	for steps > 0 && duration < controlauth.MaxPINLockout {
+		duration *= 2
+		steps--
+	}
+	if duration > controlauth.MaxPINLockout {
+		return controlauth.MaxPINLockout
+	}
+	return duration
 }
 
 func (s *Service) ClearPINFailures(personID string) {
+	personID = PersonID(personID)
 	s.inboxMu.Lock()
-	delete(s.failures, PersonID(personID))
+	delete(s.failures, personID)
+	path := s.lockoutPath
+	empty := len(s.failures) == 0
+	if !empty {
+		s.saveInboxLockoutsLocked()
+	}
 	s.inboxMu.Unlock()
+	if empty && path != "" {
+		_ = os.Remove(path)
+	}
 }

@@ -5,8 +5,6 @@ import "time"
 const (
 	MaxSessionTokens = 32
 	MaxOneShotTokens = 64
-	MaxPINFailures   = 8
-	PINFailureWindow = 60 * time.Second
 )
 
 type sessionMeta struct {
@@ -32,6 +30,9 @@ func (s *Service) sessionMeta(timeout string, minTTL time.Duration, now time.Tim
 
 func (s *Service) IssueToken() string {
 	config := s.Config()
+	if !config.Available {
+		return ""
+	}
 	token := NewToken()
 	now := s.nowTime()
 	s.mu.Lock()
@@ -43,7 +44,11 @@ func (s *Service) IssueToken() string {
 }
 
 func (s *Service) TokenOK(token string) bool {
-	if !s.Config().Enabled {
+	config := s.Config()
+	if !config.Available {
+		return false
+	}
+	if !config.Enabled {
 		return true
 	}
 	return s.tokenOKEnabled(token)
@@ -73,7 +78,7 @@ func (s *Service) SessionTTL(token string) int {
 	if !ok || meta.Exp == nil {
 		return 0
 	}
-	seconds := int(time.Until(*meta.Exp).Seconds())
+	seconds := int(meta.Exp.Sub(s.nowTime()).Seconds())
 	if seconds < 0 {
 		return 0
 	}
@@ -90,7 +95,7 @@ func (s *Service) RefreshSession(token, timeout string) map[string]any {
 	s.sessions[token] = s.sessionMeta(timeout, RefreshGrace, now)
 	seconds := 0
 	if exp := s.sessions[token].Exp; exp != nil {
-		seconds = int(time.Until(*exp).Seconds())
+		seconds = int(exp.Sub(now).Seconds())
 		if seconds < 0 {
 			seconds = 0
 		}
@@ -116,10 +121,8 @@ func (s *Service) IssueOneShot(path string) string {
 }
 
 func (s *Service) ConsumeOneShot(token, path string) bool {
-	if !s.Config().Enabled {
-		return true
-	}
-	if token == "" {
+	config := s.Config()
+	if !config.Available || !config.Enabled || token == "" {
 		return false
 	}
 	s.mu.Lock()
@@ -130,39 +133,6 @@ func (s *Service) ConsumeOneShot(token, path string) bool {
 	}
 	delete(s.oneShots, token)
 	return meta.Path == path && s.nowTime().Before(meta.Exp)
-}
-
-func (s *Service) PINLockoutRemaining() int {
-	now := s.nowTime()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	kept := s.failTimes[:0]
-	for _, when := range s.failTimes {
-		if now.Sub(when) <= PINFailureWindow {
-			kept = append(kept, when)
-		}
-	}
-	s.failTimes = kept
-	if len(s.failTimes) < MaxPINFailures {
-		return 0
-	}
-	remaining := int((PINFailureWindow - now.Sub(s.failTimes[0])).Seconds())
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
-}
-
-func (s *Service) RecordPINFailure() {
-	s.mu.Lock()
-	s.failTimes = append(s.failTimes, s.nowTime())
-	s.mu.Unlock()
-}
-
-func (s *Service) ClearPINFailures() {
-	s.mu.Lock()
-	s.failTimes = nil
-	s.mu.Unlock()
 }
 
 func (s *Service) pruneLocked(now time.Time) {

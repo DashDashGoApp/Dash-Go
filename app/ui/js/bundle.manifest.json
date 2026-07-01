@@ -43,6 +43,7 @@
       "radar-overlay.js",
       "radar-lite.js",
       "weather-sources.js",
+      "weather-blend.js",
       "weather.js",
       "clock.js",
       "messages-holidays.js",

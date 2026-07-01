@@ -1,5 +1,5 @@
-/* Dashboard Control shared spacing, target, and layout scale.
-   The final layout layer consumes these tokens; feature CSS may use them too. */
+/* Dashboard Control shared design vocabulary.
+   Control feature CSS consumes these tokens instead of re-declaring geometry. */
 :root{
   --ctrl-space-1:4px;
   --ctrl-space-2:8px;
@@ -7,10 +7,43 @@
   --ctrl-space-4:16px;
   --ctrl-space-5:20px;
   --ctrl-space-6:24px;
-  --ctrl-tap-min:44px;
-  --ctrl-summary-min:48px;
+  --ctrl-gap-compact:var(--ctrl-space-2);
+  --ctrl-gap:var(--ctrl-space-3);
+  --ctrl-tap-min:48px;
+  --ctrl-summary-min:52px;
+  --ctrl-tab-min:52px;
   --ctrl-action-min:64px;
   --ctrl-action-min-lg:76px;
+  --ctrl-metric-min:180px;
+  --ctrl-radius-sm:10px;
+  --ctrl-radius-md:14px;
+  --ctrl-radius-lg:14px;
+  --ctrl-radius-pill:999px;
+  --ctrl-line:var(--line);
+  --ctrl-line-soft:var(--line-soft);
+  --ctrl-fill:var(--panel);
+  --ctrl-fill-quiet:color-mix(in srgb,var(--panel) 88%,var(--bg));
+  --ctrl-accent-bg:color-mix(in srgb,var(--accent) 18%,var(--panel));
+  --ctrl-accent-bg-strong:color-mix(in srgb,var(--accent) 30%,var(--panel));
+  --ctrl-accent-border:color-mix(in srgb,var(--accent) 68%,var(--line));
+  --ctrl-danger-fg:var(--sun);
+  --ctrl-danger-bg:color-mix(in srgb,var(--sun) 12%,var(--panel));
+  --ctrl-danger-border:color-mix(in srgb,var(--sun) 48%,var(--line));
+  --ctrl-danger-armed-bg:color-mix(in srgb,var(--sun) 34%,var(--bg));
+  --ctrl-danger-armed-fg:var(--fg);
+  --ctrl-safe-repair-bg:color-mix(in srgb,var(--today) 10%,var(--panel));
+  --ctrl-safe-repair-border:color-mix(in srgb,var(--today) 48%,var(--line));
+  --ctrl-safe-repair-armed-bg:color-mix(in srgb,var(--today) 24%,var(--bg));
+  --ctrl-safe-repair-armed-border:color-mix(in srgb,var(--today) 72%,var(--line));
+  --ctrl-warn-fg:var(--today);
+  --ctrl-warn-bg:color-mix(in srgb,var(--today) 16%,var(--panel));
+  --ctrl-warn-border:color-mix(in srgb,var(--today) 48%,var(--line));
+  --ctrl-state-ok-border:color-mix(in srgb,var(--accent) 42%,var(--line));
+  --ctrl-state-ok-bg:color-mix(in srgb,var(--accent) 10%,var(--panel));
+  --ctrl-state-warn-border:color-mix(in srgb,var(--today) 48%,var(--line));
+  --ctrl-state-warn-bg:color-mix(in srgb,var(--today) 11%,var(--panel));
+  --ctrl-state-bad-border:color-mix(in srgb,var(--sun) 48%,var(--line));
+  --ctrl-state-bad-bg:color-mix(in srgb,var(--sun) 11%,var(--panel));
   --ctrl-bp-stack:760px;
   --ctrl-bp-two:1100px;
   --ctrl-bp-wide:1280px;

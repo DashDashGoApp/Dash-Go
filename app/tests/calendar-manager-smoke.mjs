@@ -12,7 +12,7 @@ const trash=read("internal/calendar/trash.go");
 const types=read("internal/calendar/types.go");
 const facade=read("cmd/dashboard-control-server/calendar_facade.go");
 const routesGet=read("cmd/dashboard-control-server/http_routes_get.go");
-const routesPost=read("cmd/dashboard-control-server/http_routes_post.go");
+const routesPost=["http_routes_post.go","http_routes_post_calendar.go"].map(name=>read("cmd/dashboard-control-server/"+name)).join("\n");
 const chore=read("ui/chore-wheel.js");
 const choreCore=read("ui/chore-wheel-core.js");
 const maintenance=read("ui/maintenance.js");

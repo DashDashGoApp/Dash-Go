@@ -26,6 +26,7 @@ assert.match(nav,/if\(name==="overview"\) renderCtrlQuickActions\(\)/);assert.ma
 for(const token of ["function ctrlSaveProfileOwned","Profile default:","Current:","What a profile resets"])assert.ok(profile.includes(token),`Profile must retain ${token}`);
 for(const retired of ["Fine-tune performance","profileEditorQueuePatch","profileEditorBuildTuning","profileTuningLink"])assert.ok(!profile.includes(retired),`retired Profile surface survived: ${retired}`);
 assert.ok(profile.includes('item.key!=="layoutProfile"'),"internal layoutProfile must be hidden from the visible Profile comparison");
-assert.ok(css.includes("grid-4-dashboard")&&css.includes("grid-3-provider")&&css.includes("mapmaintenance"),"count-aware Control grids missing");
+assert.ok(!css.includes("grid-4-dashboard")&&!css.includes("grid-4-screen")&&css.includes("grid-3-provider")&&css.includes("mapmaintenance"),"retired grid aliases must be removed while live count-aware grids remain");
 assert.ok(!profile.includes("Radar budget")&&!profile.includes("radarHistoryMode")&&!profile.includes("radarRenderMode"),"Radar budget should be retired from Dashboard Control");
-console.log("PASS: beta.100 Control tabs retain focused tools with Profile reserved for presets and changed-setting comparison.");
+assert.match(index,/data-ctrlpage="control">Settings</,"household and preference tab must use the clearer Settings name");
+console.log("PASS: Control tabs retain focused tools with Settings reserved for household preferences and Profile for presets.");

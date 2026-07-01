@@ -13,7 +13,22 @@
 
 ## Current development beta
 
-- No development beta is staged in this source handoff. `1.5.3` is the stable promotion candidate.
+- **Version:** `1.5.4-beta.1`
+- **Track:** beta
+- **Focus:** Dashboard Control consolidation, PIN-security state-machine hardening, installer-flow repair, weather-data correctness, Doctor/repair safety, and generated-calendar resilience: visible selected/pressed touch states, one owned tab rail, safer PIN handling, a truthful non-destructive installer menu, canonical weather data, conservative repair recovery, DST-safe chore cadence, verified ISS preservation, and correctable generated schedule movement.
+
+## 1.5.4-beta.1 focus
+
+- **Dashboard Control clarity:** selected and pressed controls use visible theme-aware fills on every theme; the six-tab rail has symmetric internal spacing and stable two-column small-screen rows.
+- **Control maintainability:** retired action-drawer, obsolete Control-page maintenance, five-tab, and unused grid layers were removed so layout, sizing, and state ownership are explicit.
+- **Overview flow:** Device status opens by default and groups key network, device, and data-freshness signals, while lower-signal telemetry is available under More device details.
+- **Touch workflow:** Settings is the clear household/preferences tab name, every page follows the same accordion model, and action feedback is shown beside the active action as well as in the existing global status line.
+- **PIN security:** configured credentials are verified strictly rather than treating a disabled or unconfigured lock as a successful verification; Control and personal-inbox failures use bounded persistent escalating lockouts; every-open Control sessions use a short server-side expiry refreshed only while Control remains active; unavailable PIN configuration fails closed; browser-facing status payloads never include verifier material; browser API requests with a supplied cross-origin context are rejected.
+- **Installer flow:** the Control PIN, dashboard service, and SSH menu actions are live and tested; the menu uses named identities with Exit last; Demo Mode defaults to keeping data; customization retries safely when review is rejected; current PIN-duration choices are preserved on Enter; pre-flight runs only after a real action is selected; and setup guidance names the moon-phase Control gesture and current Settings tab.
+- **Weather integrity:** every active provider adapter converts daily precipitation to millimetres before returning source data; the Go server publishes normalized sources rather than a second divergent blend; the browser remains the authoritative robust blend and applies a final daily low≤high coherence guard.
+- **Doctor and repair safety:** visible repair numbers resolve in the same safe→guided→admin order that Doctor renders; redirected `--fix` is safe-only unless explicit reviewed `--only` keys are supplied; repair archives live outside the application tree; and a missing/corrupt server repair failure prints a verified release-bundle recovery recipe.
+- **Message fit observability:** Dashboard Control’s Rotating messages editor reports session-only final-safe-clip and rendered-correction counts without collecting message text or adding rotation-time layout work.
+- **Generated calendar resilience:** every-N-days chores use civil-date math across DST; ISS refresh keeps the last good calendar on HTTP or provider-error payloads; stale schedule overrides are ignored safely at load; one-off moves stay in a visible ±90-day generation window and report a same-rule collision; calendar generation deduplicates clamped month-end paydays, avoids a second holiday landing, computes local astronomical season dates with Northern Hemisphere labels, preserves February 29 celebrations as February 28 observations in non-leap years, and reports moon output only when it succeeds.
 
 ## 1.5.3 highlights
 
@@ -37,7 +52,7 @@
 
 ## Product posture
 
-- Dashboard Control opens calm with all cards collapsed.
+- Dashboard Control opens with Device status ready for a glance; other cards remain collapsed and lazy.
 - Household apps are local-first, touch-first, and loaded only when opened.
 - Provider connections are optional enhancements. Local calendar, list, message, and household workflows remain useful while offline or unlinked.
 - Weather radar is on-demand; Lite keeps its work and retained visual state bounded.

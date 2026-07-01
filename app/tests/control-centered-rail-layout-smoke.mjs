@@ -17,8 +17,8 @@ assert.match(profileCss,/settinggrid-calendar-general\{[^}]*width:100%[^}]*margi
 assert.match(profileCss,/settinggrid-calendar-profile\{[^}]*width:100%[^}]*margin-inline:0/,"Calendar profile-owned settings must fill their parent rail");
 assert.match(ia,/grid-2-feature \.actiongroup-grid\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)[^}]*width:100%[^}]*margin-inline:0/,"Display pair grid must fill its rail");
 assert.match(ia,/actiongroup-grid>\.cbtn\.actionbtn[^}]*max-width:var\(--ctrl-action-button-max\)[^}]*justify-self:center/,"short action buttons must cap inside their own tracks");
-assert.match(ia,/\.ctrlcardrow\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:12px/,"shared compact-card wrapper must be one column by default");
-assert.match(ia,/#ctrlpage-control \.ctrlcardrow-control-secondary\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\);align-items:start;\}/,"desktop keeps Security/Location as a natural-height two-up pair");
+assert.match(stack,/#ctrl \.ctrlcardrow\s*\{\s*display:grid;grid-template-columns:minmax\(0,1fr\);gap:var\(--ctrl-gap\)/,"layout must be the sole owner of the one-column compact-card wrapper");
+assert.match(stack,/#ctrlpage-control \.ctrlcardrow-control-secondary\s*\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\);align-items:start;\}/,"desktop keeps Security/Location as a natural-height two-up pair");
 assert.match(index,/ctrlcardrow ctrlcardrow-control-secondary[\s\S]*data-lazy="security"[\s\S]*data-lazy="location"/,"Security and Location must retain independent lazy details inside a layout-only pair wrapper");
 assert.ok(stack.includes(".ctrlstack>.ctrlcardrow>.ctrlsec"),"nested Control details must retain the final authoritative sizing contract");
 const screen=block(nav,"renderCtrlScreenSettings");assert.ok(screen.includes("ctrlcardrow ctrlcardrow-screen"),"Screen controls and sleep schedule must share the desktop two-up wrapper");

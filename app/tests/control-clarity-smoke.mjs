@@ -19,7 +19,8 @@ assert.ok(nav.includes("Calendar range")&&nav.includes("Calendar dimensions"),"C
 assert.ok(display.includes("Clock seconds")&&display.includes("Background alert monitoring"),"Display owns clock seconds and alert monitoring");
 assert.ok(cache.includes("Interactive event maps"),"Maps owns interactive map behavior");
 assert.ok(!nav.includes('case "messagebehavior"'),"automatic messages must not retain a dead behavior route");
-for(const token of ["grid-4-dashboard","grid-3-provider","mapmaintenance"])assert.ok(ia.includes(token),`grid contract missing ${token}`);
+for(const token of ["grid-3-provider","mapmaintenance"])assert.ok(ia.includes(token),`grid contract missing ${token}`);
+assert.ok(!ia.includes("grid-4-dashboard")&&!ia.includes("grid-4-screen"),"retired fixed-count grid aliases must stay removed");
 assert.ok(nav.includes("inline-time-editor"),"sleep time editing must remain inline");
 assert.ok(!profile.includes("Radar budget")&&!profile.includes("radarHistoryMode")&&!profile.includes("radarRenderMode"),"Radar budget should be retired from Dashboard Control");
 console.log("PASS: beta.100 keeps fine controls in their natural Control cards without an information-only Messages card.");

@@ -18,7 +18,7 @@ for(const token of ["func MemorySnapshotMB", "func ParseMemoryInfoMB", "MemAvail
   assert.ok(memory.includes(token),`memory parser missing ${token}`);
 }
 assert.ok(status.includes('"swap_used_mb": swap'),"status payload must report used swap from the same snapshot");
-assert.ok(statusUI.includes('["Swap used", st.swap_used_mb'),"Device status must surface used swap");
+assert.match(statusUI,/\[\"Swap used\",\s*st\.swap_used_mb/,"Device status must surface used swap");
 assert.ok(api.includes("function ctrlObserveCachedPayload")&&api.includes('path==="/api/status"'),"existing status cache must update the budget without a second hot path");
 assert.ok(lifecycle.includes("ctrlScheduleCacheBudgetProbe"),"Control open must schedule one delayed budget probe only when needed");
 for(const token of ["CTRL_CACHE_BUDGET_POLL_MS=90000", "CTRL_RETAINABLE_LITE_PAGES", "CTRL_HEAVY_LAZY_KEYS", "function ctrlCacheBudgetTierFor", "function ctrlHibernatedPageLimit", "function ctrlObserveCacheBudgetStatus"]){

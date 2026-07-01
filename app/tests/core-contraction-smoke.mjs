@@ -28,7 +28,8 @@ assert.match(facade,/func \(a \*app\) controlEnvPath\(\) string/,"the private co
 for(const token of ["EnvPath","Config","SetPIN","RemovePIN","IssueToken","TokenOK","IssueOneShot","ConsumeOneShot","PINLockoutRemaining"]){
   assert.ok(auth.includes(token),`internal/auth must own ${token}`);
 }
-assert.match(service,/mu\s+sync\.Mutex[\s\S]*?sessions\s+map\[string\]sessionMeta[\s\S]*?oneShots\s+map\[string\]oneShotMeta[\s\S]*?failTimes\s+\[\]time\.Time/,"auth must own its single bounded runtime lock and stores");
+assert.match(service,/configMu\s+sync\.RWMutex[\s\S]*?mu\s+sync\.Mutex[\s\S]*?sessions\s+map\[string\]sessionMeta[\s\S]*?oneShots\s+map\[string\]oneShotMeta[\s\S]*?lockout\s+pinLockoutState/,"auth must own its credential lock plus bounded session and persistent-lockout state");
+assert.match(service,/lockoutPath\s+string/,"auth must retain its private persistent-lockout path");
 assert.doesNotMatch(auth,/\*app\b|cmd\/dashboard-control-server|package main/,"internal/auth must not depend on core");
 for(const retired of ["auth_pin.go","auth_session.go"]){
   assert.ok(!fs.existsSync(path.join(root,"cmd/dashboard-control-server",retired)),`retired core auth implementation must be absent: ${retired}`);

@@ -52,7 +52,7 @@
   padding:8px;
   border:1px solid var(--ctrl-line-soft);
   border-radius:var(--ctrl-radius-md);
-  background:rgba(18,18,24,0.96);
+  background:var(--ctrl-fill);
 }
 #ctrl .wxhealthcard.compact .wxhealthrows{
   display:none;

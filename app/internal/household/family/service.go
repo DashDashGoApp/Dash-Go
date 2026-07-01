@@ -27,28 +27,30 @@ const (
 )
 
 type ServiceConfig struct {
-	Home       string
-	StorePath  string
-	PinsPath   string
-	Now        func() time.Time
-	Token      func() string
-	People     func() []map[string]any
-	PersonName func(map[string]any) string
+	Home        string
+	StorePath   string
+	PinsPath    string
+	LockoutPath string
+	Now         func() time.Time
+	Token       func() string
+	People      func() []map[string]any
+	PersonName  func(map[string]any) string
 }
 
 type Service struct {
-	storePath  string
-	pinsPath   string
-	now        func() time.Time
-	token      func() string
-	people     func() []map[string]any
-	personName func(map[string]any) string
+	storePath   string
+	pinsPath    string
+	lockoutPath string
+	now         func() time.Time
+	token       func() string
+	people      func() []map[string]any
+	personName  func(map[string]any) string
 
 	boardMu  sync.Mutex
 	pinsMu   sync.Mutex
 	inboxMu  sync.Mutex
 	sessions map[string]InboxSession
-	failures map[string][]time.Time
+	failures map[string]inboxPINLockout
 }
 
 type InboxSession struct {
@@ -81,16 +83,23 @@ func New(cfg ServiceConfig) *Service {
 	if pinsPath == "" {
 		pinsPath = filepath.Join(cfg.Home, ".dashboard-family-board-inbox-pins.json")
 	}
-	return &Service{
-		storePath: storePath, pinsPath: pinsPath, now: now, token: token,
-		people: people, personName: personName,
-		sessions: map[string]InboxSession{}, failures: map[string][]time.Time{},
+	lockoutPath := cfg.LockoutPath
+	if lockoutPath == "" {
+		lockoutPath = filepath.Join(filepath.Dir(pinsPath), ".dashboard-family-board-inbox-pin-lockouts.json")
 	}
+	s := &Service{
+		storePath: storePath, pinsPath: pinsPath, lockoutPath: lockoutPath, now: now, token: token,
+		people: people, personName: personName,
+		sessions: map[string]InboxSession{}, failures: map[string]inboxPINLockout{},
+	}
+	s.loadInboxLockouts()
+	return s
 }
 
-func (s *Service) StorePath() string { return s.storePath }
-func (s *Service) PinsPath() string  { return s.pinsPath }
-func (s *Service) Now() time.Time    { return s.now().In(time.Local) }
+func (s *Service) StorePath() string   { return s.storePath }
+func (s *Service) PinsPath() string    { return s.pinsPath }
+func (s *Service) LockoutPath() string { return s.lockoutPath }
+func (s *Service) Now() time.Time      { return s.now().In(time.Local) }
 
 // Lock and Unlock are intentionally narrow adapters for the existing HTTP
 // handlers. The state mutex remains inside this service; core never receives

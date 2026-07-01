@@ -1,6 +1,8 @@
 package calendar
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,5 +175,127 @@ func TestCalendarRefreshPortsRunAfterTransactionUnlock(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Archive held the Calendar lock while calling refreshCacheSync")
+	}
+}
+
+type issRoundTripper func(*http.Request) (*http.Response, error)
+
+func (fn issRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+func TestReadLatLonRejectsUnsetCoordinatesAndComments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.local.js")
+	body := "// lat: 9; lon: 9; old sample\nconst lat: 0;\nconst lon: 0;\n"
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ReadLatLon(path); err == nil {
+		t.Fatal("0,0 placeholder location was accepted")
+	}
+}
+
+func TestISSPassesKeepLastGoodFeedOnHTTPOrEnvelopeFailure(t *testing.T) {
+	service := testService(t)
+	if err := os.WriteFile(filepath.Join(service.homeDir, ".dashboard-default-calendars"), []byte("DEFAULT_ISS_PASSES=1\nISS_N2YO_API_KEY=test-key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(service.configLocal, []byte("const lat: 41.8781; const lon: -87.6298;"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(service.CalendarDir(), "iss.slate.ics")
+	previous := []byte("previous-good-feed")
+	if err := os.WriteFile(destination, previous, 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"http-status", http.StatusTooManyRequests, `{"error":"quota"}`},
+		{"error-envelope", http.StatusOK, `{"error":{"code":1},"passes":[]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service.httpClient = func() *http.Client {
+				return &http.Client{Transport: issRoundTripper(func(*http.Request) (*http.Response, error) {
+					return &http.Response{StatusCode: test.status, Body: io.NopCloser(strings.NewReader(test.body)), Header: make(http.Header)}, nil
+				})}
+			}
+			result := service.UpdateISSPasses()
+			if result["ok"] == true {
+				t.Fatalf("failure payload was accepted: %#v", result)
+			}
+			body, err := os.ReadFile(destination)
+			if err != nil || string(body) != string(previous) {
+				t.Fatalf("previous ISS feed changed: %q err=%v", body, err)
+			}
+		})
+	}
+	service.httpClient = func() *http.Client {
+		return &http.Client{Transport: issRoundTripper(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"info":{"passescount":0},"passes":[]}`)), Header: make(http.Header)}, nil
+		})}
+	}
+	result := service.UpdateISSPasses()
+	if result["ok"] != true || result["eventCount"] != 0 {
+		t.Fatalf("valid zero-pass response was rejected: %#v", result)
+	}
+	body, err := os.ReadFile(destination)
+	if err != nil || !strings.Contains(string(body), "BEGIN:VCALENDAR") {
+		t.Fatalf("valid zero-pass response did not write an empty calendar: %q err=%v", body, err)
+	}
+}
+
+func TestGenerateDefaultsReportsOnlySuccessfulMoonAndLogsLeapObservation(t *testing.T) {
+	service := testService(t)
+	if err := os.WriteFile(filepath.Join(service.homeDir, ".dashboard-default-calendars"), []byte("DEFAULT_MOON_PHASES=1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(service.celebrationsFile, []byte("02-29|Leap day birthday\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	service.generateMoon = func(bool) map[string]any { return map[string]any{"ok": false, "error": "simulated moon failure"} }
+	result, err := service.GenerateDefaults(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range jsonutil.List(result["written"]) {
+		if file == "moon.violet.ics" || file == "moon.slate.ics" {
+			t.Fatalf("failed moon file was reported as written: %#v", result)
+		}
+	}
+	log, err := os.ReadFile(filepath.Join(service.logDir, "calendar-defaults.log"))
+	if err != nil || !strings.Contains(string(log), "observed February 28") {
+		t.Fatalf("leap-day observation was not logged: %q err=%v", log, err)
+	}
+}
+
+func TestCelebrationsHaveStableUIDsAndObserveLeapDays(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "celebrations")
+	if err := os.WriteFile(path, []byte("02-29|Leap birthday\n05-10|Anniversary\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	start, end := DateOnly(2026, time.January, 1), DateOnly(2028, time.January, 1)
+	events := CelebrationICSEvents(path, []int{2026, 2027}, start, end)
+	bySummary := map[string]string{}
+	foundLeap := false
+	for _, event := range events {
+		bySummary[event.Summary] = event.UID
+		if event.Summary == "Leap birthday" && scheduleDateKey(event.Date) == "2026-02-28" && strings.Contains(event.Description, "Observed February 28") {
+			foundLeap = true
+		}
+	}
+	if !foundLeap {
+		t.Fatalf("non-leap-year birthday was not observed: %#v", events)
+	}
+	if err := os.WriteFile(path, []byte("05-10|Anniversary\n02-29|Leap birthday\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	reordered := CelebrationICSEvents(path, []int{2026}, start, end)
+	for _, event := range reordered {
+		if want := bySummary[event.Summary]; want != "" && event.UID != want {
+			t.Fatalf("UID changed after line reorder for %s: %s want %s", event.Summary, event.UID, want)
+		}
 	}
 }

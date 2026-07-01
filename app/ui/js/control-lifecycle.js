@@ -2,6 +2,23 @@
 // This stays separate from location/PIN rendering so opening and closing the
 // Control shell can remain small, auditable, and independently bounded.
 
+let CTRL_EVERY_OPEN_HEARTBEAT=0;
+function ctrlStopEveryOpenHeartbeat(){
+  if(CTRL_EVERY_OPEN_HEARTBEAT){ clearInterval(CTRL_EVERY_OPEN_HEARTBEAT); CTRL_EVERY_OPEN_HEARTBEAT=0; }
+}
+function ctrlRefreshEveryOpenHeartbeat(){
+  ctrlStopEveryOpenHeartbeat();
+  if(!CTRL_OPEN||!CTRL_TOKEN||!CTRL_LOCK_STATUS||!CTRL_LOCK_STATUS.enabled||CTRL_LOCK_STATUS.timeout!=="every_open") return;
+  const beat=async()=>{
+    if(!CTRL_OPEN||!CTRL_TOKEN||!CTRL_LOCK_STATUS||CTRL_LOCK_STATUS.timeout!=="every_open") return;
+    try{
+      const r=await api("/api/lock/heartbeat","POST",{});
+      CTRL_LOCK_STATUS={...CTRL_LOCK_STATUS,...r,unlocked:true};
+    }catch(_){}
+  };
+  CTRL_EVERY_OPEN_HEARTBEAT=window.setInterval(beat,30000);
+}
+
 async function renderCtrlAll(){
   try{ await renderCtrlPage(ctrlActivePageName(),CTRL_PAGE_RENDER_SEQ); }
   catch(e){
@@ -27,6 +44,7 @@ async function openCtrl(){
   collapseCtrlSections();
   cleanupInactiveCtrlPages("overview");
   armOverlayAutoClose();
+  if(typeof ctrlResetActionFeedback==="function")ctrlResetActionFeedback();
   ctrlMsg("");
   const pin=$("#ctrlpin");
   if(pin) pin.classList.remove("show");
@@ -38,9 +56,11 @@ async function openCtrl(){
     if(!CTRL_TOKEN){ showPinLock(); return; }
   }
   await renderCtrlAll();
+  ctrlRefreshEveryOpenHeartbeat();
   if(typeof ctrlScheduleCacheBudgetProbe==="function")ctrlScheduleCacheBudgetProbe();
 }
 function closeCtrl(){
+  ctrlStopEveryOpenHeartbeat();
   if(typeof stopCtrlUpdatePoll==="function")stopCtrlUpdatePoll();
   if(typeof closePeopleInboxPINKeypad==="function")closePeopleInboxPINKeypad({restoreFocus:false});
   if(typeof hideOSK==="function")hideOSK();
@@ -49,6 +69,7 @@ function closeCtrl(){
   CTRL_PAGE_RENDER_SEQ++;
   if(typeof ctrlCloseMemorySettle==="function") ctrlCloseMemorySettle();
   ctrlHideAllOutputConsoles();
+  if(typeof ctrlResetActionFeedback==="function")ctrlResetActionFeedback();
   cleanupCtrlTemporaryContent();
   document.querySelectorAll(".ctrlpage").forEach(p=>cleanupCtrlPage(p,"close"));
   const overviewPage=document.querySelector("#ctrlpage-overview");

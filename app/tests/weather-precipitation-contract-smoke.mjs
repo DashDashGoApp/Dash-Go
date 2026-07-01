@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+const root=process.argv[2]||path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
+const js=["weather-sources.js","weather-blend.js"].map(name=>fs.readFileSync(path.join(root,"ui/js",name),"utf8")).join("\n");
+const go=fs.readFileSync(path.join(root,"internal/weather/weather_keyed_providers.go"),"utf8");
+const nws=fs.readFileSync(path.join(root,"internal/weather/weather_keyed_nws.go"),"utf8");
+const om=fs.readFileSync(path.join(root,"internal/weather/weather_openmeteo.go"),"utf8");
+const blend=fs.readFileSync(path.join(root,"internal/weather/weather_blend_go.go"),"utf8");
+assert.match(js,/const WEATHER_PRECIP_MM_MAX=1500/);
+assert.match(js,/precipitation_unit:"mm"/);
+assert.match(js,/totalprecip_mm/);
+assert.doesNotMatch(js,/totalprecip_in/);
+assert.match(js,/precipitationSumMM\(x\.rain,x\.snow\)/);
+assert.match(js,/coherenceAdjusted:true/);
+assert.match(go,/precipitationMMGo\(day\["totalprecip_mm"\], "mm"\)/);
+assert.match(go,/precipitationSumMMGo\(x\["rain"\], x\["snow"\]\)/);
+assert.match(go,/googlePrecipitationMMGo/);
+assert.match(go,/precipitationMMGo\(x\["precipAccumulation"\]/);
+assert.match(nws,/precipitationMMGo\(x\["precipIN"\], "in"\)/);
+assert.match(om,/q\.Set\("precipitation_unit", "mm"\)/);
+assert.match(blend,/browser-authoritative normalized sources/);
+assert.doesNotMatch(blend,/func blendCurrentGo/);
+console.log("PASS: weather precipitation is canonical mm and browser blending is the single authority");

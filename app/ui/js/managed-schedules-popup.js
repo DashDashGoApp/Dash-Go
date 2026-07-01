@@ -94,13 +94,21 @@ function showManagedSchedulePopup(ev){
     }
     const current=managedScheduleLocalDate(info.actualDate)||managedScheduleLocalDate(info.nominalDate);
     const date=managedScheduleDateInput(managedScheduleISO(current));
-    const custom=el("label","managed-schedule-custom");custom.append(el("span","","Move to a date"),date);root.appendChild(custom);
+    const custom=el("label","managed-schedule-custom");custom.append(el("span","","Move to a date"),date,el("small","","Choose a date within 90 days of the scheduled occurrence."));root.appendChild(custom);
     let busy=false;
     const commit=async(action,actualDate)=>{
       if(busy)return;busy=true;root.classList.add("busy");message.textContent="Saving schedule adjustment…";
       try{
-        await managedSchedulePost({ruleId:info.ruleId,nominalDate:info.nominalDate,action,actualDate:actualDate||""});
-        if(typeof hideOSK==="function")hideOSK();await managedScheduleRefresh();closeScrim();
+        const result=await managedSchedulePost({ruleId:info.ruleId,nominalDate:info.nominalDate,action,actualDate:actualDate||""});
+        if(typeof hideOSK==="function")hideOSK();await managedScheduleRefresh();
+        const adjustment=result&&result.adjustment&&typeof result.adjustment==="object"?result.adjustment:null;
+        if(adjustment&&adjustment.collision){
+          message.textContent=`Saved. Another occurrence of this schedule is also on ${managedScheduleDateLabel(adjustment.actualDate||actualDate)}.`;
+          root.classList.remove("busy");busy=false;
+          actions.replaceChildren(managedScheduleAction("Done","Keep both occurrences on that day.","primary",closeScrim),managedScheduleAction("Edit recurring schedule","Change future paydays or pickup dates in Dashboard Control.","",managedScheduleOpenControl));
+          return;
+        }
+        closeScrim();
       }catch(error){
         const text=error&&error.message?error.message:String(error||"");
         message.textContent=/locked|unlock|token/i.test(text)?"Unlock Dashboard Control, then try again.":text;

@@ -5,6 +5,16 @@
 const COMP_FIT={hardFloor:12,maxLines:4,maxTargetLines:3,minVisualSize:42,maxVisualSize:72};
 const COMP_FIT_CACHE_LIMIT=120;
 const COMP_FIT_CACHE=new Map();
+// Session-only diagnostics expose rare final CSS-clamp clips in Dashboard
+// Control without storing message text or adding work during rotation.
+const COMP_FIT_DIAGNOSTICS={clipped:0,corrected:0,lastClippedAt:0};
+function complimentFitDiagnostics(){ return {...COMP_FIT_DIAGNOSTICS}; }
+function noteComplimentFitClipped(fit){
+  if(!fit||fit.fits!==false||fit.clipDiagnosticRecorded) return;
+  fit.clipDiagnosticRecorded=true;
+  COMP_FIT_DIAGNOSTICS.clipped+=1;
+  COMP_FIT_DIAGNOSTICS.lastClippedAt=Date.now();
+}
 function complimentCleanText(text){ return String(text||"").trim().replace(/\s+/g," "); }
 function complimentNumber(style,property){ return parseFloat(style&&style[property])||0; }
 function complimentBoxMetrics(el){
@@ -178,6 +188,7 @@ function complimentCorrectRenderedFit(el,key,fit,metrics,lite,observedLines){
     next=measureComplimentFit(el,fit.displayText,start,complimentFloorSize(candidateMetrics),candidateMetrics,minimum);
   }
   next={...next,displayText:fit.displayText,layout:fit.layout||"single",correctionAttempts:Math.max(0,Number(fit.correctionAttempts)||0)+1};
+  COMP_FIT_DIAGNOSTICS.corrected+=1;
   cacheComplimentFit(key,next);el.textContent=next.displayText;complimentApplyFitAndVerify(el,key,next,metrics,lite);
 }
 function complimentScheduleRenderedVerification(el,key,fit,metrics,lite){
@@ -187,8 +198,8 @@ function complimentScheduleRenderedVerification(el,key,fit,metrics,lite){
     fit.renderVerifyPending=false;
     if(el.__dashComplimentFitKey!==key||el.__dashComplimentFit!==fit)return;
     const observed=complimentRenderedOverflow(el,fit);
-    if(!observed.overflow){fit.renderVerified=true;cacheComplimentFit(key,fit);return;}
-    if(Number(fit.correctionAttempts)||0){fit.renderVerified=true;fit.fits=false;cacheComplimentFit(key,fit);return;}
+    if(!observed.overflow){fit.renderVerified=true;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);return;}
+    if(Number(fit.correctionAttempts)||0){fit.renderVerified=true;fit.fits=false;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);return;}
     complimentCorrectRenderedFit(el,key,fit,metrics,lite,observed.lines);
   };
   if(typeof requestAnimationFrame==="function")requestAnimationFrame(verify);else setTimeout(verify,0);

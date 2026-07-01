@@ -127,7 +127,7 @@ func TestHouseholdPeopleInboxPINCanBeManagedWithoutMasterControlPIN(t *testing.T
 	if w.Code != http.StatusOK {
 		t.Fatalf("remove personal inbox PIN without master Control PIN: status=%d body=%s", w.Code, w.Body.String())
 	}
-	if !a.verifyFamilyBoardInboxPIN("sam", "any-value") {
-		t.Fatal("removed personal inbox PIN should leave inbox available")
+	if a.verifyFamilyBoardInboxPIN("sam", "any-value") {
+		t.Fatal("removed personal inbox PIN must not report a verified credential")
 	}
 }

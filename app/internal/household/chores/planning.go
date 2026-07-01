@@ -19,6 +19,17 @@ func DateFromKey(key string) (time.Time, bool) {
 	return parsed, err == nil
 }
 
+// calendarDayDelta compares the civil calendar labels, not elapsed instants.
+// Local midnights are 23 or 25 hours apart around daylight-saving transitions;
+// cadence must not drift simply because the timezone offset changed overnight.
+func calendarDayDelta(date, anchor time.Time) int {
+	date = date.In(time.Local)
+	anchor = anchor.In(time.Local)
+	left := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	right := time.Date(anchor.Year(), anchor.Month(), anchor.Day(), 0, 0, 0, 0, time.UTC)
+	return int(left.Sub(right) / (24 * time.Hour))
+}
+
 func Cadence(chore map[string]any, now time.Time) map[string]any {
 	row := jsonutil.Map(chore["cadence"])
 	typ := Text(row["type"], 16)
@@ -50,7 +61,7 @@ func Due(chore map[string]any, key string, now time.Time) bool {
 		if !valid || date.Before(anchor) {
 			return false
 		}
-		delta := int(date.Sub(anchor).Hours() / 24)
+		delta := calendarDayDelta(date, anchor)
 		every := clamp(jsonutil.Int(cadence["every"], 1), 1, 365)
 		return delta%every == 0
 	default:

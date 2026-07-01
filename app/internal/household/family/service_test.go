@@ -143,3 +143,43 @@ func TestFamilyBoardMutationsKeepPrivateScopeAndPersistence(t *testing.T) {
 		t.Fatal("recipient archive must not invalidate current private delivery freshness")
 	}
 }
+
+func TestInboxPINVerifierSeparatesOpenInboxFromCredentialVerification(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.Local)
+	svc := testService(t.TempDir(), &now)
+	if svc.PinConfigured("sam") || svc.VerifyPIN("sam", "") {
+		t.Fatal("an inbox without a configured PIN must not report a verified credential")
+	}
+	unlocked, actionErr := svc.UnlockInbox("sam", "")
+	if actionErr != nil || unlocked["inboxToken"] == "" {
+		t.Fatalf("an intentionally open inbox did not open: payload=%#v error=%#v", unlocked, actionErr)
+	}
+}
+
+func TestInboxPINLockoutEscalatesAndPersists(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.Local)
+	home := t.TempDir()
+	svc := testService(home, &now)
+	if err := svc.SetPIN("sam", "1234"); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 7; attempt++ {
+		if _, actionErr := svc.UnlockInbox("sam", "0000"); actionErr == nil || actionErr.Status != 401 {
+			t.Fatalf("attempt %d error=%#v want 401", attempt+1, actionErr)
+		}
+	}
+	if _, actionErr := svc.UnlockInbox("sam", "0000"); actionErr == nil || actionErr.Status != 429 || actionErr.RetryAfter != 60 {
+		t.Fatalf("eighth failure error=%#v want 60-second lockout", actionErr)
+	}
+	if _, err := os.Stat(svc.LockoutPath()); err != nil {
+		t.Fatalf("inbox lockout was not persisted: %v", err)
+	}
+	restarted := testService(home, &now)
+	if got := restarted.LockoutRemaining("sam"); got != 60 {
+		t.Fatalf("restart lost inbox lockout: %d", got)
+	}
+	now = now.Add(61 * time.Second)
+	if _, actionErr := restarted.UnlockInbox("sam", "0000"); actionErr == nil || actionErr.Status != 429 || actionErr.RetryAfter != 120 {
+		t.Fatalf("next failure did not escalate: %#v", actionErr)
+	}
+}

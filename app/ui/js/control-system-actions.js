@@ -92,8 +92,8 @@ function renderCtrlQuickActions(){
   const row=$("#ctrlactions");
   if(!row || row.dataset.rendered==="1")return;
   row.dataset.rendered="1"; row.replaceChildren();
-  const common=actionGroup("Quick actions","Safe dashboard actions.","actiongroup-common actiongroup-compact");
-  common.grid.appendChild(caction("Sync calendars","Pull calendars.","",async()=>{
+  const common=actionGroup("","","actiongroup-common");
+  common.grid.appendChild(caction("Sync calendars","Fetch every configured calendar now.","",async()=>{
     ctrlMsg("Pulling calendars from the web… (can take up to a minute)");
     try{
       const r=await api("/api/calendars/sync","POST",{});
@@ -101,15 +101,15 @@ function renderCtrlQuickActions(){
       ctrlMsg(r.ran&&r.ran.length?"Synced via "+r.ran.join(", ")+" — calendar updated.":"No sync script installed (installer option 5 sets one up).");
     }catch(e){ctrlMsg("Sync failed: "+e.message);}
   }));
-  common.grid.appendChild(caction("Refresh data","Reload data.","",async()=>{
+  common.grid.appendChild(caction("Refresh data","Refresh calendar, weather, and alert data.","",async()=>{
     ctrlMsg("Refreshing calendars, weather, and alerts…");
     try{await Promise.all([discoverCalendars().then(loadCalendars),loadWeather(),loadAlerts()]);checkTheme();updateStale();ctrlMsg("Everything refreshed.");}
     catch(e){ctrlMsg("Refresh hit a problem: "+e.message);}
   }));
-  common.grid.appendChild(caction("Restart browser","Reload kiosk.","",async()=>{
+  common.grid.appendChild(caction("Restart browser","Restart the kiosk browser without rebooting.","",async()=>{
     ctrlMsg("Restarting browser…");try{await api("/api/browser/restart","POST",{});}catch(e){ctrlMsg(e.message);}
   }));
-  common.grid.appendChild(caction("Screen off","Touch wakes.","",async()=>{
+  common.grid.appendChild(caction("Screen off","Blank the display now; touch wakes it.","",async()=>{
     try{await api("/api/display/off","POST",{});closeCtrl();}catch(e){ctrlMsg(e.message);}
   }));
   row.appendChild(common.group);
@@ -118,12 +118,12 @@ function renderCtrlPowerActions(){
   const row=$("#ctrlpoweractions");
   if(!row || row.dataset.rendered==="1")return;
   row.dataset.rendered="1"; row.replaceChildren();
-  const danger=actionGroup("Power & updates","Destructive — confirm twice.","actiongroup-danger");
-  danger.grid.appendChild(confirmAction("System update","apt update/upgrade","Tap again to run",async()=>{await startSystemUpdateFromControl();}));
-  danger.grid.appendChild(confirmAction("Reboot device","Restart device.","Tap again to reboot",async()=>{
+  const danger=actionGroup("","","actiongroup-danger");
+  danger.grid.appendChild(confirmAction("System update","Install available operating-system packages.","Tap again to run",async()=>{await startSystemUpdateFromControl();}));
+  danger.grid.appendChild(confirmAction("Reboot device","Restart this device safely.","Tap again to reboot",async()=>{
     ctrlMsg("Rebooting…");try{await api("/api/reboot","POST",{});}catch(e){ctrlMsg(e.message);}
   }));
-  danger.grid.appendChild(confirmAction("Shut down","Power off.","Tap again to shut down",async()=>{
+  danger.grid.appendChild(confirmAction("Shut down","Power off safely. Use power to start again.","Tap again to shut down",async()=>{
     ctrlMsg("Shutting down… (unplug/replug power to start again)");try{await api("/api/poweroff","POST",{});}catch(e){ctrlMsg(e.message);}
   }));
   row.appendChild(danger.group);

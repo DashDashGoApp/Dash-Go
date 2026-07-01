@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,10 @@ func (a *app) requireLoopback(next http.HandlerFunc) http.HandlerFunc {
 		setNoStore(w)
 		if !isLoopback(r) {
 			a.err(w, "loopback only", http.StatusForbidden)
+			return
+		}
+		if !sameOriginAPIRequest(r) {
+			a.err(w, "same-origin API requests only", http.StatusForbidden)
 			return
 		}
 		next(w, r)
@@ -87,6 +92,28 @@ func (a *app) httpRoutes() *http.ServeMux {
 	mux.HandleFunc("/fonts/", a.handleRuntimeFontRoute)
 	mux.HandleFunc("/", a.handleStaticRoute)
 	return mux
+}
+
+// sameOriginAPIRequest blocks browser cross-origin requests to the local
+// control API. Headerless local tools remain supported; a supplied Origin or
+// Sec-Fetch-Site header must describe the same dashboard origin.
+func sameOriginAPIRequest(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" {
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return false
+		}
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		if !strings.EqualFold(u.Scheme, scheme) || !strings.EqualFold(u.Host, r.Host) {
+			return false
+		}
+	}
+	site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+	return site == "" || site == "same-origin" || site == "none"
 }
 
 func isLoopback(r *http.Request) bool {

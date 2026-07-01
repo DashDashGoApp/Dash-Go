@@ -67,7 +67,7 @@ func (s *Service) fetchGoWeatherWithConfig(parent context.Context, cfg Config) (
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("no Go weather provider answered")
 	}
-	payload := blendWeatherSourcesGo(sources, status, selected, cfg)
+	payload := weatherSourcesPayloadGo(sources, status, selected)
 	payload["location"] = map[string]any{"lat": cfg.Lat, "lon": cfg.Lon}
 	payload["keyStore"] = filepath.Join(s.home, ".dashboard-weather.env")
 	payload["keysInServedConfig"] = len(cfg.ProviderKeys) > 0 || strings.TrimSpace(cfg.APIKey) != ""

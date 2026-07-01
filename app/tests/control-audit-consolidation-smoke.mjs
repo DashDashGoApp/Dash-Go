@@ -1,0 +1,46 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import {fileURLToPath} from "node:url";
+
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
+const read=rel=>fs.readFileSync(path.join(root,rel),"utf8");
+const walk=dir=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?walk(path.join(dir,entry.name)):[path.join(dir,entry.name)]);
+const rel=file=>path.relative(root,file).replaceAll(path.sep,"/");
+const sourceFiles=walk(path.join(root,"ui")).filter(file=>/\.(?:css|js)$/.test(file));
+const source=new Map(sourceFiles.map(file=>[rel(file),fs.readFileSync(file,"utf8")]));
+const index=read("index.html");
+const layout=read("ui/css/control/layout.css");
+const tokens=read("ui/css/control/tokens.css");
+const theme=read("ui/css/control/theme-weather.css");
+const nav=read("ui/js/control-navigation.js");
+const ui=read("ui/js/control-ui.js");
+const status=read("ui/js/control-status-health.js");
+const actions=read("ui/js/control-system-actions.js");
+
+const tabOwners=[...source.entries()].filter(([,body])=>body.includes("ctrltabs"));
+assert.deepEqual(tabOwners.map(([file])=>file),["ui/css/control/layout.css"],"only the authoritative layout may own tab-rail CSS");
+assert.match(layout,/padding:var\(--ctrl-gap-compact\);[\s\S]*?border-radius:var\(--ctrl-radius-md\);/,"tab rail needs symmetric inset and the card radius");
+assert.match(layout,/min-height:var\(--ctrl-tab-min\)/,"tabs need the deliberate primary-navigation touch height");
+assert.doesNotMatch(layout,/last-child[\s\S]*grid-column/,"six tabs must never create a small-screen orphan row");
+assert.ok(![...source.values()].some(body=>body.includes("actiondrawer")),"retired action drawer source must be fully removed");
+assert.ok(![...source.values()].some(body=>body.includes("actiongroup-compact")),"unowned compact action class must be removed");
+assert.ok(![...source.values()].some(body=>body.includes("grid-4-dashboard")||body.includes("grid-4-screen")),"retired grid aliases must be removed");
+assert.match(tokens,/--ctrl-accent-bg:color-mix/,"selected fill must be semantic rather than a panel alias");
+assert.match(tokens,/--ctrl-accent-bg-strong:color-mix/,"pressed fill must be distinct and semantic");
+assert.doesNotMatch(theme,/--ctrl-accent-bg:var\(--panel\)/,"theme pass must not flatten selected fill to panel");
+assert.match(ui,/function ctrlSetActionFeedbackTarget\(/,"actions need a local feedback target");
+assert.match(ui,/ctrl-action-feedback/,"action groups need local feedback regions");
+assert.match(actions,/actionGroup\("","","actiongroup-common"\)/,"Quick actions must not duplicate its accordion heading");
+assert.match(actions,/actionGroup\("","","actiongroup-danger"\)/,"Power actions must not duplicate its accordion heading");
+assert.match(index,/data-ctrlpage="control">Settings</,"Control-in-Control tab must use the clearer Settings name");
+for(const page of ["overview","display","calendars","content","control","system"])assert.match(index,new RegExp(`id="ctrlpage-${page}"[^>]*data-accordion`),`${page} must use the shared accordion model`);
+assert.match(index,/data-lazy="status" data-default-open="true"/,"Device status must be the intentional Overview default");
+assert.match(nav,/function openDefaultCtrlSection\(page\)[\s\S]*?data-default-open/,"default section helper must open Device status");
+assert.match(status,/ctrlStatusGroup\("Network"/,"Device status must group network data");
+assert.match(status,/ctrlStatusGroup\("Data freshness"/,"Device status must group freshness data");
+assert.match(status,/ctrlStatusMore\(/,"lower-signal device telemetry must be behind an explicit details control");
+assert.match(layout,/padding-right:var\(--ctrl-scroll-inset\);[\s\S]*?padding-left:calc\(var\(--ctrl-scroll-inset\) \+ var\(--ctrl-scrollbar-space\)\);[\s\S]*?scrollbar-gutter:stable/,"Control page scroll gutter must compensate for its scrollbar edge");
+assert.match(read("ui/css/control/panel-polish.css"),/background:var\(--ctrl-fill\)/,"sticky action bar must use a theme-aware surface");
+console.log("PASS: Dashboard Control audit consolidation keeps state visibility, tab ownership, local feedback, and overview flow intentional.");

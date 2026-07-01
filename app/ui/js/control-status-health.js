@@ -1,44 +1,62 @@
 function ago(t){ return t?fmtAge(Date.now()-t)+" ago":"never"; }
+function ctrlStatusGroup(title,items){
+  const group=el("section","ctrlstatus-group");
+  group.appendChild(el("div","ctrlstatus-group-title",title));
+  const grid=el("div","ctrlstatus-grid");
+  for(const [label,value,state] of items)grid.appendChild(ctrlStat(label,value,state));
+  group.appendChild(grid);
+  return group;
+}
+function ctrlStatusMore(items){
+  const details=document.createElement("details");
+  details.className="ctrlstatus-more";
+  const summary=document.createElement("summary");
+  summary.textContent="More device details";
+  const body=el("div","ctrlstatus-more-body");
+  const grid=el("div","ctrlstatus-grid");
+  for(const [label,value,state] of items)grid.appendChild(ctrlStat(label,value,state));
+  body.appendChild(grid);
+  details.append(summary,body);
+  return details;
+}
 function renderCtrlStatus(st){
   if(typeof syncTerminalAccessCard==="function")syncTerminalAccessCard(!st||st.terminalAccessEnabled!==false);
-  const wrap=$("#ctrlstatus"); wrap.innerHTML=""; wrap.className="ctrlgrid";
-  const wifi=st.wifi||{}, map=st.map||{}, mp=map.provider||{};
-  const now=Date.now();
-  // RAW values only — the render loop below escapes exactly once. (A previous
-  // version pre-escaped here AND escaped in the loop, which displayed a
-  // literal "<wbr>" inside the IP address.) The IP needs no break helper:
-  // its tile spans two grid columns and fits on one line.
-  const items=[
-    ["WiFi", wifi.ssid||"not connected"],
-    ["Signal", wifi.signal!=null?wifi.signal+"%":"—"],
-    ["IP address", wifi.ip||"—"],
-    ["Hostname", st.hostname||"—"],
-    ["Performance profile", st.profileLabel || profileLabel(st.profile || CONFIG.profile)],
-    ["CPU temp", st.temp_c!=null?st.temp_c.toFixed(1)+"°C":"—"],
-    ["CPU freq", st.freq_mhz!=null?st.freq_mhz+" MHz":"—"],
-    ["CPU load", st.load!=null?st.load:"—"],
-    ["Available RAM", st.mem_avail_mb!=null?st.mem_avail_mb+" MB":"—"],
-    ["Swap used", st.swap_used_mb!=null?st.swap_used_mb+" MB":"—"],
-    ["Disk free", st.disk_free_mb!=null?(st.disk_free_mb>=2048?(st.disk_free_mb/1024).toFixed(1)+" GB":st.disk_free_mb+" MB"):"—"],
-    ["Throttling", st.throttled==null?"—":(st.throttled==="0x0"?"none":st.throttled)],
-    ["Uptime", st.uptime||"—"],
-    // Client-side data freshness — the dashboard knows these itself.
-    ["Calendar data", ago(lastCalOK)],
-    ["Weather data", ago(lastWxOK)],
-    ["Events loaded", String(EVENTS.length)],
-    ["Map provider", mp.primaryLabel||mp.primary||"auto"],
-    ["Map images", (map.imageCount!=null?map.imageCount:"—")+" files · "+(map.imageLocationCount!=null?map.imageLocationCount:"—")+" locations"],
-    ["Map prewarm", map.prewarm&&map.prewarm.running?"running":(map.prewarm&&map.prewarm.lastEnd?ago(map.prewarm.lastEnd*1000):"not yet")],
-    ["Display fonts", st.fontsPresent===false?"missing · using fallbacks":"present"],
-    ["Page running", fmtAge(now-BOOT_TS)],
-  ];
-  for(const [k,v] of items){
-    // The IP tile spans two columns so the full address sits on one line
-    // instead of wrapping with a dangling digit.
-    const d=el("div","stat"+(k==="IP address"?" wide":""));
-    d.innerHTML=`<div class="k">${escapeHTML(k)}</div><div class="v">${escapeHTML(String(v))}</div>`;
-    wrap.appendChild(d);
-  }
+  const wrap=$("#ctrlstatus");
+  if(!wrap)return;
+  wrap.replaceChildren();
+  wrap.className="ctrlstatus-sections";
+  const wifi=st.wifi||{},map=st.map||{},mp=map.provider||{},now=Date.now();
+  wrap.append(
+    ctrlStatusGroup("Network",[
+      ["WiFi",wifi.ssid||"not connected"],
+      ["Signal",wifi.signal!=null?wifi.signal+"%":"—"],
+      ["IP address",wifi.ip||"—"],
+    ]),
+    ctrlStatusGroup("Device",[
+      ["Performance profile",st.profileLabel||profileLabel(st.profile||CONFIG.profile)],
+      ["CPU temp",st.temp_c!=null?st.temp_c.toFixed(1)+"°C":"—"],
+      ["Available RAM",st.mem_avail_mb!=null?st.mem_avail_mb+" MB":"—"],
+      ["Disk free",st.disk_free_mb!=null?(st.disk_free_mb>=2048?(st.disk_free_mb/1024).toFixed(1)+" GB":st.disk_free_mb+" MB"):"—"],
+    ]),
+    ctrlStatusGroup("Data freshness",[
+      ["Calendar data",ago(lastCalOK)],
+      ["Weather data",ago(lastWxOK)],
+      ["Events loaded",String(EVENTS.length)],
+    ]),
+    ctrlStatusMore([
+      ["Hostname",st.hostname||"—"],
+      ["CPU freq",st.freq_mhz!=null?st.freq_mhz+" MHz":"—"],
+      ["CPU load",st.load!=null?st.load:"—"],
+      ["Swap used",st.swap_used_mb!=null?st.swap_used_mb+" MB":"—"],
+      ["Throttling",st.throttled==null?"—":(st.throttled==="0x0"?"none":st.throttled)],
+      ["Uptime",st.uptime||"—"],
+      ["Map provider",mp.primaryLabel||mp.primary||"auto"],
+      ["Map images",(map.imageCount!=null?map.imageCount:"—")+" files · "+(map.imageLocationCount!=null?map.imageLocationCount:"—")+" locations"],
+      ["Map prewarm",map.prewarm&&map.prewarm.running?"running":(map.prewarm&&map.prewarm.lastEnd?ago(map.prewarm.lastEnd*1000):"not yet")],
+      ["Display fonts",st.fontsPresent===false?"missing · using fallbacks":"present"],
+      ["Page running",fmtAge(now-BOOT_TS)],
+    ]),
+  );
 }
 function fmtDateTime(ms){
   if(!ms) return "—";

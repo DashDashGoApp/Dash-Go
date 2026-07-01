@@ -124,7 +124,7 @@ func (s *Service) VerifyPIN(personID, pin string) bool {
 	personID = PersonID(personID)
 	record := jsonutil.Map(jsonutil.Map(s.Pins()["pins"])[personID])
 	if len(record) == 0 {
-		return true
+		return false
 	}
 	return controlauth.VerifyPIN(pin, jsonutil.StringValue(record["salt"]), jsonutil.StringValue(record["hash"]), jsonutil.Int(record["iterations"], 0))
 }

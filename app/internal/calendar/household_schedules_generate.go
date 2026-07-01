@@ -82,6 +82,9 @@ func paydayRuleEvents(rule PaydayRule, start, end time.Time, holidaysByLayer map
 }
 
 func pickupNominalDates(rule PickupRule, start, end time.Time) []time.Time {
+	if rule.EveryWeeks < 1 {
+		return nil
+	}
 	weekday := weekdayIndex(rule.Weekday)
 	if weekday < 0 {
 		return nil
@@ -114,6 +117,9 @@ func paydayNominalDates(rule PaydayRule, start, end time.Time) []time.Time {
 	out := []time.Time{}
 	switch rule.Kind {
 	case "every-weeks":
+		if rule.EveryWeeks < 1 {
+			return out
+		}
 		anchor, ok := scheduleDate(rule.Start)
 		if !ok {
 			return out
@@ -128,6 +134,7 @@ func paydayNominalDates(rule PaydayRule, start, end time.Time) []time.Time {
 		}
 	case "monthly-dates":
 		for cursor := DateOnly(start.Year(), start.Month(), 1); cursor.Before(end); cursor = cursor.AddDate(0, 1, 0) {
+			seen := map[string]bool{}
 			for _, requested := range rule.Days {
 				last := cursor.AddDate(0, 1, -1).Day()
 				day := requested
@@ -135,6 +142,11 @@ func paydayNominalDates(rule PaydayRule, start, end time.Time) []time.Time {
 					day = last
 				}
 				value := DateOnly(cursor.Year(), cursor.Month(), day)
+				key := scheduleDateKey(value)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
 				if !value.Before(start) && value.Before(end) {
 					out = append(out, value)
 				}
@@ -195,10 +207,18 @@ func scheduleActualDate(ruleID string, nominal time.Time, adjustment ScheduleAdj
 			if days < 1 {
 				days = 1
 			}
+			direction := 1
 			if mode == "shift-backward" {
-				return nominal.AddDate(0, 0, -days), "holiday schedule", true
+				direction = -1
 			}
-			return nominal.AddDate(0, 0, days), "holiday schedule", true
+			day := nominal.AddDate(0, 0, direction*days)
+			for steps := 0; steps < 14; steps++ {
+				if !holidayApplies(day, adjustment, holidays) {
+					return day, "holiday schedule", true
+				}
+				day = day.AddDate(0, 0, direction)
+			}
+			return nominal, "no safe pickup day found", true
 		}
 		return nominal, "", true
 	}
@@ -222,7 +242,7 @@ func scheduleActualDate(ruleID string, nominal time.Time, adjustment ScheduleAdj
 			}
 		}
 	}
-	return nominal, "", true
+	return nominal, "no business day found", true
 }
 
 func scheduleNonBusinessDay(day time.Time, adjustment ScheduleAdjustment, holidays map[string]bool) bool {

@@ -11,8 +11,7 @@
   box-sizing:border-box;
   clear:both;
 }
-#ctrl .ctrlsecbody.hasoutputconsole,
-#ctrl .actiondrawer-body.hasoutputconsole{
+#ctrl .ctrlsecbody.hasoutputconsole{
   padding-bottom:18px;
 }
 #ctrl .ctrloutputhead{
@@ -60,9 +59,9 @@
   white-space:pre-wrap;
   color:var(--dim);
 }
-#ctrlpage-control .ctrlsec-maintenance[open] .ctrlsecbody.hasoutputconsole,
-#ctrlpage-control .ctrlsec-systemupdate[open] .ctrlsecbody.hasoutputconsole,
-#ctrlpage-control .ctrlsec-diagnostics[open] .ctrlsecbody.hasoutputconsole{
+#ctrlpage-system .ctrlsec-maintenance[open] .ctrlsecbody.hasoutputconsole,
+#ctrlpage-system .ctrlsec-systemupdate[open] .ctrlsecbody.hasoutputconsole,
+#ctrlpage-system .ctrlsec-diagnostics[open] .ctrlsecbody.hasoutputconsole{
   border-radius:0 0 14px 14px;
 }
 body.ctrl-lite #ctrl .ctrloutputconsole{
@@ -70,47 +69,6 @@ body.ctrl-lite #ctrl .ctrloutputconsole{
   box-shadow:none;
 }
 
-/* 1.1.0 alpha: restore larger Dashboard Control tab buttons.
-   These are primary navigation controls on a touch kiosk, so they should be
-   easier to hit than ordinary action buttons. */
-#ctrl .ctrltabs{
-  gap:10px;
-  margin:12px 0 14px;
-  padding:6px 0 12px;
-}
-#ctrl .ctrltabs .cbtn{
-  min-height:58px;
-  padding:13px 12px;
-  border-radius:16px;
-  font-size:16px;
-  font-weight:800;
-  letter-spacing:0.01em;
-  white-space:nowrap;
-  -webkit-tap-highlight-color:transparent;
-}
-body.ctrl-lite #ctrl .ctrltabs{
-  gap:9px;
-  margin:10px 0 12px;
-  padding:4px 0 10px;
-}
-body.ctrl-lite #ctrl .ctrltabs .cbtn{
-  min-height:60px;
-  padding:13px 10px;
-  border-radius:15px;
-}
-@media(max-width:760px){
-  #ctrl .ctrltabs{grid-template-columns:repeat(2,minmax(0,1fr));}
-  #ctrl .ctrltabs .cbtn{min-height:56px;font-size:15px;}
-  #ctrl .ctrltabs .cbtn:last-child{grid-column:1 / -1;}
-}
-
-/* Pi Zero touch feedback: tab buttons should react before cleanup/API work runs. */
-#ctrl .ctrltabs .cbtn.tapdown{
-  color:var(--fg);
-  border-color:var(--accent);
-  background:rgba(127,214,168,0.22);
-  box-shadow:inset 0 0 0 1px rgba(127,214,168,0.30);
-}
 
 #ctrlpanel.pinlocked{justify-content:center;}
 #ctrlpanel.pinlocked .ctrlhead,

@@ -1,6 +1,9 @@
 package calendar
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -92,5 +95,76 @@ func TestLegacyHouseholdSchedulesPreservesExistingInstallerRules(t *testing.T) {
 	}
 	if legacy.Pickups[0].Adjustment.Mode != "shift-forward" || !legacy.Pickups[0].Adjustment.WeekHoliday {
 		t.Fatalf("legacy pickup adjustment = %#v", legacy.Pickups[0].Adjustment)
+	}
+}
+
+func TestMonthlyPaydayDatesDeduplicateAfterMonthEndClamp(t *testing.T) {
+	rule := PaydayRule{ID: "payday", Label: "Payday", Enabled: true, Kind: "monthly-dates", Days: []int{15, 30, 31}}
+	dates := paydayNominalDates(rule, DateOnly(2026, time.February, 1), DateOnly(2026, time.March, 1))
+	if len(dates) != 2 {
+		t.Fatalf("February monthly dates = %d, want 2 after 30/31 clamp dedupe", len(dates))
+	}
+	if got := scheduleDateKey(dates[1]); got != "2026-02-28" {
+		t.Fatalf("month-end payday = %s, want 2026-02-28", got)
+	}
+}
+
+func TestHolidayShiftContinuesPastHolidayLandingAndExplainsFallback(t *testing.T) {
+	nominal := DateOnly(2026, time.July, 1)
+	adjustment := ScheduleAdjustment{Mode: "shift-forward", Days: 1}
+	holiday := map[string]bool{"20260701": true, "20260702": true}
+	actual, reason, include := scheduleActualDate("trash", nominal, adjustment, holiday, nil)
+	if !include || scheduleDateKey(actual) != "2026-07-03" || reason != "holiday schedule" {
+		t.Fatalf("holiday landing = %s / %q / include=%v", scheduleDateKey(actual), reason, include)
+	}
+	blocked := map[string]bool{}
+	for day := nominal; day.Before(nominal.AddDate(0, 0, 15)); day = day.AddDate(0, 0, 1) {
+		blocked[day.Format("20060102")] = true
+	}
+	actual, reason, include = scheduleActualDate("trash", nominal, adjustment, blocked, nil)
+	if !include || !actual.Equal(nominal) || reason != "no safe pickup day found" {
+		t.Fatalf("blocked holiday shift = %s / %q / include=%v", scheduleDateKey(actual), reason, include)
+	}
+}
+
+func TestOrphanedOverridesDoNotBlockHouseholdScheduleLoad(t *testing.T) {
+	service := testService(t)
+	raw := `{"schema":1,"paydays":[{"id":"payday","label":"Payday","enabled":true,"kind":"monthly-dates","days":[15],"adjustment":{"mode":"none"}}],"pickups":[],"overrides":[{"ruleId":"retired-rule","nominalDate":"2026-06-15","action":"skip"}]}`
+	if err := os.WriteFile(service.householdSchedulesPath(), []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, migrated, err := service.HouseholdSchedules()
+	if err != nil || migrated {
+		t.Fatalf("load = %#v migrated=%v err=%v", cfg, migrated, err)
+	}
+	if len(cfg.Overrides) != 0 {
+		t.Fatalf("orphaned override survived load: %#v", cfg.Overrides)
+	}
+	if _, err := service.GenerateDefaults(false); err != nil {
+		t.Fatalf("default calendar generation failed because of an orphaned override: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(service.logDir, "household-schedules.log"))
+	if err != nil || !strings.Contains(string(body), "dropped orphaned") {
+		t.Fatalf("missing orphaned-override diagnostic: %q err=%v", body, err)
+	}
+}
+
+func TestScheduleMoveBoundsAndSameRuleCollision(t *testing.T) {
+	service := testService(t)
+	cfg := HouseholdSchedules{Schema: HouseholdSchedulesSchema, Pickups: []PickupRule{{
+		ID: "trash", Label: "Trash pickup", Enabled: true, Weekday: "monday", EveryWeeks: 1, Start: "2026-06-01", Adjustment: ScheduleAdjustment{Mode: "none"},
+	}}}
+	if _, err := service.SaveHouseholdSchedules(cfg); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.SetHouseholdScheduleOverrideWithResult(ScheduleOverride{RuleID: "trash", NominalDate: "2026-06-01", Action: "move", ActualDate: "2026-06-08"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Collision || result.ActualDate != "2026-06-08" {
+		t.Fatalf("move result = %#v, want same-rule collision", result)
+	}
+	if _, err := service.SetHouseholdScheduleOverrideWithResult(ScheduleOverride{RuleID: "trash", NominalDate: "2026-06-01", Action: "move", ActualDate: "2062-06-01"}); err == nil {
+		t.Fatal("out-of-window move was accepted")
 	}
 }
