@@ -4,7 +4,7 @@
 
 ## Current stable release
 
-- **Version:** `1.5.3`
+- **Version:** `1.5.4`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
@@ -13,23 +13,15 @@
 
 ## Current development beta
 
-- **Version:** `1.5.4-beta.2`
-- **Track:** beta
-- **Focus:** the cumulative 1.5.4 hardening work plus intentional Dashboard Control action/choice geometry: visible selected/pressed touch states, balanced option grids, safer PIN handling, a truthful non-destructive installer menu, canonical weather data, conservative repair recovery, DST-safe chore cadence, verified ISS preservation, and correctable generated schedule movement.
+- No development beta is staged in this source handoff. `1.5.4` is the stable promotion candidate.
 
-## 1.5.4-beta.2 focus
+## 1.5.4 highlights
 
-- **Count-aware Control grids:** Quick actions stays at its intrinsic content height; five visual/action choices render as a centered 3 + 2; six choices render as 3 + 3; compact kiosk layouts retain two comfortable columns without changing the shared shell tiers.
-- **Dashboard Control clarity:** selected and pressed controls use visible theme-aware fills on every theme; the six-tab rail has symmetric internal spacing and stable two-column small-screen rows.
-- **Control maintainability:** retired action-drawer, obsolete Control-page maintenance, five-tab, and unused grid layers were removed so layout, sizing, and state ownership are explicit.
-- **Overview flow:** Device status opens by default and groups key network, device, and data-freshness signals, while lower-signal telemetry is available under More device details.
-- **Touch workflow:** Settings is the clear household/preferences tab name, every page follows the same accordion model, and action feedback is shown beside the active action as well as in the existing global status line.
-- **PIN security:** configured credentials are verified strictly rather than treating a disabled or unconfigured lock as a successful verification; Control and personal-inbox failures use bounded persistent escalating lockouts; every-open Control sessions use a short server-side expiry refreshed only while Control remains active; unavailable PIN configuration fails closed; browser-facing status payloads never include verifier material; browser API requests with a supplied cross-origin context are rejected.
-- **Installer flow:** the Control PIN, dashboard service, and SSH menu actions are live and tested; the menu uses named identities with Exit last; Demo Mode defaults to keeping data; customization retries safely when review is rejected; current PIN-duration choices are preserved on Enter; pre-flight runs only after a real action is selected; and setup guidance names the moon-phase Control gesture and current Settings tab.
-- **Weather integrity:** every active provider adapter converts daily precipitation to millimetres before returning source data; the Go server publishes normalized sources rather than a second divergent blend; the browser remains the authoritative robust blend and applies a final daily low≤high coherence guard.
-- **Doctor and repair safety:** visible repair numbers resolve in the same safe→guided→admin order that Doctor renders; redirected `--fix` is safe-only unless explicit reviewed `--only` keys are supplied; repair archives live outside the application tree; and a missing/corrupt server repair failure prints a verified release-bundle recovery recipe.
-- **Message fit observability:** Dashboard Control’s Rotating messages editor reports session-only final-safe-clip and rendered-correction counts without collecting message text or adding rotation-time layout work.
-- **Generated calendar resilience:** every-N-days chores use civil-date math across DST; ISS refresh keeps the last good calendar on HTTP or provider-error payloads; stale schedule overrides are ignored safely at load; one-off moves stay in a visible ±90-day generation window and report a same-rule collision; calendar generation deduplicates clamped month-end paydays, avoids a second holiday landing, computes local astronomical season dates with Northern Hemisphere labels, preserves February 29 celebrations as February 28 observations in non-leap years, and reports moon output only when it succeeds.
+- **Dashboard Control:** consolidated competing Control styling into clear ownership, restored visible selected and pressed touch states, stabilized the six-tab rail, renamed the household/preferences tab to Settings, and made action and option grids deliberate rather than auto-fit accidents. Five choices balance as centered 3 + 2 and six as 3 + 3, while quick-action cards retain their intrinsic height.
+- **Installer and setup:** restored the advertised Control PIN, dashboard-service, and SSH menu actions; made Demo Mode safe by default; corrected the moon-phase Control gesture; retained current PIN-duration choices on Enter; moved pre-flight after a real menu action; and made menu identities and setup guidance self-consistent.
+- **PIN, Doctor, and repair hardening:** made verifier semantics strict, configuration reads fail closed, every-open Control sessions server-enforced, and Control/inbox lockouts persistent and escalating. Doctor repair selection now matches what it renders, redirected fixes are safe-only, and repair preserves backups outside the application tree with a verified recovery recipe for broken server binaries.
+- **Weather and messages:** normalized daily precipitation to millimetres at every active adapter, retained one authoritative browser blend with daily low/high coherence, and added privacy-preserving message-fit diagnostics without rotation-time layout work.
+- **Generated calendars and schedules:** fixed every-N-days chore cadence across DST, retained prior good ISS feeds on provider failures, hardened one-time occurrence moves and stale overrides, removed duplicate clamped month-end paydays, improved holiday shifts, and made seasons, February 29 celebrations, and moon-output reporting more truthful.
 
 ## 1.5.3 highlights
 
