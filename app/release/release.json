@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.5.3-beta.1",
-  "track": "beta",
+  "version": "1.5.3",
+  "track": "stable",
   "minimumUpgradeVersion": "1.4.0"
 }

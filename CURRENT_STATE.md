@@ -4,7 +4,7 @@
 
 ## Current stable release
 
-- **Version:** `1.5.2`
+- **Version:** `1.5.3`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
@@ -13,10 +13,12 @@
 
 ## Current development beta
 
-- **Version:** `1.5.3-beta.1`
-- **Track:** beta
-- **Focus:** reviewed static SVG polish: five calendar decals for every seasonal/holiday theme and calendar-aware observance theme, richer user-selected décor density on every profile including Lite, clearer Bold and High Contrast weather SVGs, and modest crescent earthshine refinement.
-- **Runtime posture:** no decoration polling, network work, animation, external SVG assets, raster images, SVG filters, masks, or gradients were added to calendar décor. Decals are inserted only during a normal calendar render or an explicit visual/theme setting change.
+- No development beta is staged in this source handoff. `1.5.3` is the stable promotion candidate.
+
+## 1.5.3 highlights
+
+- **Calendar décor:** every seasonal, holiday, and calendar-aware observance theme carries five static calendar decals. User-selected décor density stays available on every profile, including Lite, without filters, masks, gradients, animation, polling, or external assets.
+- **Visual polish:** Bold and High Contrast weather SVGs are clearer, and crescent earthshine receives a modest refinement while retaining the existing rendering model.
 
 ## 1.5.2 highlights
 
