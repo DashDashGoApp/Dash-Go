@@ -4,7 +4,7 @@
 
 ## Current stable release
 
-- **Version:** `1.5.4`
+- **Version:** `1.5.5`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
@@ -13,7 +13,11 @@
 
 ## Current development beta
 
-- No development beta is staged in this source handoff. `1.5.4` is the stable promotion candidate.
+- No development beta is staged in this source handoff. `1.5.5` is the stable promotion candidate.
+
+## 1.5.5 highlights
+
+- **Responsive showcase rendering:** the dashboard now renders cleanly at 1920×1080, 1366×768, and 1280×800 landscape and 1080×1920, 800×1280, and 768×1024 portrait. Narrow day columns place event times on their own line with word-boundary wrapping and hyphenation, portrait walls show abbreviated weekday headers so all seven days remain visible, the sidebar clock can no longer overflow its panel, and scrolling panes fade at their edges instead of cutting text mid-glyph.
 
 ## 1.5.4 highlights
 

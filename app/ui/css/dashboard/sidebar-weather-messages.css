@@ -6,8 +6,8 @@
 }
 #clock{padding:var(--dash-clock-pad);border-bottom:1px solid var(--line);}  /* generous triple-tap target */
 #cdate{font-family:var(--dash-clock-font);font-size:var(--dash-clock-date-size);font-weight:var(--dash-clock-weight);color:var(--fg);letter-spacing:0.015em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
-#ctime{font-family:var(--dash-clock-font);font-size:var(--dash-clock-time-size);font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
-#ctime sup,#ctime .ap{font-size:var(--dash-clock-suffix-size);color:var(--dim);vertical-align:super;}
+#ctime{font-family:var(--dash-clock-font);font-size:min(var(--dash-clock-time-size),calc((var(--sidebarwidth) - 40px)/4.3));font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
+#ctime sup,#ctime .ap{font-size:min(var(--dash-clock-suffix-size),0.36em);color:var(--dim);vertical-align:super;}
 #agendalist{flex:1;overflow-y:auto;scrollbar-width:none;padding:4px 0 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;contain:content;}
 #agendalist::-webkit-scrollbar{display:none;}
 .agday{padding:10px 20px 9px;border-bottom:1px solid var(--line-soft);}
@@ -19,7 +19,7 @@
 .agev .at .start{color:var(--accent);}
 .agev .at .end{color:var(--endtime);font-size:16px;}
 .agev .at.allday{color:var(--dimmer);font-size:16px;}
-.agev .agtitle{flex:1;min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
+.agev .agtitle{flex:1;min-width:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto;}
 .agev.empty{color:var(--dimmer);font-style:italic;}
 /* The overscan controller keeps a small directional window painted before it
    enters view. Distant rows still retain normal browser content culling. */
@@ -61,7 +61,7 @@
 .wxday:hover{background:rgba(255,255,255,0.03);}
 .wxday .dd{font-family:var(--dash-weather-display-font,var(--dash-weather-font));font-size:var(--dash-weather-day-size);font-weight:var(--dash-weather-secondary-weight);color:var(--dim);}
 .wxday .ic{font-size:var(--dash-weather-row-icon-size);line-height:1;text-align:center;}
-.wxday .desc{font-family:var(--dash-weather-font);font-size:var(--dash-weather-description-size);font-weight:var(--dash-weather-secondary-weight);color:var(--dimmer);line-height:1.12;white-space:normal;overflow-wrap:anywhere;overflow:hidden;max-height:2.35em;}
+.wxday .desc{font-family:var(--dash-weather-font);font-size:var(--dash-weather-description-size);font-weight:var(--dash-weather-secondary-weight);color:var(--dimmer);line-height:1.12;white-space:normal;overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto;overflow:hidden;max-height:2.35em;}
 .wxday .temps{font-family:var(--dash-weather-display-font,var(--dash-weather-font));font-size:var(--dash-weather-temp-size);font-weight:var(--dash-weather-secondary-weight);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;}
 .wxday .temps .hi{color:var(--fg);}
 .wxday .temps .lo{color:var(--dimmer);margin-left:6px;}
@@ -195,3 +195,7 @@ html[data-theme="daylight"] .pill{background:rgba(20,28,34,0.045);}
   -webkit-touch-callout:none;
   touch-action:manipulation;
 }
+
+/* Sidebar scroll lists fade out at their pane edges instead of cutting glyphs. */
+#agendalist{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),rgba(0,0,0,0));mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),rgba(0,0,0,0));}
+#wx14{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),rgba(0,0,0,0));mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),rgba(0,0,0,0));}

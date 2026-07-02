@@ -63,10 +63,13 @@ function renderCalHead(){
   const head=$("#calhead"); head.innerHTML="";
   const base=startOfWeek(new Date());
   const fmt=FMT.weekday;
+  const abbr=new Intl.DateTimeFormat(LOCALE,{weekday:"short"});
   for(let i=0;i<7;i++){
     const d=new Date(+base+i*DAY);
     const dow=d.getDay();
-    const div=el("div",dow===6?"dow-sat":dow===0?"dow-sun":"",fmt.format(d));
+    const div=el("div",dow===6?"dow-sat":dow===0?"dow-sun":"");
+    div.appendChild(el("span","dow-full",fmt.format(d)));
+    div.appendChild(el("span","dow-abbr",abbr.format(d)));
     head.appendChild(div);
   }
 }
