@@ -88,6 +88,8 @@ func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*ca
 			parseExdates(&ev, prop, zones)
 		case "RDATE":
 			parseRdates(&ev, prop, zones)
+		case "ORGANIZER", "ATTENDEE":
+			ev.HasScheduling = true
 		case "RECURRENCE-ID":
 			if dt, dateOnly, _, ok := parseICSDateInZone(prop.value, prop.params, zones, ev.zone); ok {
 				ms := epochMs(dt)

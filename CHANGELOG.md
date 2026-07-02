@@ -2,6 +2,15 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.3] — 2026-07-02
+
+### Opt-in private CalDAV writeback
+
+- Added local-first two-way calendar editing for exact private CalDAV/vdir collections explicitly enrolled during setup. Dashboard users can add an event from a day popup, edit a simple event without moving it between collections, and skip exactly one recurring occurrence; the local vdir is updated first and normal CalDAV sync is then queued in the background.
+- Kept website and URL ICS subscriptions, broad multi-collection mirrors, unmanaged local files, Dash-Go-generated feeds, attendee/organizer events, and detached recurrence instances structurally read-only in both UI and server routes. Registered CalDAV mirrors can be hidden but are protected from Calendar Manager delete/trash operations, so Dashboard Control never deletes a remote calendar.
+- Added safe direct-VEVENT editing that retains nested `VALARM` components and provider properties, rejects aggregate event files, preserves DTSTART timezone/date form for `EXDATE`, uses date-only all-day values with exclusive end dates, and requires an enabled Dashboard Control PIN before a one-time event may be deleted.
+- Added calendar-writeback status and configuration controls plus exact-collection setup enrollment. Broad CalDAV discovery remains display-only; a provider whose local vdir does not materialize the selected exact collection stays read-only rather than risking an aggregate write.
+
 ## [1.5.6-beta.2] — 2026-07-02
 
 ### Frontend first-paint and calendar efficiency

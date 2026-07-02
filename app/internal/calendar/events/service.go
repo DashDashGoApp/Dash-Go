@@ -15,6 +15,8 @@ type ServiceConfig struct {
 	OutputEnabled  func(url string) bool
 	SourceIdentity func(url string) string
 	OwnedSource    func(url string) (CalendarSource, bool)
+	WritableSource func(url string) bool
+	DeleteAllowed  func(url string) bool
 	Now            func() time.Time
 }
 
@@ -27,6 +29,8 @@ type Service struct {
 	outputEnabled  func(string) bool
 	sourceIdentity func(string) string
 	ownedSource    func(string) (CalendarSource, bool)
+	writableSource func(string) bool
+	deleteAllowed  func(string) bool
 	now            func() time.Time
 }
 
@@ -43,6 +47,14 @@ func New(cfg ServiceConfig) *Service {
 	if ownedSource == nil {
 		ownedSource = func(string) (CalendarSource, bool) { return CalendarSource{}, false }
 	}
+	writableSource := cfg.WritableSource
+	if writableSource == nil {
+		writableSource = func(string) bool { return false }
+	}
+	deleteAllowed := cfg.DeleteAllowed
+	if deleteAllowed == nil {
+		deleteAllowed = func(string) bool { return false }
+	}
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
@@ -54,6 +66,8 @@ func New(cfg ServiceConfig) *Service {
 		outputEnabled:  outputEnabled,
 		sourceIdentity: sourceIdentity,
 		ownedSource:    ownedSource,
+		writableSource: writableSource,
+		deleteAllowed:  deleteAllowed,
 		now:            now,
 	}
 }

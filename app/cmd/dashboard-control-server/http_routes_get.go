@@ -47,6 +47,10 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 		a.handleRadarTile(w, r)
 		return
 	}
+	if path == "/api/calendar/writeback/status" {
+		a.json(w, a.calendarWritebackStatus())
+		return
+	}
 	if a.handleTodoGet(w, r, path) {
 		return
 	}

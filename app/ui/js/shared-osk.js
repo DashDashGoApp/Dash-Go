@@ -54,7 +54,7 @@ function hideOSK(){
   const osk=oskRoot();
   if(osk) osk.classList.remove("show");
   if(_oskTarget) _oskTarget.classList.remove("oskfocus");
-  document.querySelectorAll(".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open").forEach(page=>page.classList.remove("osk-open"));
+  document.querySelectorAll(".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open,#popbody.osk-open").forEach(page=>page.classList.remove("osk-open"));
   document.documentElement.style.removeProperty("--osk-h");
   _oskTarget=null;
 }
@@ -200,7 +200,7 @@ function showOSKFor(input){
   }
   const osk=buildOSK();
   osk.classList.add("show");
-  const page=input.closest("#listsapp,#chorewheel,#familyboard,#maintenance,#routines,.ctrlpage")||$("#ctrlpage-content");
+  const page=input.closest("#listsapp,#chorewheel,#familyboard,#maintenance,#routines,.ctrlpage,#popbody")||$("#ctrlpage-content");
   if(page) page.classList.add("osk-open");
   measureOSK(osk);
   setTimeout(()=>input.scrollIntoView({block:"center",behavior:"smooth"}),40);

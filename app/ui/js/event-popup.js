@@ -44,6 +44,8 @@ function showEventPopup(ev){
     if(ev.location){mapWrap=el("div","eventmap loading","Map loads after event details…");frag.appendChild(mapWrap);}
     if(ev.desc){const d=el("div");d.style.marginTop="10px";d.textContent=ev.desc;frag.appendChild(d);}
     if(!ev.location&&!ev.desc)frag.appendChild(el("div",null,"No additional details."));
+    const calendarActions=typeof calendarWritebackEventActions==="function"?calendarWritebackEventActions(ev,token):null;
+    if(calendarActions)frag.appendChild(calendarActions);
     if(mapWrap)popupDefer(token,task=>{if(task.isCurrent()&&mapWrap.isConnected)loadEventMap(ev.location,mapWrap,task);});
     return frag;
   });

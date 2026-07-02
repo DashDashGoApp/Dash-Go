@@ -18,7 +18,7 @@ When an optional service is unavailable, Dash-Go does not invent missing data or
 |---|---|---|---|
 | Local iCalendar files | Calendar events from local `.ics` files | Nothing leaves the device | Fully available |
 | Remote iCalendar feeds | Read-only calendars from an HTTPS or webcal feed | Feed request; the URL may itself contain a private token | Existing local calendar content remains available until refreshed or removed |
-| CalDAV | Calendar synchronization through a compatible CalDAV server | CalDAV endpoint, configured credentials, and calendar data | No new remote changes are synchronized |
+| CalDAV | Calendar synchronization through a compatible CalDAV server; optional Dashboard edits for one exact enrolled private collection | CalDAV endpoint, configured credentials, calendar data, and user-requested local-first changes when writeback is enabled | Existing local mirror remains available; writes wait locally for the next successful synchronization |
 | Microsoft To Do | Optional task-list synchronization | Microsoft authorization data, mapped list information, and relevant task changes | Local task workflows remain available; remote synchronization waits for recovery |
 | Apprise-Go notifications | Optional delivery through configured notification services | Notification text and the configured destination route | No notification is sent while the destination is unavailable |
 | Weather and air quality | Forecasts, conditions, air quality, and severe-weather alerts | Configured location coordinates and, where needed, a provider API key | Cached information may remain visible; fresh data cannot be retrieved |
@@ -46,7 +46,7 @@ Dash-Go supports compatible CalDAV workflows through its local synchronization s
 
 A CalDAV setup can store an endpoint, account name, app password, token, collection selection, and synchronized calendar data locally on the Dash-Go device. Those credentials are used only to communicate with the configured CalDAV server.
 
-Removing or disabling a CalDAV connection stops future synchronization. It does not automatically erase local household data or unrelated calendar files.
+Dashboard writeback is optional and narrow: it is allowed only for one exact local vdir collection explicitly enrolled during setup and enabled in Dashboard Control. A Dashboard-created or edited event is written locally first and synchronized remotely later. URL subscriptions, broad multi-collection mirrors, generated feeds, and unmanaged local ICS files are never writeback targets. Dash-Go never deletes a remote calendar; removing or disabling a CalDAV connection stops future synchronization without automatically erasing local household data or unrelated calendar files.
 
 ## Microsoft To Do
 

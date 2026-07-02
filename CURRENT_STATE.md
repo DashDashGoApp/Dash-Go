@@ -13,10 +13,17 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.2`
+- **Version:** `1.5.6-beta.3`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** graceful server lifecycle, durable local writes, repair resolver correctness, long-running To Do sync/SSE reliability, PIN derivation compatibility, frontend first-paint and calendar-layout efficiency, outbound metadata cleanup, and source-tree hygiene.
+- **Focus:** explicit private CalDAV calendar writeback, including safe local-first create/edit/skip flows, strict read-only boundaries for subscriptions and generated feeds, and the established reliability, durability, and frontend-efficiency work from beta.1–beta.2.
+
+## 1.5.6-beta.3 highlights
+
+- **Private two-way CalDAV calendars:** Dashboard edits are opt-in and eligible only for an exact, setup-registered local vdir collection. A user can add a standard event from a day popup, edit a simple event in its original collection, or skip one recurring occurrence. Each accepted change saves to the local vdir first, refreshes Dash-Go’s derived mirror, then queues normal CalDAV synchronization.
+- **Strict read-only boundaries:** website/URL ICS subscriptions, local unmanaged files, broad multi-collection mirrors, generated Dash-Go feeds, attendee/organizer events, and detached recurrence instances cannot enter any writeback route. Calendar Manager protects registered remote mirrors from delete/trash actions; it can hide them but never delete a remote calendar.
+- **Safe event semantics:** writeback preserves nested alarms and unknown provider properties, rejects aggregate items, writes recurrence exceptions in the master DTSTART’s date/time/TZID form, keeps all-day dates date-based with an exclusive end date, and requires an enabled Dashboard Control PIN for one-time event deletion.
+- **CalDAV control and status:** setup can enroll one exact private CalDAV collection for dashboard edits, while broad discovered collections remain display-only. Calendars Control shows writeback availability and enables or disables each registered collection without exposing remote collection paths.
 
 ## 1.5.6-beta.2 highlights
 

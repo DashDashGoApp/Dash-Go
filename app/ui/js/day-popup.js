@@ -139,7 +139,12 @@ function showDayPopup(day,evs){
     mode:"daytimelinepop",title:FMT.dayLong.format(day),when:evs.length+(evs.length===1?" event":" events"),loading:"Preparing day timeline…",
     afterCommit:(token,body)=>{if(session&&session.token===token)session.afterCommit(body);}
   },token=>{
-    if(!evs.length)return el("div",null,"No events.");
+    if(!evs.length){
+      const root=el("div","dt-popup-session");
+      root.appendChild(el("div","dt-empty","No events."));
+      session={token,afterCommit(){calendarWritebackMountDayAdd(root,day,token);}};
+      return root;
+    }
     dtBeginDayCardPaintContext(model);
     const root=el("div","dt-popup-session"),host=el("div","dt-viewhost"),state={view:initial,views:{},body:null};
     root.addEventListener("click",e=>{
@@ -171,6 +176,7 @@ function showDayPopup(day,evs){
       popupDefer(token,ctx=>ctx.onCancel(()=>dtCancelTimelineStage(state.views.timeline)));
       dtScrollInitialView(body,first,initial,model);
       if(initial==="timeline")dtStageTimelineCards(token,first);
+      calendarWritebackMountDayAdd(root,day,token);
     }};
     return root;
   });

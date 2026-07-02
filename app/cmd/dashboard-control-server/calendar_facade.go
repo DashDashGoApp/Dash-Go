@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	calendarpkg "github.com/DashDashGoApp/Dash-Go/app/internal/calendar"
@@ -104,9 +105,34 @@ func (a *app) generateCalendarManifest() error { return a.calendarService().Gene
 func (a *app) calendars() any                  { return a.calendarService().Calendars() }
 
 func (a *app) calendarManagementStatus() map[string]any {
-	return a.calendarService().ManagementStatus()
+	status := a.calendarService().ManagementStatus()
+	writeback := a.calendarWritebackStatus()
+	status["writeback"] = writeback
+	registered := map[string]bool{}
+	for _, raw := range jsonutil.List(writeback["calendars"]) {
+		row := jsonutil.Map(raw)
+		if source := strings.TrimSpace(jsonutil.StringValue(row["source"])); source != "" {
+			registered[source] = true
+		}
+	}
+	for _, raw := range jsonutil.List(status["calendars"]) {
+		row := jsonutil.Map(raw)
+		if !registered[strings.TrimSpace(jsonutil.StringValue(row["url"]))] {
+			continue
+		}
+		// A vdir-derived file is a local dashboard mirror, never an ownership
+		// transfer. Calendar Manager may hide it but must not trash or unlink it.
+		row["kind"] = "writeback"
+		row["deleteMode"] = "hide-only"
+		row["sourceLabel"] = "Private CalDAV mirror · remote calendar is unchanged"
+		row["writebackRegistered"] = true
+	}
+	return status
 }
 func (a *app) archiveLocalCalendar(url, displayName string) (calendarTrashRecord, error) {
+	if a.calendarWritebackService().RegisteredSource(url) {
+		return calendarTrashRecord{}, fmt.Errorf("private CalDAV mirrors cannot be deleted from Dashboard Control; disconnect them from CalDAV setup instead")
+	}
 	return a.calendarService().Archive(url, displayName)
 }
 func (a *app) restoreLocalCalendar(id string) (calendarTrashRecord, error) {

@@ -133,3 +133,13 @@ func ReadString(path, def string) string {
 	}
 	return s
 }
+
+// RemoveDurable deletes a managed file and flushes its parent directory entry.
+// It is used for vdir event deletion so a power loss cannot resurrect a file
+// after Dash-Go has already acknowledged its removal.
+func RemoveDurable(path string) error {
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(path))
+}

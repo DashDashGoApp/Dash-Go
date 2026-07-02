@@ -31,7 +31,7 @@ const document={
   querySelectorAll(selector){
     requested.push(selector);
     if(selector==="#osk") return [visible,legacyDuplicate];
-    if(selector===".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open") return [openPage];
+    if(selector===".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open,#popbody.osk-open") return [openPage];
     return [];
   },
   documentElement:{style:{removeProperty(name){cleared.push(name);}}},
@@ -41,10 +41,10 @@ vm.createContext(context);
 vm.runInContext(source,context,{filename:"shared-osk.js"});
 vm.runInContext("_oskTarget=__target; hideOSK();",context);
 
-assert.deepEqual(requested,["#osk",".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open"],"hide must resolve the keyboard by #osk before releasing all active overlay surfaces");
+assert.deepEqual(requested,["#osk",".ctrlpage.osk-open,#listsapp.osk-open,#chorewheel.osk-open,#familyboard.osk-open,#maintenance.osk-open,#routines.osk-open,#popbody.osk-open"],"hide must resolve the keyboard by #osk before releasing all active overlay surfaces");
 assert.equal(visible.classList.contains("show"),false,"hide must remove the visible keyboard class");
 assert.equal(target.classList.contains("oskfocus"),false,"hide must clear the focused field affordance");
-assert.equal(openPage.classList.contains("osk-open"),false,"hide must release Control, Lists, Chore Wheel, Family Board, Maintenance, and Routines scroll-room state");
+assert.equal(openPage.classList.contains("osk-open"),false,"hide must release Control, Lists, Chore Wheel, Family Board, Maintenance, Routines, and popup scroll-room state");
 assert.deepEqual(cleared,["--osk-h"],"hide must clear the keyboard-height custom property");
 assert.deepEqual(removed,[legacyDuplicate],"a legacy duplicate keyboard root must be removed rather than left visible");
 

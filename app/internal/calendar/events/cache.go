@@ -90,7 +90,7 @@ func (s *Service) buildCache(cals []CalendarSource, sources []SourceMeta, window
 		for _, ev := range parsed {
 			for _, inst := range expand(ev, windowStart, windowEnd) {
 				if eventInWindow(inst, windowStart, windowEnd) {
-					allEvents = append(allEvents, serializeEvent(inst, cal, idx))
+					allEvents = append(allEvents, s.serializeEvent(inst, cal, idx))
 					idx++
 				}
 			}
@@ -118,7 +118,7 @@ func (s *Service) buildCache(cals []CalendarSource, sources []SourceMeta, window
 	return &CacheOutput{Version: CacheVersion, FingerprintVersion: FingerprintVersion, GeneratedAt: nowMs, WindowStart: epochMs(windowStart), WindowEnd: epochMs(windowEnd), Sources: sources, Issues: issues, Events: allEvents}, nil
 }
 
-func serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[string]any {
+func (s *Service) serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[string]any {
 	uid := ev.UID
 	startMs := epochMs(ev.Start)
 	var endAny any = nil
@@ -136,6 +136,11 @@ func serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[string]any {
 		calMeta["owner"] = owner
 	}
 	item := map[string]any{"id": ident, "title": defaultString(ev.Title, "(no title)"), "desc": ev.Desc, "location": ev.Location, "start": startMs, "end": endAny, "allDay": ev.AllDay, "uid": uid, "calUrl": cal.URL, "cal": calMeta}
+	if s.writableSource(cal.URL) && owner == "" && uid != "" && !ev.HasScheduling {
+		canEdit := !ev.Recur && ev.RecurID == nil
+		canDelete := canEdit && s.deleteAllowed(cal.URL)
+		item["writeback"] = map[string]any{"enabled": true, "canEdit": canEdit, "canDelete": canDelete, "canSkip": ev.Recur && ev.RecurID == nil, "deleteRequiresPin": canEdit && !canDelete}
+	}
 	if owner != "" {
 		item["appOwner"] = owner
 	}

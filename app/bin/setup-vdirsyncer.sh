@@ -11,6 +11,7 @@ set -u
 DASH="${DASH:-$HOME/dashboard}"
 BIN_DIR="$DASH/bin"
 CAL_DIR="$DASH/calendars"
+CONFIG_DIR="$DASH/config"
 LOG_DIR="$DASH/logs"
 VDIR_HOME="${DASH_VDIR_HOME:-$HOME/.dashboard-vdirsyncer}"
 VDIR_CFG="$VDIR_HOME/config"
@@ -19,6 +20,7 @@ VDIR_COLLECTIONS="$VDIR_HOME/collections"
 VDIR_PAIRS="$VDIR_HOME/pairs"
 VDIR_PASSWORDS="$VDIR_HOME/passwords"
 MAP="${DASH_VDIR_MAP:-$VDIR_HOME/calendars.map}"
+WRITEBACK_REGISTRY="$CONFIG_DIR/calendar-writeback.json"
 SYNC_LOG="$LOG_DIR/vdir-sync.log"
 
 # pip --user and pipx commonly place vdirsyncer here. Keep cron and interactive
@@ -31,7 +33,7 @@ warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
-mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS"
+mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$CONFIG_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS"
 chmod 700 "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" 2>/dev/null || true
 touch "$MAP" "$VDIR_PAIRS"
 chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
@@ -170,6 +172,34 @@ write_vdirsyncer_config(){
   chmod 600 "$VDIR_CFG" 2>/dev/null || true
 }
 
+write_writeback_registry(){
+  local temp first name color tag pair collection writable collection_id source exact
+  temp="$(mktemp)" || return 1
+  first=1
+  {
+    printf '{\n  "version": 1,\n  "enabled": false,\n  "requirePin": false,\n  "calendars": ['
+    while IFS='|' read -r name color tag pair collection writable collection_id _; do
+      [ -n "$name" ] || continue
+      # A broad discovery mirror is display-only. Writeback requires one exact
+      # remote collection and a concrete local vdir below its pair root.
+      [ "$writable" = "1" ] && [ -n "$collection_id" ] || continue
+      exact="$collection/$collection_id"
+      if [ ! -d "$exact" ]; then
+        warn "private collection $name was not materialized as one exact vdir; leaving Dashboard edits off"
+        continue
+      fi
+      if [ -n "$tag" ]; then source="calendars/$name.$color.$tag.ics"; else source="calendars/$name.$color.ics"; fi
+      [ "$first" -eq 1 ] || printf ','
+      first=0
+      printf '\n    {"source":"%s","collection":"%s","writable":true,"enabled":true,"name":"%s"}' "$source" "$exact" "$name"
+    done < "$MAP"
+    printf '\n  ]\n}\n'
+  } > "$temp" || { rm -f "$temp"; return 1; }
+  chmod 600 "$temp" || { rm -f "$temp"; return 1; }
+  mv "$temp" "$WRITEBACK_REGISTRY" || { rm -f "$temp"; return 1; }
+  chmod 600 "$WRITEBACK_REGISTRY" 2>/dev/null || true
+}
+
 write_sync_wrapper(){
   cat > "$BIN_DIR/sync-vdir.sh" <<WRAPPER
 #!/usr/bin/env bash
@@ -221,7 +251,11 @@ vdirsyncer -c "\$VDIR_CFG" sync >> "\$LOG" 2>&1 || { sync_rc=1; log 'vdirsyncer 
 merge_collection(){
   src="\$1"; dest="\$2"; tmp="\$(mktemp)"
   if ! find "\$src" -type f -name '*.ics' -print -quit 2>/dev/null | grep -q .; then
-    rm -f "\$tmp"; return 1
+    # A successful sync with no vdir items is a valid empty collection (for
+    # example after deleting its final event). A failed sync keeps old data.
+    if [ "\$sync_rc" -ne 0 ]; then rm -f "\$tmp"; return 1; fi
+    printf 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Dash-Go//vdirsyncer//EN\nCALSCALE:GREGORIAN\nEND:VCALENDAR\n' > "\$tmp"
+    mv "\$tmp" "\$dest"; return 0
   fi
   {
     printf 'BEGIN:VCALENDAR\\nVERSION:2.0\\nPRODID:-//Dash-Go//vdirsyncer//EN\\nCALSCALE:GREGORIAN\\n'
@@ -236,11 +270,11 @@ merge_collection(){
     printf 'END:VCALENDAR\\n'
   } > "\$tmp"
   if grep -q 'BEGIN:VEVENT' "\$tmp"; then mv "\$tmp" "\$dest"; return 0; fi
-  if [ ! -s "\$dest" ]; then mv "\$tmp" "\$dest"; else rm -f "\$tmp"; fi
-  return 0
+  if [ "\$sync_rc" -eq 0 ]; then mv "\$tmp" "\$dest"; return 0; fi
+  rm -f "\$tmp"; return 1
 }
 
-while IFS='|' read -r name color tag pair collection; do
+while IFS='|' read -r name color tag pair collection writable _; do
   [ -n "\$name" ] || continue
   if [ -n "\$tag" ]; then dest="\$CAL_DIR/\$name.\$color.\$tag.ics"; else dest="\$CAL_DIR/\$name.\$color.ics"; fi
   if merge_collection "\$collection" "\$dest"; then
@@ -321,11 +355,18 @@ while true; do
   echo "    Optionally limit to one collection UUID (blank = sync all discovered collections)."
   read -rp "    Collection UUID [all]: " collection_id
   if ! valid_collection_id "$collection_id"; then warn "    collection UUID may use only letters, numbers, dot, hyphen, and underscore."; unset password; continue; fi
+  writable=0
+  if [ -n "$collection_id" ]; then
+    read -rp "    Allow Dashboard add/edit/skip for this one collection? [y/N]: " writable_choice
+    case "${writable_choice:-n}" in y|Y|yes|YES) writable=1;; esac
+  else
+    echo "    Broad discovered mirrors stay read-only. Choose one exact collection UUID to enable Dashboard edits later."
+  fi
 
   pair="dash_${name}"
   collection_path="$VDIR_COLLECTIONS/$name"
   mkdir -p "$collection_path"
-  printf '%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" >> "$MAP"
+  printf '%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$writable" "$collection_id" >> "$MAP"
   printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$url" "$username" "$collection_id" >> "$VDIR_PAIRS"
   printf '%s' "$password" > "$VDIR_PASSWORDS/$name"
   chmod 600 "$VDIR_PASSWORDS/$name" "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
@@ -355,6 +396,9 @@ else
 fi
 echo "Files in $CAL_DIR:"
 ls -1 "$CAL_DIR"/*.ics 2>/dev/null | sed 's/^/   /' || true
+
+write_writeback_registry || { warn "could not write calendar writeback registry"; exit 1; }
+ok "calendar writeback registry written (Dashboard edits start disabled)"
 
 say "Scheduling CalDAV sync (every 15 minutes)"
 if install_vdir_cron; then

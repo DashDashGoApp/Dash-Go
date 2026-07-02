@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.6-beta.2"
+VERSION="1.5.6-beta.3"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -239,7 +239,11 @@ Apps load only when opened and use the shared Dash-Go overlay, theme, touch cont
 
 ### CalDAV calendars
 
-Choose **Add CalDAV calendar** from the installer’s calendar-sync menu for iCloud, Nextcloud, Fastmail, Radicale, or another standard CalDAV service. Dash-Go keeps the account credentials outside the served dashboard tree and syncs the chosen collection into a local Dash-Go calendar.
+Choose **Add CalDAV calendar** from the installer’s calendar-sync menu for iCloud, Nextcloud, Fastmail, Radicale, or another standard CalDAV service. Dash-Go keeps account credentials outside the served dashboard tree and synchronizes the chosen remote collection into a local Dash-Go calendar.
+
+A private CalDAV collection can optionally be enrolled for **Dashboard edits** when setup can identify one exact local vdir collection. In **Dashboard Control → Calendars**, enable that collection to add events from a day popup, edit simple events, or skip one occurrence of a recurring event. Dash-Go writes the local vdir first, updates its dashboard mirror, then queues the usual CalDAV synchronization.
+
+Website and `webcal`/HTTPS ICS subscriptions remain permanently read-only. Broad discovered CalDAV mirrors, local unmanaged ICS files, generated Dash-Go feeds, attendee/organizer events, and detached recurring instances are also read-only. Calendar Manager can hide a registered CalDAV mirror but never deletes the remote calendar. One-time event deletion requires an enabled Dashboard Control PIN.
 
 ### Microsoft To Do
 

@@ -18,6 +18,7 @@ import (
 	controlauth "github.com/DashDashGoApp/Dash-Go/app/internal/auth"
 	calendarpkg "github.com/DashDashGoApp/Dash-Go/app/internal/calendar"
 	eventspkg "github.com/DashDashGoApp/Dash-Go/app/internal/calendar/events"
+	writebackpkg "github.com/DashDashGoApp/Dash-Go/app/internal/calendar/writeback"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	householdpkg "github.com/DashDashGoApp/Dash-Go/app/internal/household"
 	chorepkg "github.com/DashDashGoApp/Dash-Go/app/internal/household/chores"
@@ -59,6 +60,10 @@ type app struct {
 	events                  *eventspkg.Service
 	calendarInitMu          sync.Mutex
 	calendar                *calendarpkg.Service
+	writebackInitMu         sync.Mutex
+	writeback               *writebackpkg.Service
+	writebackSyncMu         sync.Mutex
+	writebackSyncing        bool
 	mapsInitMu              sync.Mutex
 	maps                    *mapspkg.Service
 	messagesInitMu          sync.Mutex

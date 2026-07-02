@@ -9,7 +9,7 @@ import "time"
 // CacheVersion advances when recurrence expansion semantics change. A previous
 // cache remains structurally readable, but must be rebuilt before it can be
 // reused with the current parser.
-const CacheVersion = 6
+const CacheVersion = 7
 const FingerprintVersion = 5
 const maxRecurrenceSteps = 50000
 
@@ -74,6 +74,7 @@ type ICSEvent struct {
 	Seq             int
 	AppOwner        string
 	Meta            map[string]string
+	HasScheduling   bool
 	zone            *calendarZone
 }
 

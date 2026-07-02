@@ -37,6 +37,8 @@ func (a *app) eventService() *eventspkg.Service {
 			OutputEnabled:  a.calendarOutputEnabledForURL,
 			SourceIdentity: calendarSourceIdentity,
 			OwnedSource:    ownedCalendarSource,
+			WritableSource: a.calendarWritebackSourceWritable,
+			DeleteAllowed:  a.calendarWritebackDeleteAllowed,
 			Now:            time.Now,
 		})
 	}

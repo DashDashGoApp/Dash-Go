@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -48,6 +49,22 @@ func (a *app) handlePublicPost(w http.ResponseWriter, r *http.Request, path stri
 		return true
 	}
 	if a.handleRoutinesPost(w, r, path, body) {
+		return true
+	}
+	if path == "/api/calendar/event/create" || path == "/api/calendar/event/update" || path == "/api/calendar/event/skip-occurrence" {
+		if a.calendarWritebackRequirePIN() {
+			return false
+		}
+		result, err := a.handleCalendarWritebackMutation(path, body)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "already running") {
+				code = http.StatusConflict
+			}
+			a.err(w, err.Error(), code)
+		} else {
+			a.json(w, result)
+		}
 		return true
 	}
 	switch path {

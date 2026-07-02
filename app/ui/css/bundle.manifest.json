@@ -15,6 +15,7 @@
       "dashboard/day-timeline-popup.css",
       "dashboard/managed-schedules-popup.css",
       "dashboard/event-popup-compact.css",
+      "dashboard/calendar-writeback.css",
       "dashboard/control-status-maintenance.css",
       "dashboard/control-theme-actions-lite.css",
       "dashboard/control-visual-style.css",
