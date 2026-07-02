@@ -54,8 +54,8 @@ assert.match(cull,/function calendarSetWeekCullReady\(ready,scroll\)\{[\s\S]*?if
   "Calendar needs one explicit culling readiness marker with deterministic cleanup");
 assert.match(cull,/const CALENDAR_WEEK_CULL_BEHIND_OVERSCAN=1;[\s\S]*?const CALENDAR_WEEK_CULL_AHEAD_OVERSCAN=2;[\s\S]*?const CALENDAR_WEEK_CULL_WARM_MS=250;/,
   "Lite culling must preserve bounded directional overscan and a short warm hold");
-assert.match(grid,/function finishCalendarDayEvents\(\)\{[\s\S]*?lists\.forEach\(evlist=>fitDayEventList\(evlist,fitGap\)\);[\s\S]*?calendarSetWeekCullReady\(true\);/,
-  "Lite culling may start only after Calendar event fitting completes");
+assert.match(grid,/function finishCalendarDayEvents\(\)\{[\s\S]*?lists\.map\(prepareDayEventListForMeasure\);[\s\S]*?measureDayEventList\(item\);[\s\S]*?applyDayEventListFit\(item,fitGap\);[\s\S]*?calendarSetWeekCullReady\(true\);/,
+  "Lite culling may start only after Calendar event fitting completes, and the fit pass must keep its batched write→read→write phases");
 assert.match(grid,/function requestCalendarLayoutFit\(reason,opts\)\{[\s\S]*?_calendarFitSig=sig;[\s\S]*?calendarSetWeekCullReady\(false,scroll\);[\s\S]*?requestAnimationFrame\(\(\)=>runCalendarFitPipeline/,
   "Calendar must clear Lite culling before every geometry measurement pass");
 assert.match(grid,/function renderCalendar\(opts\)\{[\s\S]*?_calendarRenderSig=renderSig;[\s\S]*?calendarSetWeekCullReady\(false,scroll\);[\s\S]*?renderCalHead\(\);/,

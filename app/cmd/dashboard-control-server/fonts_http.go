@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -29,9 +31,22 @@ func (a *app) handleFontGet(w http.ResponseWriter, r *http.Request, path string)
 		a.json(w, map[string]any{"fonts": a.fontStatusPayload()})
 		return true
 	case "/api/fonts/face.css":
+		// This stylesheet is render-blocking in index.html and its contents
+		// change only when the household changes fonts. no-store forced every
+		// kiosk boot and Surf relaunch to refetch it before first paint;
+		// revalidation keeps font changes instant (each request still asks the
+		// server) while letting an unchanged answer be one 304 round trip.
+		css := a.settingsService().FontFaceCSS()
+		sum := sha256.Sum256([]byte(css))
+		tag := `W/"fontcss-` + hex.EncodeToString(sum[:8]) + `"`
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write([]byte(a.settingsService().FontFaceCSS()))
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("ETag", tag)
+		if requestHasETag(r.Header.Get("If-None-Match"), tag) {
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+		_, _ = w.Write([]byte(css))
 		return true
 	}
 	return false
@@ -54,7 +69,11 @@ func (a *app) handleRuntimeFont(w http.ResponseWriter, r *http.Request, path str
 		return true
 	}
 	defer font.Close()
-	w.Header().Set("Cache-Control", "no-store")
+	// no-cache (revalidate every use), not no-store: ServeContent already
+	// sends Last-Modified and honors If-Modified-Since, so an unchanged font
+	// file becomes a 304 instead of a full TTF download and re-parse on every
+	// kiosk boot. A replaced font still shows up immediately.
+	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, publicName, info.ModTime(), font)
 	return true
 }

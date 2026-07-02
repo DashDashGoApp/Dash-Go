@@ -58,56 +58,6 @@ function calendarLayoutSignature(scroll){
     calendarEventSignature(), calendarWeatherSignature()
   ].join("|");
 }
-function fitDayEventList(evlist,gap){
-  if(!evlist) return;
-  const total=+(evlist.dataset.totalEvents||0);
-  const events=Array.from(evlist.children).filter(x=>x.classList && x.classList.contains("ev"));
-  const more=Array.from(evlist.children).find(x=>x.dataset && x.dataset.moreRow==="1");
-  if(!total || !events.length){
-    if(more) more.classList.add("autofit-hidden");
-    return;
-  }
-  const cap=Math.max(1,+(evlist.dataset.cap||CALENDAR_AUTOFIT_CANDIDATE_CAP));
-  const limit=Math.min(events.length,cap);
-  for(const e of events) e.classList.remove("autofit-hidden");
-  if(more){
-    more.classList.remove("autofit-hidden");
-    more.style.visibility="hidden";
-  }
-  const available=evlist.clientHeight;
-  gap=Number.isFinite(gap)?gap:0;
-  const heights=events.map(e=>e.offsetHeight||0);
-  const moreH=more?(more.offsetHeight||0):0;
-  if(more) more.style.visibility="";
-  const sumHeights=(n)=>{
-    let h=0;
-    for(let i=0;i<n;i++) h+=heights[i]||0;
-    if(n>1) h+=gap*(n-1);
-    return h;
-  };
-  // If every event fits and the safety cap did not hide any events, no "+N"
-  // row is needed.
-  if(total<=limit && sumHeights(total)<=available){
-    for(let i=0;i<events.length;i++) events[i].classList.toggle("autofit-hidden",i>=total);
-    if(more) more.classList.add("autofit-hidden");
-    return;
-  }
-  // Reserve one row for "+N more" before choosing visible events, so the
-  // indicator never becomes a surprise extra row that overflows the cell.
-  let visible=0;
-  const maxVisible=Math.max(0,Math.min(limit,total)-1);
-  for(let n=0;n<=maxVisible;n++){
-    const h=sumHeights(n)+moreH+(n>0?gap:0);
-    if(h<=available || n===0) visible=n;
-    else break;
-  }
-  for(let i=0;i<events.length;i++) events[i].classList.toggle("autofit-hidden",i>=visible);
-  if(more){
-    const hidden=Math.max(0,total-visible);
-    more.textContent="+"+hidden+" more";
-    more.classList.toggle("autofit-hidden",hidden<=0);
-  }
-}
 function resetCalendarSpanOffsets(){
   document.querySelectorAll("#calscroll .evlist").forEach(evlist=>{
     evlist.style.marginTop="";
@@ -178,7 +128,13 @@ function finishCalendarDayEvents(){
   _fitDayEventsFinishTimer=0;
   const lists=Array.from(document.querySelectorAll("#calscroll .evlist[data-auto-fit='1']"));
   const fitGap=lists.length?calendarFlexGap(lists[0]):0;
-  lists.forEach(evlist=>fitDayEventList(evlist,fitGap));
+  // Batched write→read→write: unclamp every list first, take every
+  // measurement against ONE forced layout, then apply every clamp decision.
+  // Interleaving these phases per cell forced a reflow per day cell, which
+  // was the largest remaining per-fit cost on single-core boards.
+  const items=lists.map(prepareDayEventListForMeasure);
+  for(const item of items) measureDayEventList(item);
+  for(const item of items) applyDayEventListFit(item,fitGap);
   // All geometry-dependent reads/writes are complete. Lite may now let the
   // browser skip paint/layout work for week rows outside the scroll viewport.
   calendarSetWeekCullReady(true);

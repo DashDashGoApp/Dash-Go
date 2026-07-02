@@ -26,7 +26,20 @@ function ensureDashGoTapCleanup(){
   if(!DASHGO_TAP_REMOVAL_OBSERVER&&typeof MutationObserver==="function"){
     const target=document.documentElement||document.body;
     if(target){
-      DASHGO_TAP_REMOVAL_OBSERVER=new MutationObserver(()=>pruneDashGoTapBindings());
+      // The observer only performs housekeeping (dropping bindings whose
+      // elements left the DOM), so it never needs to run once per mutation
+      // batch. Calendar/agenda/weather refreshes replace whole subtrees in a
+      // burst; coalescing to a single deferred prune per burst keeps that
+      // rebuild work off the same frames doing layout on slow boards.
+      let pruneQueued=false;
+      const queuePrune=()=>{
+        if(pruneQueued)return;
+        pruneQueued=true;
+        const run=()=>{pruneQueued=false;pruneDashGoTapBindings();};
+        if(typeof requestIdleCallback==="function")requestIdleCallback(run,{timeout:1500});
+        else setTimeout(run,250);
+      };
+      DASHGO_TAP_REMOVAL_OBSERVER=new MutationObserver(queuePrune);
       DASHGO_TAP_REMOVAL_OBSERVER.observe(target,{childList:true,subtree:true});
     }
   }

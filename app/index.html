@@ -23,11 +23,13 @@
   try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
 }());
 </script>
-<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.6-beta.1">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.6-beta.1">
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.6-beta.2">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.6-beta.2">
+<link rel="icon" href="data:,">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
-     birthdays:[...] }. Missing file is harmless (404 ignored). -->
+     birthdays:[...] }. Missing file is harmless (404 ignored). The CodeQL
+     alert contract pins this as a parser-time static script. -->
 <script src="/config/config.local.js"></script>
 </head>
 <body>
@@ -251,6 +253,6 @@
   </section>
 </div>
 
-<script src="/ui/js/app.bundle.js?v=1.5.6-beta.1" defer></script>
+<script src="/ui/js/app.bundle.js?v=1.5.6-beta.2" defer></script>
 </body>
 </html>

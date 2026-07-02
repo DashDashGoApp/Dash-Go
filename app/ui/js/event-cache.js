@@ -47,6 +47,27 @@ async function loadEventsCache(winStart,winEnd){
     return null;
   }
 }
+let LAST_KNOWN_EVENTS_PERSIST_QUEUED=false;
+let LAST_KNOWN_EVENTS_PENDING=null;
+function queueLastKnownEventsPersist(events){
+  // Calendar commits can arrive in a short burst (last-known first paint,
+  // then fresh ICS). Serialize only the newest snapshot so deferred work
+  // cannot overwrite newer data and repeated refreshes share one idle slot.
+  LAST_KNOWN_EVENTS_PENDING=events;
+  if(LAST_KNOWN_EVENTS_PERSIST_QUEUED)return;
+  LAST_KNOWN_EVENTS_PERSIST_QUEUED=true;
+  const persist=()=>{
+    LAST_KNOWN_EVENTS_PERSIST_QUEUED=false;
+    const current=LAST_KNOWN_EVENTS_PENDING;
+    LAST_KNOWN_EVENTS_PENDING=null;
+    if(!current)return;
+    try{ localStorage.setItem("dashboard:lastEvents",JSON.stringify({ts:Date.now(),events:current.map(e=>({
+      id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",managedSchedule:e.managedSchedule||null,cal:e.cal||{}
+    }))})); }catch(_){ }
+  };
+  if(typeof requestIdleCallback==="function")requestIdleCallback(persist,{timeout:4000});
+  else setTimeout(persist,600);
+}
 function commitCalendarEvents(all,sigExtra){
   const sig=(sigExtra||"")+"::"+all.map(e=>(e.title||"")+"|"+(+e.start)+"|"+(e.end?+e.end:0)+"|"+
                        ((e.location||"").length)+"|"+((e.desc||"").length)+"|"+
@@ -60,9 +81,11 @@ function commitCalendarEvents(all,sigExtra){
   EVENTS=all;
   rebuildDayIndex();
   loadCalendars._sig=sig;
-  try{ localStorage.setItem("dashboard:lastEvents",JSON.stringify({ts:Date.now(),events:all.map(e=>({
-    id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",managedSchedule:e.managedSchedule||null,cal:e.cal||{}
-  }))})); }catch(_){ }
+  // Persist the last-known snapshot after the visible update is scheduled.
+  // JSON.stringify of a full multi-week window plus a synchronous
+  // localStorage write only benefits the NEXT boot, so it stays off the
+  // fresh-data-to-paint path and coalesces with any following refresh.
+  queueLastKnownEventsPersist(all);
   const paint=()=>{ renderCalendar(); renderAgenda(); };
   if(typeof deferDashboardWork==="function" && deferDashboardWork("calendar-render",paint)) return true;
   paint();

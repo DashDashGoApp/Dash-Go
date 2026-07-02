@@ -2,6 +2,14 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.2] — 2026-07-02
+
+### Frontend first-paint and calendar efficiency
+
+- Changed runtime font assets from `no-store` delivery to revalidated delivery: the dynamic font stylesheet now carries a content ETag and font binaries use normal Last-Modified revalidation, avoiding unnecessary downloads and font parsing on unchanged kiosk relaunches.
+- Coalesced tap-binding cleanup away from mutation bursts, deferred last-known-event snapshot persistence until after a visible calendar update is scheduled, and batched day-cell event fitting into calendar-wide write → read → write phases to avoid per-cell layout thrashing on low-power devices.
+- Added an empty data favicon so kiosk launches no longer generate a `/favicon.ico` 404. Dashboard content, touch behavior, and profile defaults are unchanged.
+
 ## [1.5.6-beta.1] — 2026-07-02
 
 ### Reliability, repair, and long-lived requests

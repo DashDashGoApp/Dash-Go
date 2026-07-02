@@ -13,12 +13,17 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.1`
+- **Version:** `1.5.6-beta.2`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** graceful server lifecycle, durable local writes, repair resolver correctness, long-running To Do sync/SSE reliability, PIN derivation compatibility, outbound metadata cleanup, and source-tree hygiene.
+- **Focus:** graceful server lifecycle, durable local writes, repair resolver correctness, long-running To Do sync/SSE reliability, PIN derivation compatibility, frontend first-paint and calendar-layout efficiency, outbound metadata cleanup, and source-tree hygiene.
 
-## 1.5.6-beta.1 highlights
+## 1.5.6-beta.2 highlights
+
+- **Frontend first-paint and steady-state efficiency:** runtime fonts now revalidate instead of being re-downloaded and re-parsed at every kiosk launch; tap-binding cleanup and last-known-event snapshots move off layout-critical work; and calendar day-event fitting batches its write/read/write phases across cells to avoid per-day forced reflows.
+- **Small kiosk polish:** the dashboard supplies an explicit empty favicon to prevent the browser’s avoidable `/favicon.ico` 404 request. These are timing and caching changes only; dashboard content and interaction behavior remain unchanged.
+
+## 1.5.6-beta.1 foundation
 
 - **Update and repair reliability:** server SIGTERM/SIGINT now performs a bounded graceful HTTP shutdown; explicit GitHub-release repair resolution no longer loses its result when the installed `VERSION` is damaged or missing; and interrupted-update recovery preserves its truthful recovery timestamp.
 - **To Do delivery paths:** the intentionally bounded 75-second inbound sync receives a response-specific write deadline, while its SSE stream clears only its own deadline and sends a lightweight heartbeat to avoid unnecessary EventSource reconnects.

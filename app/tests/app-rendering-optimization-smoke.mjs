@@ -23,7 +23,8 @@ const familyBoard=read("ui/family-board.js");
 // one document listener per card/button rebuilt by app renderers.
 assert.match(tap,/const DASHGO_TAP_BINDINGS=new Set\(\)/,"tap primitive must track live bindings centrally");
 assert.match(tap,/function pruneDashGoTapBindings\(\)/,"tap primitive must prune detached controls");
-assert.match(tap,/new MutationObserver\(\(\)=>pruneDashGoTapBindings\(\)\)/,"tap primitive must clean detached render trees");
+assert.match(tap,/new MutationObserver\(queuePrune\)/,"tap primitive must clean detached render trees");
+assert.match(tap,/requestIdleCallback\(run,\{timeout:1500\}\)/,"tap primitive pruning must coalesce mutation bursts onto the idle path");
 assert.equal((tap.match(/document\.addEventListener\("visibilitychange"/g)||[]).length,1,"tap primitive must install one shared visibility listener");
 assert.match(tap,/DASHGO_TAP_BINDINGS\.delete\(binding\)/,"tap disposer must remove its central binding record");
 
@@ -72,4 +73,12 @@ assert.match(routinePost,/response\["day"\] = routinesDayResponse\(result\.Paylo
 // Family Board only needs one sorted active-note list to report its count.
 assert.match(familyBoard,/const active=core\.activeOrder\(noteList\(\)\),count=active\.length;/,"Family Board must sort active notes once when accepting state");
 
+const eventCache=read("ui/js/event-cache.js");
+assert.match(eventCache,/function queueLastKnownEventsPersist\(events\)\{[\s\S]*?LAST_KNOWN_EVENTS_PENDING=events;[\s\S]*?if\(LAST_KNOWN_EVENTS_PERSIST_QUEUED\)return;/,
+  "last-known event persistence must coalesce refresh bursts to the latest snapshot");
+assert.match(eventCache,/queueLastKnownEventsPersist\(all\);/,
+  "calendar event commits must defer snapshot serialization through the shared idle queue");
+const indexHtml=read("index.html");
+assert.match(indexHtml,/<link rel="icon" href="data:,">/,
+  "dashboard must suppress the unneeded favicon 404 on kiosk launch");
 console.log("PASS: app rendering work keeps tap cleanup bounded, lazy retries recoverable, user strings DOM-safe, Chore Wheel indexed, and Routines checkbox updates focused and batched");
