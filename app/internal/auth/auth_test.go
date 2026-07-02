@@ -41,3 +41,16 @@ func TestSessionExpiryModesAndTokens(t *testing.T) {
 		t.Fatalf("tokens not distinct: %q %q", first, second)
 	}
 }
+
+func TestValidPINAcceptsOnlyASCIIDigitsInCompatibilityRange(t *testing.T) {
+	for _, pin := range []string{"0000", "12345678"} {
+		if !auth.ValidPIN(pin) {
+			t.Fatalf("valid PIN %q rejected", pin)
+		}
+	}
+	for _, pin := range []string{"123", "123456789", "１２３４", "12 34", "12a4"} {
+		if auth.ValidPIN(pin) {
+			t.Fatalf("invalid PIN %q accepted", pin)
+		}
+	}
+}

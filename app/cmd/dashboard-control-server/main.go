@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	releasepkg "github.com/DashDashGoApp/Dash-Go/app/internal/release"
@@ -189,7 +192,13 @@ func main() {
 	port := envInt("DASH_CONTROL_PORT", 8090, 1024, 65535)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	log.Printf("dashboard Go control server on http://%s (dir %s)", addr, a.dash)
-	if err := a.httpServer(addr).ListenAndServe(); err != nil {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := serveHTTPUntilSignal(ctx, a.httpServer(addr), listener, 8*time.Second); err != nil {
 		log.Fatal(err)
 	}
 }

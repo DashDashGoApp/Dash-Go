@@ -42,7 +42,7 @@ func fetchOpenMeteoGo(ctx context.Context, id string, cfg Config) (map[string]an
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Dash-Go/1.3.5-beta.47")
+	req.Header.Set("User-Agent", weatherOutboundUserAgent)
 	res, err := weatherHTTPClient.Do(req)
 	if err != nil {
 		return nil, err

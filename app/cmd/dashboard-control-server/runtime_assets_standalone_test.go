@@ -63,9 +63,9 @@ func TestRuntimeAssetsStandaloneVerifierRuns(t *testing.T) {
 	if err := verifyGeneratedAssets(fixture, true); err != nil {
 		t.Fatalf("prepare generated fixture: %v", err)
 	}
-	cmd := exec.Command(goBinary, "run", "runtime_assets.go", "verify_main.go", fixture)
+	cmd := exec.Command(goBinary, "run", ".", fixture)
 	cmd.Dir = work
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("standalone generated-assets verifier failed: %v\n%s", err, output)

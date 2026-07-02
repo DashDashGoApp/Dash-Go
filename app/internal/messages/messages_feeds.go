@@ -114,11 +114,10 @@ func (s *Service) updateMessageItem(id, text string, weight int) (map[string]any
 func (s *Service) handleMessages(w http.ResponseWriter, path string, body map[string]any) {
 	status := s.messageSourcesStatus()
 	cache := jsonutil.Map(status["cache"])
-	prefs := jsonutil.Map(status["prefs"])
 	switch path {
 	case "/api/message-sources":
 		enabled := s.normalizeMessageEnabled(jsonutil.List(body["enabled"]))
-		prefs = map[string]any{"enabled": enabled, "updatedAt": nowMillis()}
+		prefs := map[string]any{"enabled": enabled, "updatedAt": nowMillis()}
 		s.saveMessageSourcesStatus(prefs)
 		if jsonutil.Truthy(body["refresh"]) {
 			cache = s.refreshMessages(context.Background(), !jsonutil.Truthy(body["localOnly"]), true)

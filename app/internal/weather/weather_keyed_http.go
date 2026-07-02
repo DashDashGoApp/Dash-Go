@@ -12,6 +12,8 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
+const weatherOutboundUserAgent = "Dash-Go (+local-kiosk)"
+
 const weatherJSONResponseLimit = 4 << 20
 
 var weatherHTTPClient = &http.Client{Timeout: 20 * time.Second}
@@ -46,7 +48,7 @@ func fetchJSONGo(ctx context.Context, rawURL string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Dash-Go/1.3.5-beta.47 (+local kiosk)")
+	req.Header.Set("User-Agent", weatherOutboundUserAgent)
 	req.Header.Set("Accept", "application/json")
 	res, err := weatherHTTPClient.Do(req)
 	if err != nil {
@@ -89,7 +91,7 @@ func fetchJSONAnyGo(ctx context.Context, rawURL string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Dash-Go/1.3.5-beta.47 (+local kiosk)")
+	req.Header.Set("User-Agent", weatherOutboundUserAgent)
 	req.Header.Set("Accept", "application/json")
 	res, err := weatherHTTPClient.Do(req)
 	if err != nil {

@@ -10,9 +10,12 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
+
+const messageOutboundUserAgent = "Dash-Go (+local-kiosk)"
 
 func decodeMessageJSON(body io.Reader, limit int64, dst any) error {
 	return json.NewDecoder(io.LimitReader(body, limit)).Decode(dst)
@@ -25,7 +28,7 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 		if err != nil {
 			return err
 		}
-		req.Header.Set("User-Agent", "Dash-Go/1.3.5-beta.47 (+local-kiosk)")
+		req.Header.Set("User-Agent", messageOutboundUserAgent)
 		req.Header.Set("Accept", "application/json")
 		for k, v := range headers {
 			req.Header.Set(k, v)
@@ -261,7 +264,7 @@ func quoteRowsTexts(rows []map[string]any) []string {
 
 func (s *Service) fetchRandomWordDefinition(ctx context.Context, client *http.Client, provider string) ([]string, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://random-word-api.herokuapp.com/word?number=1", nil)
-	req.Header.Set("User-Agent", "Dash-Go/1.3.5-beta.47 (+local-kiosk)")
+	req.Header.Set("User-Agent", messageOutboundUserAgent)
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -278,5 +281,9 @@ func (s *Service) fetchRandomWordDefinition(ctx context.Context, client *http.Cl
 	if word == "" {
 		return nil, fmt.Errorf("random word unavailable")
 	}
-	return []string{strings.Title(word) + " — a useful word to look up together."}, nil
+	// strings.Title is deprecated; the provider returns one lowercase English
+	// word, so capitalizing the first rune directly is sufficient.
+	runes := []rune(word)
+	runes[0] = unicode.ToUpper(runes[0])
+	return []string{string(runes) + " — a useful word to look up together."}, nil
 }

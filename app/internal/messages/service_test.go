@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,5 +128,23 @@ func TestMessageSourcePreferencesWriteTheExistingPath(t *testing.T) {
 	prefs := s.Preferences()
 	if len(jsonutil.List(prefs["enabled"])) != 1 || jsonutil.List(prefs["enabled"])[0] != "jokes" {
 		t.Fatalf("unexpected preferences: %#v", prefs)
+	}
+}
+
+func TestMessageOutboundUserAgentIsVersionNeutral(t *testing.T) {
+	if messageOutboundUserAgent != "Dash-Go (+local-kiosk)" || strings.Contains(messageOutboundUserAgent, "/") {
+		t.Fatalf("message outbound User-Agent=%q", messageOutboundUserAgent)
+	}
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate message source")
+	}
+	body, err := os.ReadFile(filepath.Join(filepath.Dir(source), "messages_providers.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if strings.Contains(text, "Dash-Go/1.") || strings.Count(text, "messageOutboundUserAgent") < 3 {
+		t.Fatal("message providers retained a versioned or unshared outbound User-Agent")
 	}
 }

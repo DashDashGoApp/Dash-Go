@@ -232,12 +232,15 @@ func mapFallbackSVG(lat, lon float64, z int, style string, reason string) string
 	}
 	label := fmt.Sprintf("%.5f, %.5f · z%d", lat, lon, z)
 	if reason != "" {
+		// Truncate before escaping so an entity like &amp; is never split, and
+		// on rune boundaries so the SVG stays valid UTF-8.
+		if runes := []rune(reason); len(runes) > 80 {
+			reason = string(runes[:80])
+		}
 		reason = strings.ReplaceAll(reason, "&", "&amp;")
 		reason = strings.ReplaceAll(reason, "<", "&lt;")
 		reason = strings.ReplaceAll(reason, ">", "&gt;")
-		if len(reason) > 80 {
-			reason = reason[:80]
-		}
+		label += " · " + reason
 	}
 	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="520" height="220" viewBox="0 0 520 220"><rect width="520" height="220" fill="%s"/><path d="M-20 60 C70 35 115 90 190 60 S335 25 540 60" fill="none" stroke="%s" stroke-width="26" opacity=".70"/><path d="M45 235 C95 160 160 145 210 118 S345 65 485 -20" fill="none" stroke="%s" stroke-width="14" opacity=".82"/><path d="M-25 165 C75 150 120 175 205 158 S390 126 545 168" fill="none" stroke="%s" stroke-width="9" opacity=".65"/>%s<rect x="14" y="174" width="492" height="36" rx="12" fill="#000" opacity=".42"/><text x="260" y="198" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="15" font-weight="800" fill="#ffffff" stroke="#000000" stroke-width="2.4" stroke-opacity=".34" paint-order="stroke">Map unavailable · %s</text></svg>`, bg, water, road, road, markerSVG(520, 220), label)
 }

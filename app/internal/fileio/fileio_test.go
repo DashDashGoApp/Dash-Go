@@ -61,3 +61,35 @@ func TestWriteAtomicAndExists(t *testing.T) {
 		t.Fatalf("WriteAtomic mode = %o", info.Mode().Perm())
 	}
 }
+
+func TestAtomicWritersLeaveNoStagingFilesAfterDurableReplacement(t *testing.T) {
+	root := t.TempDir()
+	atomicPath := filepath.Join(root, "state", "payload.txt")
+	jsonPath := filepath.Join(root, "state", "payload.json")
+	if err := WriteAtomic(atomicPath, []byte("first"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomic(atomicPath, []byte("second"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteJSON(jsonPath, map[string]any{"ok": true}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(atomicPath)
+	if err != nil || string(body) != "second" {
+		t.Fatalf("atomic replacement body=%q err=%v", body, err)
+	}
+	info, err := os.Stat(atomicPath)
+	if err != nil || info.Mode().Perm() != 0640 {
+		t.Fatalf("atomic replacement mode=%v err=%v", info.Mode(), err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(atomicPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Fatalf("durable writer left temporary staging file %q", entry.Name())
+		}
+	}
+}

@@ -113,7 +113,7 @@ func (s *Service) handleRadarTile(w http.ResponseWriter, r *http.Request) {
 		s.err(w, "could not make radar request", http.StatusBadGateway)
 		return
 	}
-	req.Header.Set("User-Agent", "Dash-Go/1.4.2-beta.4 radar")
+	req.Header.Set("User-Agent", weatherOutboundUserAgent)
 	resp, err := (&http.Client{Timeout: 12 * time.Second}).Do(req)
 	if err != nil {
 		s.noteProviderBackoff("radar-"+provider, err)

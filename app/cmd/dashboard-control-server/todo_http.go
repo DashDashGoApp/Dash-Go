@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +14,13 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 	todopkg "github.com/DashDashGoApp/Dash-Go/app/internal/todo"
 )
+
+const todoSyncResponseWriteWindow = 90 * time.Second
+
+// todoSSEHeartbeatInterval is a package variable only so focused tests can
+// exercise the bounded stream lifecycle without sleeping for the production
+// cadence. Production keeps the calm 30-second EventSource heartbeat.
+var todoSSEHeartbeatInterval = 30 * time.Second
 
 func (a *app) handleTodoGet(w http.ResponseWriter, r *http.Request, path string) bool {
 	switch path {
@@ -290,6 +298,10 @@ func (a *app) handleTodoPost(w http.ResponseWriter, r *http.Request, path string
 	case "/api/todo/sync":
 		ctx, cancel := context.WithTimeout(r.Context(), 75*time.Second)
 		defer cancel()
+		// This handler may legitimately run past the server-wide 45s
+		// WriteTimeout; give the response enough room to be written after a
+		// full-length sync instead of severing the connection mid-flight.
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(todoSyncResponseWriteWindow))
 		result, err := a.todoRunInboundSync(ctx)
 		if err != nil {
 			status := http.StatusBadGateway
@@ -322,6 +334,10 @@ func (a *app) handleTodoStream(w http.ResponseWriter, r *http.Request) {
 		a.err(w, "stream unsupported", 500)
 		return
 	}
+	// The server-wide WriteTimeout (45s) would otherwise sever this long-lived
+	// stream and force EventSource reconnect churn. Clear the write deadline
+	// for this response only; other endpoints keep the global limit.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Connection", "keep-alive")
@@ -335,10 +351,19 @@ func (a *app) handleTodoStream(w http.ResponseWriter, r *http.Request) {
 	defer func() { a.todoStreamMu.Lock(); delete(a.todoStreams, ch); a.todoStreamMu.Unlock(); close(ch) }()
 	fmt.Fprintf(w, "event: sync.state\ndata: {}\n\n")
 	flusher.Flush()
+	// Heartbeat comments let the server notice dead peers instead of holding
+	// the goroutine until TCP keepalive gives up.
+	heartbeat := time.NewTicker(todoSSEHeartbeatInterval)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		case msg := <-ch:
 			eventName := "todo"
 			var payload map[string]any

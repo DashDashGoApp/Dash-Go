@@ -4,13 +4,12 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"hash"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -78,8 +77,15 @@ func ValidPIN(pin string) bool {
 	// Four-to-eight digit PINs remain accepted for compatibility with existing
 	// kiosk installations. Persistent escalating lockout protects the lower end
 	// of that range without silently invalidating an installed household PIN.
-	ok, _ := regexp.MatchString(`^\d{4,8}$`, pin)
-	return ok
+	if len(pin) < 4 || len(pin) > 8 {
+		return false
+	}
+	for i := 0; i < len(pin); i++ {
+		if pin[i] < '0' || pin[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func encode(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
@@ -88,29 +94,17 @@ func decode(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
 }
 
-func pbkdf2Key(password, salt []byte, iter, keyLen int, h func() hash.Hash) []byte {
-	prf := hmac.New(h, password)
-	hashLen := prf.Size()
-	numBlocks := (keyLen + hashLen - 1) / hashLen
-	var derived []byte
-	blockValue := make([]byte, hashLen)
-	for block := 1; block <= numBlocks; block++ {
-		prf.Reset()
-		_, _ = prf.Write(salt)
-		_, _ = prf.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-		blockValue = prf.Sum(blockValue[:0])
-		accumulated := append([]byte(nil), blockValue...)
-		for i := 1; i < iter; i++ {
-			prf.Reset()
-			_, _ = prf.Write(blockValue)
-			blockValue = prf.Sum(blockValue[:0])
-			for index := range accumulated {
-				accumulated[index] ^= blockValue[index]
-			}
-		}
-		derived = append(derived, accumulated...)
+// pbkdf2Key derives a key via the standard library's PBKDF2 (Go 1.24+,
+// part of the validated crypto module). The stdlib implementation only
+// returns an error for FIPS-mode parameter violations; PIN hashing uses
+// SHA-256 with well-formed lengths, so a failure here is unreachable and
+// treated as an empty (never-matching) key.
+func pbkdf2Key(password, salt []byte, iter, keyLen int) []byte {
+	derived, err := pbkdf2.Key(sha256.New, string(password), salt, iter, keyLen)
+	if err != nil {
+		return nil
 	}
-	return derived[:keyLen]
+	return derived
 }
 
 func NewPINPayload(pin string, timeout any) (map[string]string, error) {
@@ -120,7 +114,7 @@ func NewPINPayload(pin string, timeout any) (map[string]string, error) {
 	salt := make([]byte, 16)
 	_, _ = rand.Read(salt)
 	iterations := DefaultPINIterations
-	digest := pbkdf2Key([]byte(pin), salt, iterations, 32, sha256.New)
+	digest := pbkdf2Key([]byte(pin), salt, iterations, 32)
 	payload := map[string]string{
 		"DASH_CONTROL_PIN_ENABLED":    "1",
 		"DASH_CONTROL_PIN_ITERATIONS": strconv.Itoa(iterations),
@@ -142,7 +136,7 @@ func VerifyPIN(pin, saltEncoded, hashEncoded string, iterations int) bool {
 	if saltErr != nil || hashErr != nil || len(want) == 0 || iterations < MinPINIterations || iterations > MaxPINIterations {
 		return false
 	}
-	got := pbkdf2Key([]byte(pin), salt, iterations, len(want), sha256.New)
+	got := pbkdf2Key([]byte(pin), salt, iterations, len(want))
 	return hmac.Equal(got, want)
 }
 

@@ -29,6 +29,9 @@ exports/
 .dashboard-apprise.env
 
 # Generated application assets
+# Test/runtime data must never live beside dashboard-control-server source.
+app/cmd/dashboard-control-server/*.json
+!app/cmd/dashboard-control-server/testdata/**/*.json
 app/bin/dashboard-control-server
 app/bin/dashboard-control-server-linux-*
 app/ui/js/app.bundle.js

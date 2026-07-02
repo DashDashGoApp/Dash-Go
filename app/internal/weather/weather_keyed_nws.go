@@ -50,7 +50,7 @@ func fetchXWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		d["sunset"] = append(d["sunset"], x["sunsetISO"])
 	}
 	resp := obs["response"]
-	ob := map[string]any{}
+	var ob map[string]any
 	if arr := jsonutil.List(resp); len(arr) > 0 {
 		ob = anyMap(anyMap(arr[0])["ob"])
 	} else {

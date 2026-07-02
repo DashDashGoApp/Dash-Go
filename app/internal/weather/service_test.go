@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -145,4 +146,29 @@ func TestWeatherCacheKeyUsesOpaqueProviderMarkers(t *testing.T) {
 	if strings.Contains(first, "first-secret") || strings.Contains(second, "second-secret") {
 		t.Fatalf("provider key leaked into aggregate cache identity: %q / %q", first, second)
 	}
+}
+
+func TestWeatherOutboundUserAgentIsVersionNeutral(t *testing.T) {
+	if weatherOutboundUserAgent != "Dash-Go (+local-kiosk)" || strings.Contains(weatherOutboundUserAgent, "/") {
+		t.Fatalf("weather outbound User-Agent=%q", weatherOutboundUserAgent)
+	}
+	for _, name := range []string{"weather_keyed_http.go", "weather_openmeteo.go", "radar_tile.go"} {
+		body, err := os.ReadFile(filepath.Join(filepath.Dir(runtimeAssetTestSourceFile(t)), name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		if strings.Contains(text, "Dash-Go/1.") || !strings.Contains(text, "weatherOutboundUserAgent") {
+			t.Fatalf("%s retained a versioned or unshared outbound User-Agent", name)
+		}
+	}
+}
+
+func runtimeAssetTestSourceFile(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not locate weather source")
+	}
+	return file
 }

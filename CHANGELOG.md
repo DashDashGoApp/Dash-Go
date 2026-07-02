@@ -2,6 +2,21 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.1] — 2026-07-02
+
+### Reliability, repair, and long-lived requests
+
+- Added bounded SIGTERM/SIGINT graceful HTTP shutdown so service restarts and updates can drain in-flight work rather than cutting it off abruptly.
+- Corrected explicit GitHub Release resolution for repair when the installed `VERSION` is missing or damaged, and preserved the timestamp recorded when interrupted system-update state is recovered.
+- Kept the global HTTP write limit for ordinary endpoints while extending only the bounded Microsoft To Do sync response and clearing it only for the long-lived To Do SSE stream; the stream now emits a lightweight heartbeat.
+- Made atomic text and JSON writes flush file content, requested mode, and the parent-directory rename entry in durable order for removable-storage power-loss resilience.
+
+### Compatibility, observability, and source hygiene
+
+- Replaced the local PBKDF2 implementation with Go’s standard library while proving byte-identical legacy PIN derivation; retained the existing four-to-eight ASCII-digit PIN policy.
+- Rendered safely escaped, rune-bounded map-fallback reasons; replaced stale release-numbered outbound User-Agent strings; and removed dead startup regular expressions and a committed runtime JSON artifact from the control-server source directory.
+- Added focused regression coverage for graceful shutdown, To Do deadline/heartbeat behavior, repair resolution, PIN compatibility, durable replacement behavior, fallback-map output, stale update timestamps, removed regex references, and runtime-artifact exclusion.
+
 ## [1.5.5] — 2026-07-02
 
 ### Responsive rendering across landscape and portrait showcase resolutions

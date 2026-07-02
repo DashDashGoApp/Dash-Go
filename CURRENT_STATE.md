@@ -13,7 +13,17 @@
 
 ## Current development beta
 
-- No development beta is staged in this source handoff. `1.5.5` is the stable promotion candidate.
+- **Version:** `1.5.6-beta.1`
+- **Track:** beta
+- **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
+- **Focus:** graceful server lifecycle, durable local writes, repair resolver correctness, long-running To Do sync/SSE reliability, PIN derivation compatibility, outbound metadata cleanup, and source-tree hygiene.
+
+## 1.5.6-beta.1 highlights
+
+- **Update and repair reliability:** server SIGTERM/SIGINT now performs a bounded graceful HTTP shutdown; explicit GitHub-release repair resolution no longer loses its result when the installed `VERSION` is damaged or missing; and interrupted-update recovery preserves its truthful recovery timestamp.
+- **To Do delivery paths:** the intentionally bounded 75-second inbound sync receives a response-specific write deadline, while its SSE stream clears only its own deadline and sends a lightweight heartbeat to avoid unnecessary EventSource reconnects.
+- **Durability and security compatibility:** atomic file and JSON writes flush content, requested mode, and replacement directory metadata in durable order; PIN derivation now uses Go’s standard PBKDF2 while a regression proves legacy hashes remain byte-compatible; four-to-eight ASCII-digit PIN compatibility remains unchanged.
+- **Maintenance and privacy:** removed dozens of dead startup regexes, replaced stale versioned outbound User-Agent strings, rendered safe map-fallback reasons, and removed a committed runtime JSON artifact while moving shared tests to their intended temporary Todo data directory.
 
 ## 1.5.5 highlights
 

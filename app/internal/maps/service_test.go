@@ -3,7 +3,9 @@ package maps
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
@@ -58,5 +60,24 @@ func TestServiceOwnsMapPaths(t *testing.T) {
 	}
 	if got, want := filepath.Base(service.ProviderFile()), "map-provider.json"; got != want {
 		t.Fatalf("provider file=%q want %q", got, want)
+	}
+}
+
+func TestMapFallbackSVGIncludesEscapedRuneSafeReason(t *testing.T) {
+	reason := "provider <temporarily unavailable> & retrying"
+	svg := mapFallbackSVG(41.8781, -87.6298, 12, "standard", reason)
+	if !strings.Contains(svg, "provider &lt;temporarily unavailable&gt; &amp; retrying") {
+		t.Fatalf("fallback SVG omitted or failed to escape reason: %s", svg)
+	}
+	if strings.Contains(svg, "<temporarily unavailable>") {
+		t.Fatalf("fallback SVG kept raw markup in reason: %s", svg)
+	}
+	longReason := strings.Repeat("界", 81)
+	svg = mapFallbackSVG(41.8781, -87.6298, 12, "standard", longReason)
+	if !utf8.ValidString(svg) {
+		t.Fatal("fallback SVG is not valid UTF-8 after reason truncation")
+	}
+	if got := strings.Count(svg, "界"); got != 80 {
+		t.Fatalf("fallback reason rune truncation count=%d, want 80", got)
 	}
 }

@@ -32,7 +32,7 @@ func TestWriteThemeCreatesAndUpdatesConfigLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `theme: "paper"`) && !strings.Contains(string(b), `theme: "paper"`) {
+	if !strings.Contains(string(b), `theme: "paper"`) {
 		t.Fatalf("created config did not contain theme paper: %s", string(b))
 	}
 	if err := a.writeTheme("chalkboard"); err != nil {
@@ -43,7 +43,7 @@ func TestWriteThemeCreatesAndUpdatesConfigLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(b)
-	if !strings.Contains(text, `theme: "chalkboard"`) && !strings.Contains(text, `theme: "chalkboard"`) {
+	if !strings.Contains(text, `theme: "chalkboard"`) {
 		t.Fatalf("updated config did not contain theme chalkboard: %s", text)
 	}
 	if strings.Contains(text, `theme: "paper"`) {

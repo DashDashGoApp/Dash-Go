@@ -92,7 +92,7 @@ func (a *app) systemUpdateStatus() map[string]any {
 		a.recoverInterruptedSystemUpdateStatus(m, now, detail)
 		state = "failed"
 		activeState = false
-		updatedAt = now.Unix()
+		// recoverInterruptedSystemUpdateStatus already stamped m["updatedAt"].
 		lastHeartbeat = now.Unix()
 		statusAge = 0
 	}

@@ -12,6 +12,10 @@ import (
 	releasepkg "github.com/DashDashGoApp/Dash-Go/app/internal/release"
 )
 
+// newGitHubReleaseClient is a narrow test seam. Production always resolves
+// only the canonical GitHub Release repository through releasepkg.NewClient.
+var newGitHubReleaseClient = releasepkg.NewClient
+
 // runResolveGitHubReleaseCLI is the narrow installer-facing seam for the
 // GitHub Release migration. It resolves only canonical public metadata;
 // staging, downloading, checksums, and replacement remain installer work.
@@ -29,26 +33,27 @@ func (a *app) runResolveGitHubReleaseCLI(args []string) int {
 		fmt.Fprintln(fs.Output(), "--track must be stable or beta")
 		return 64
 	}
-	current, err := releasepkg.ParseVersion(strings.TrimSpace(a.releaseVersion))
-	if err != nil {
+	current, currentErr := releasepkg.ParseVersion(strings.TrimSpace(a.releaseVersion))
+	if currentErr != nil {
 		// A damaged/missing VERSION must not turn into an arbitrary channel.
 		current, _ = releasepkg.ParseVersion("0.0.0")
 	}
 	track := releasepkg.NormalizeTrack(*trackRaw, current)
-	client := releasepkg.NewClient()
+	client := newGitHubReleaseClient()
 	var resolved releasepkg.Resolved
+	var resolveErr error
 	if requested := strings.TrimSpace(*versionRaw); requested != "" {
-		wanted, err := releasepkg.ParseVersion(requested)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+		wanted, parseErr := releasepkg.ParseVersion(requested)
+		if parseErr != nil {
+			fmt.Fprintln(os.Stderr, parseErr)
 			return 64
 		}
-		resolved, _, err = client.ResolveVersionCached(context.Background(), track, wanted, *cacheFile)
+		resolved, _, resolveErr = client.ResolveVersionCached(context.Background(), track, wanted, *cacheFile)
 	} else {
-		resolved, _, err = client.ResolveCached(context.Background(), track, *cacheFile)
+		resolved, _, resolveErr = client.ResolveCached(context.Background(), track, *cacheFile)
 	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if resolveErr != nil {
+		fmt.Fprintln(os.Stderr, resolveErr)
 		return 1
 	}
 	payload, err := json.Marshal(resolved)

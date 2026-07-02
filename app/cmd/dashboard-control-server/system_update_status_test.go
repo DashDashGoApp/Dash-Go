@@ -64,6 +64,9 @@ func TestSystemUpdateStatusRecoversAgedDeadOwner(t *testing.T) {
 	if persisted["state"] != "failed" || persisted["interrupted"] != true {
 		t.Fatalf("recovery not persisted: %#v", persisted)
 	}
+	if recoveredAt, updatedAt := jsonutil.Int(persisted["recoveredAt"], 0), jsonutil.Int(persisted["updatedAt"], 0); int64(recoveredAt) <= old || updatedAt != recoveredAt {
+		t.Fatalf("recovery timestamp was not preserved: recoveredAt=%d updatedAt=%d payload=%#v", recoveredAt, updatedAt, persisted)
+	}
 }
 
 func TestSystemUpdateStatusPreservesFreshLaunchHandoff(t *testing.T) {
