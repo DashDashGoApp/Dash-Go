@@ -65,7 +65,7 @@ function attachTaps(elm,opts){
   const holdMax=Math.max(250,Number(opts.holdMax)||1200);
   const need=Math.max(1,Number(opts.maxTaps)||1);
   let count=0,lastAt=0,lastX=0,lastY=0;
-  let downAt=0,downX=0,downY=0,ignoreDown=false,pointerActive=false;
+  let downAt=0,downX=0,downY=0,ignoreDown=false,pointerActive=false,scrollRoot=null,scrollTopAtDown=0;
   let suppressClickUntil=0;
   const reset=()=>{ count=0; lastAt=0; lastX=0; lastY=0; };
   const isTapDisabled=node=>!!(node&&(
@@ -76,7 +76,7 @@ function attachTaps(elm,opts){
   const cancelGesture=()=>{
     ignoreDown=true;
     pointerActive=false;
-    downAt=0; downX=0; downY=0;
+    downAt=0; downX=0; downY=0; scrollRoot=null; scrollTopAtDown=0;
     reset();
     suppressClickUntil=0;
   };
@@ -84,6 +84,15 @@ function attachTaps(elm,opts){
     try{ return typeof opts.ignore==="function" && !!opts.ignore(e); }
     catch(_){ return false; }
   };
+  const resolveScrollRoot=()=>{
+    try{
+      const candidate=typeof opts.scrollRoot==="function"?opts.scrollRoot():opts.scrollRoot;
+      if(typeof candidate==="string")return document.querySelector(candidate);
+      return candidate&&candidate.isConnected!==false?candidate:null;
+    }catch(_){return null;}
+  };
+  const markScrollStart=()=>{scrollRoot=resolveScrollRoot();scrollTopAtDown=scrollRoot?Number(scrollRoot.scrollTop)||0:0;};
+  const scrolledSinceDown=()=>!!(scrollRoot&&Math.abs((Number(scrollRoot.scrollTop)||0)-scrollTopAtDown)>2);
   const register=(x,y,event,source)=>{
     const now=Date.now();
     const px=Number.isFinite(+x)?+x:0, py=Number.isFinite(+y)?+y:0;
@@ -111,14 +120,14 @@ function attachTaps(elm,opts){
     }
     ignoreDown=false;
     pointerActive=true;
-    downAt=Date.now(); downX=e.clientX||0; downY=e.clientY||0;
+    downAt=Date.now(); downX=e.clientX||0; downY=e.clientY||0; markScrollStart();
   };
   const onPointerUp=e=>{
     if(ignoreDown || !isPrimaryPointer(e) || isTapDisabled(elm) || ignored(e)){
       cancelGesture();
       return;
     }
-    if(!validRelease(e.clientX,e.clientY)){
+    if(!validRelease(e.clientX,e.clientY)||scrolledSinceDown()){
       cancelGesture();
       return;
     }
@@ -147,7 +156,7 @@ function attachTaps(elm,opts){
     ignoreDown=false;
     pointerActive=true;
     const t=e.touches&&e.touches[0]; if(!t){ cancelGesture(); return; }
-    downAt=Date.now(); downX=t.clientX||0; downY=t.clientY||0;
+    downAt=Date.now(); downX=t.clientX||0; downY=t.clientY||0; markScrollStart();
   };
   const onTouchEnd=e=>{
     if(ignoreDown || isTapDisabled(elm) || ignored(e)){
@@ -155,7 +164,7 @@ function attachTaps(elm,opts){
       return;
     }
     const t=e.changedTouches&&e.changedTouches[0];
-    if(!t || !validRelease(t.clientX,t.clientY)){
+    if(!t || !validRelease(t.clientX,t.clientY)||scrolledSinceDown()){
       cancelGesture();
       return;
     }

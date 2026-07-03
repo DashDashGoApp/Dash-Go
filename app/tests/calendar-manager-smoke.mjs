@@ -25,9 +25,14 @@ assert.match(control,/\/api\/calendars\/manage/,'manager data must load only thr
 assert.match(control,/Move this \.ics file to Calendar Trash/,'local deletion must describe archival rather than permanent deletion');
 assert.match(control,/Only the Dash-Go symlink is removed/,'symlink removal must promise external-target safety');
 assert.match(control,/Stop calendar output/,'app rows must offer an output-specific action instead of a false delete');
-assert.match(control,/confirmAction\(/,'destructive calendar actions must use in-app two-tap confirmation');
+assert.match(control,/ctrlCalendarManagerConfirmAction\(/,'destructive calendar actions must use the shared in-app two-tap confirmation');
 assert.doesNotMatch(control,/\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/,'Calendar Manager may not use browser dialogs');
-assert.match(css,/\.calmanager\{[\s\S]*?max-height:min\(58vh,640px\)[\s\S]*?overflow:auto/,'Calendar Manager needs one bounded scroll region');
+assert.match(control,/ctrlCalendarManagerScrollRoot/,'Calendar Manager actions must identify the Calendar page as their scroll root');
+assert.match(control,/ctrlCalendarManagerRefresh/,'Calendar Manager mutations must use focused refreshes');
+assert.match(control,/ctrlCalendarManagerAnchor/,'Calendar Manager mutations must preserve a semantic scroll anchor');
+assert.match(css,/calendar-manager-shell[\s\S]*?overflow:visible[\s\S]*?max-height:none/,'Calendar Manager shell must not become an inner scroll port');
+assert.match(css,/calendar-manager-group[\s\S]*?overflow:visible[\s\S]*?max-height:none/,'Calendar Manager groups must extend the page instead of scrolling independently');
+assert.doesNotMatch(css,/\.calmanager\{[\s\S]*?overflow:auto/,'Calendar Manager must not create nested overflow:auto scroll ports');
 assert.match(css,/\.calmanager-row/,'Calendar Manager rows need themed panel styling');
 assert.match(types,/TrashRetentionDays\s*=\s*30/,'Calendar Trash retention must remain 30 days');
 assert.match(manager,/os\.Rename\(path, destination\)/,'archive must move a local source rather than unlink it');

@@ -29,7 +29,7 @@ async function loadEventsCache(winStart,winEnd){
     const res=await fetch("cache/events.cache.json?t="+Date.now(),{cache:"no-store"});
     if(!res.ok) return null;
     const cache=await res.json();
-    if(!cache || cache.version!==7 || !Array.isArray(cache.events)) return null;
+    if(!cache || cache.version!==8 || !Array.isArray(cache.events)) return null;
     if(cache.windowStart>+winStart || cache.windowEnd<+winEnd) return null;
     const all=[];
     for(const raw of cache.events){

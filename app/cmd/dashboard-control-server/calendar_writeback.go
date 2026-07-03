@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -39,6 +40,19 @@ func (a *app) calendarWritebackService() *writebackpkg.Service {
 func (a *app) calendarWritebackSourceWritable(source string) bool {
 	return a.calendarWritebackService().SourceWritable(source)
 }
+
+// calendarWritebackCacheFingerprint is deliberately derived from only the local
+// registry bytes. It exposes no configuration contents to the event package but
+// makes cache capabilities change whenever the master switch, a selected source,
+// or PIN policy changes outside an immediate forced refresh.
+func (a *app) calendarWritebackCacheFingerprint() string {
+	b, err := os.ReadFile(filepath.Join(a.configDir, calendarWritebackRegistryFile))
+	if err != nil {
+		return "unconfigured"
+	}
+	sum := sha256.Sum256(b)
+	return fmt.Sprintf("%x", sum[:])
+}
 func (a *app) calendarWritebackRequirePIN() bool { return a.calendarWritebackService().RequirePIN() }
 
 // Delete is intentionally stricter than create/edit/skip: it is available
@@ -57,7 +71,8 @@ func (a *app) calendarWritebackStatus() map[string]any {
 	}
 	rows := make([]any, 0, len(status.Calendars))
 	for _, cal := range status.Calendars {
-		row := map[string]any{"source": cal.Source, "name": cal.Name, "writable": cal.Writable, "enabled": cal.Enabled, "pair": cal.Pair, "provider": cal.Provider, "connection": cal.Connection, "remoteId": cal.RemoteID}
+		deleteAllowed := a.calendarWritebackDeleteAllowed(cal.Source)
+		row := map[string]any{"source": cal.Source, "name": cal.Name, "writable": cal.Writable, "enabled": cal.Enabled, "pair": cal.Pair, "provider": cal.Provider, "connection": cal.Connection, "remoteId": cal.RemoteID, "deleteAllowed": deleteAllowed}
 		if state, ok := status.States[cal.Source]; ok {
 			row["state"] = state.State
 			row["detail"] = state.Detail
@@ -93,6 +108,9 @@ func (a *app) configureCalendarWriteback(body map[string]any) (map[string]any, e
 	status, err := a.calendarWritebackService().Configure(enabled, requirePIN, requested)
 	if err != nil {
 		return nil, err
+	}
+	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
 	a.recordAction("calendars", "Configure calendar edits", "success", fmt.Sprintf("%d registered calendar(s) · %s", len(status.Calendars), map[bool]string{true: "enabled", false: "disabled"}[status.Enabled]), nil)
 	return a.calendarWritebackStatus(), nil

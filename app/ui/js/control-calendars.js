@@ -1,6 +1,68 @@
 function ctrlCalendarVisibilityRoot(){
   return document.querySelector("#ctrlpage-calendars #ctrlcals");
 }
+function ctrlCalendarManagerScrollRoot(){return document.querySelector("#ctrlpage-calendars");}
+function ctrlCalendarManagerSourceRow(root,source){
+  const key=String(source||"");
+  if(!root||!key)return null;
+  return Array.from(root.querySelectorAll("[data-calendar-source]")).find(node=>node.dataset.calendarSource===key)||null;
+}
+function ctrlCalendarManagerAnchor(source){
+  const root=ctrlCalendarManagerScrollRoot();
+  if(!root)return null;
+  const active=document.activeElement&&document.activeElement.closest?document.activeElement.closest("[data-calendar-source]"):null;
+  const key=String(source||active&&active.dataset.calendarSource||"");
+  const target=ctrlCalendarManagerSourceRow(root,key);
+  return {root,scrollTop:root.scrollTop,key,offset:target?target.getBoundingClientRect().top-root.getBoundingClientRect().top:null};
+}
+function ctrlCalendarRestoreManagerAnchor(anchor){
+  if(!anchor||!anchor.root||!anchor.root.isConnected)return;
+  const root=anchor.root;
+  if(anchor.key){
+    const target=ctrlCalendarManagerSourceRow(root,anchor.key);
+    if(target&&anchor.offset!==null){
+      root.scrollTop+=target.getBoundingClientRect().top-root.getBoundingClientRect().top-anchor.offset;
+      return;
+    }
+  }
+  root.scrollTop=anchor.scrollTop;
+}
+function ctrlCalendarManagerAction(label,desc,cls,fn){
+  const b=el("button","cbtn actionbtn"+(cls?" "+cls:""));b.type="button";
+  b.innerHTML=`<span class="bt">${escapeHTML(label)}</span>${desc?`<span class="bd">${escapeHTML(desc)}</span>`:""}`;
+  bindTap(b,async()=>{ctrlSetActionFeedbackTarget(b);if(typeof fn==="function")return await fn();},{scrollRoot:ctrlCalendarManagerScrollRoot});
+  return b;
+}
+function ctrlCalendarManagerConfirmAction(label,desc,armedLabel,fn){
+  const b=ctrlCalendarManagerAction(label,desc,"danger requiresconfirm",async()=>{
+    const normal=b.dataset.normalHtml||b.innerHTML;
+    b.dataset.normalHtml=normal;
+    if(!b.classList.contains("armed")){
+      b.classList.add("armed");b.innerHTML=`<span class="bt">${escapeHTML(armedLabel)}</span><span class="bd">Tap once more to confirm.</span>`;
+      setTimeout(()=>{if(!b.isConnected)return;b.classList.remove("armed");b.innerHTML=b.dataset.normalHtml||normal;},5000);
+      return;
+    }
+    b.classList.remove("armed");b.innerHTML=b.dataset.normalHtml||normal;
+    return await fn(b);
+  });
+  return b;
+}
+async function ctrlCalendarManagerRefresh(message,source,syncDashboard){
+  const anchor=ctrlCalendarManagerAnchor(source);
+  try{
+    if(syncDashboard){
+      await ctrlCalendarRefresh(message,anchor);
+      return;
+    }
+    const manager=ctrlCalendarVisibilityRoot()?.querySelector(".calendar-manager-shell");
+    if(manager){
+      ctrlBeginWarmRefresh(manager,"Refreshing calendar settings…");
+      renderCtrlCalendarManagerData(manager,await api("/api/calendars/manage"));
+      ctrlCalendarRestoreManagerAnchor(anchor);
+    }
+    if(message)ctrlMsg(message);
+  }catch(error){ctrlMsg(error.message||String(error));throw error;}
+}
 async function renderCtrlCals(){
   const row=ctrlCalendarVisibilityRoot();
   if(!row) return;
@@ -49,7 +111,8 @@ function ctrlCalendarChip(c,onToggle){
   bindTap(b,onToggle);
   return b;
 }
-async function ctrlCalendarRefresh(message){
+async function ctrlCalendarRefresh(message,anchor){
+  const savedAnchor=anchor||ctrlCalendarManagerAnchor();
   delete CTRL_CACHE["/api/calendars"];
   delete CTRL_CACHE["/api/cache/status"];
   await discoverCalendars();
@@ -59,6 +122,7 @@ async function ctrlCalendarRefresh(message){
   if(cacheSection&&cacheSection.open)await renderCtrlCache();
   const healthSection=document.querySelector('#ctrlpage-calendars details.ctrlsec[data-lazy="calhealth"]');
   if(healthSection&&healthSection.open)await renderCtrlCalendarHealthPanel();
+  ctrlCalendarRestoreManagerAnchor(savedAnchor);
   if(message)ctrlMsg(message);
 }
 function ctrlCalendarManagerState(row,open){
@@ -86,6 +150,7 @@ async function ctrlCalendarManagerPost(path,payload,success){
 }
 function ctrlCalendarManagerRow(item){
   const card=el("article","calmanager-row calmanager-"+String(item.kind||"unknown"));
+  if(item&&item.url)card.dataset.calendarSource=String(item.url);
   const color=ctrlCalendarChipColor(item.color||item.name);
   const head=el("div","calmanager-head");
   const title=el("div","calmanager-title");
@@ -97,38 +162,38 @@ function ctrlCalendarManagerRow(item){
   const actions=el("div","calmanager-actions");
   if(item.kind==="app"){
     if(item.outputEnabled===false){
-      actions.appendChild(caction("Enable calendar output","Rebuild this app’s local calendar from existing data.","primary",async()=>{
+      actions.appendChild(ctrlCalendarManagerAction("Enable calendar output","Rebuild this app’s local calendar from existing data.","primary",async()=>{
         await ctrlCalendarManagerPost("/api/calendars/manage/app-output",{owner:item.owner,enabled:true},`${item.name} calendar output enabled.`);
       }));
     }else{
-      actions.appendChild(confirmAction("Stop calendar output","Keep app data; remove the generated feed until you enable it again.","Tap again to stop output",async()=>{
+      actions.appendChild(ctrlCalendarManagerConfirmAction("Stop calendar output","Keep app data; remove the generated feed until you enable it again.","Tap again to stop output",async()=>{
         await ctrlCalendarManagerPost("/api/calendars/manage/app-output",{owner:item.owner,enabled:false},`${item.name} calendar output stopped. App data remains local.`);
       }));
       actions.lastChild.classList.add("calmanager-stop");
-      actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show generated events on the dashboard.":"Keep output but hide its events on the dashboard.","",async()=>{
+      actions.appendChild(ctrlCalendarManagerAction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show generated events on the dashboard.":"Keep output but hide its events on the dashboard.","",async()=>{
         const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.url});
         await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
       }));
     }
   }else if(item.kind==="writeback"){
-    actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this private calendar mirror on the dashboard.":"Hide this mirror without altering the remote calendar.","",async()=>{
+    actions.appendChild(ctrlCalendarManagerAction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this private calendar mirror on the dashboard.":"Hide this mirror without altering the remote calendar.","",async()=>{
       const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.url});
       await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
     }));
   }else if(item.kind==="local"||item.kind==="symlink"){
-    actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this local source on the dashboard.":"Hide this source without deleting it.","",async()=>{
+    actions.appendChild(ctrlCalendarManagerAction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this local source on the dashboard.":"Hide this source without deleting it.","",async()=>{
       const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.url});
       await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
     }));
     const isLink=item.kind==="symlink";
     const label=isLink?"Remove calendar link":"Delete local calendar";
     const description=isLink?"Only the Dash-Go symlink is removed. Its external target stays untouched and can be restored for 30 days.":"Move this .ics file to Calendar Trash. Restore is available for 30 days.";
-    actions.appendChild(confirmAction(label,description,isLink?"Tap again to remove link":"Tap again to move to trash",async()=>{
+    actions.appendChild(ctrlCalendarManagerConfirmAction(label,description,isLink?"Tap again to remove link":"Tap again to move to trash",async()=>{
       const result=await ctrlCalendarManagerPost("/api/calendars/manage/delete",{url:item.url,name:item.name},`${item.name} moved to Calendar Trash for 30 days.`);
       return result;
     }));
   }else{
-    actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar","Unknown source types are visibility-only.","",async()=>{
+    actions.appendChild(ctrlCalendarManagerAction(item.enabled===false?"Show calendar":"Hide calendar","Unknown source types are visibility-only.","",async()=>{
       const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.url});
       await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
     }));
@@ -154,11 +219,11 @@ function renderCtrlCalendarManagerData(wrap,manager){
   if(!rows.length)list.appendChild(ctrlStateCard("empty","No managed calendars","Add a local .ics calendar or open an app that creates a local calendar feed."));
   else rows.forEach(item=>list.appendChild(ctrlCalendarManagerRow(item)));
   wrap.appendChild(list);
-  if(typeof ctrlPrivateCalendarSettings==="function")wrap.appendChild(ctrlPrivateCalendarSettings(manager&&manager.privateCalendars));
+  if(typeof ctrlPrivateCalendarSettings==="function")wrap.appendChild(ctrlPrivateCalendarSettings(manager&&manager.privateCalendars,manager&&manager.writeback));
   if(typeof ctrlCalendarWritebackSettings==="function")wrap.appendChild(ctrlCalendarWritebackSettings(manager&&manager.writeback));
   const trash=Array.isArray(manager&&manager.trash)?manager.trash:[];
   if(trash.length){
-    const trashCard=el("section","caltrash");
+    const trashCard=el("section","calendar-manager-group caltrash");
     trashCard.append(el("div","calmanager-heading","Recently deleted calendars"),el("p","calmanager-note",`Calendar Trash retains local files and links for ${Number(manager.retentionDays)||30} days. Active calendars are never auto-deleted.`));
     trash.forEach(item=>trashCard.appendChild(ctrlCalendarTrashRow(item)));
     wrap.appendChild(trashCard);
@@ -201,7 +266,7 @@ function renderCtrlCalsData(row,cals){
   }));
   row.appendChild(actions);
   if(open){
-    const manager=el("section","calmanager");
+    const manager=el("section","calendar-manager-shell");
     row.appendChild(manager);
     renderCtrlCalendarManager(manager);
   }

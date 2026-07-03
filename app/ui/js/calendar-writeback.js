@@ -41,17 +41,51 @@ function calendarWritebackShowError(root,message){
   const note=el("div","calendar-writeback-note error",message||"Calendar change failed.");
   root.appendChild(note);setTimeout(()=>note.remove(),6000);
 }
+function calendarWritebackEventCapability(ev,status){
+  const cached=ev&&ev.writeback;
+  if(!cached||cached.candidate!==true)return null;
+  const source=String(ev&&ev.cal&&ev.cal.url||ev&&ev.calUrl||"");
+  const calendars=Array.isArray(status&&status.calendars)?status.calendars:[];
+  const calendar=calendars.find(item=>item&&String(item.source||"")===source);
+  if(!calendar||calendar.writable!==true)return null;
+  if(status&&status.enabled!==true)return {state:"master-off"};
+  if(calendar.enabled===false)return {state:"calendar-off"};
+  return {
+    state:"ready",
+    canEdit:cached.canEdit===true,
+    canSkip:cached.canSkip===true,
+    canDelete:cached.canEdit===true&&calendar.deleteAllowed===true,
+    deleteRequiresPin:cached.canEdit===true&&calendar.deleteAllowed!==true,
+  };
+}
 function calendarWritebackEventActions(ev,token){
-  const cap=ev&&ev.writeback;
-  if(!cap||cap.enabled!==true)return null;
+  // Eligibility stays in the cache, but the current local writeback registry is
+  // checked only when the user opens this popup. That prevents a stale cache
+  // record from hiding actions after Calendar Manager changes an edit setting.
+  if(!ev||!ev.writeback||ev.writeback.candidate!==true)return null;
   const root=el("section","calendar-writeback-actions");
-  root.appendChild(el("div","calendar-writeback-note","Dashboard edits save locally first. Remote calendar sync follows."));
-  const row=el("div","calendar-writeback-action-row");
-  if(cap.canEdit)row.appendChild(calendarWritebackButton("Edit event","",()=>openCalendarEventForm({event:ev})));
-  if(cap.canDelete)row.appendChild(calendarWritebackButton("Delete event","danger",()=>calendarWritebackConfirm(ev,"delete",token)));
-  if(cap.canSkip)row.appendChild(calendarWritebackButton("Skip this occurrence","",()=>calendarWritebackConfirm(ev,"skip",token)));
-  if(row.childNodes.length)root.appendChild(row);
-  if(cap.deleteRequiresPin)root.appendChild(el("div","calendar-writeback-note","Set and unlock a Dashboard Control PIN to allow deleting one-time events."));
+  root.hidden=true;
+  calendarWritebackStatus().then(status=>{
+    if(!popupIsCurrent(token)||!root.isConnected)return;
+    const cap=calendarWritebackEventCapability(ev,status);
+    if(!cap){root.remove();return;}
+    root.hidden=false;root.replaceChildren();
+    if(cap.state==="master-off"){
+      root.appendChild(el("div","calendar-writeback-note","Dashboard calendar edits are off. Turn them on in Calendar Manager to edit this private calendar."));
+      return;
+    }
+    if(cap.state==="calendar-off"){
+      root.appendChild(el("div","calendar-writeback-note","Dashboard edits are disabled for this calendar. Enable them in Calendar Manager to change this event."));
+      return;
+    }
+    root.appendChild(el("div","calendar-writeback-note","Dashboard edits save locally first. Remote calendar sync follows."));
+    const row=el("div","calendar-writeback-action-row");
+    if(cap.canEdit)row.appendChild(calendarWritebackButton("Edit event","",()=>openCalendarEventForm({event:ev})));
+    if(cap.canDelete)row.appendChild(calendarWritebackButton("Delete event","danger",()=>calendarWritebackConfirm(ev,"delete",token)));
+    if(cap.canSkip)row.appendChild(calendarWritebackButton("Skip this occurrence","",()=>calendarWritebackConfirm(ev,"skip",token)));
+    if(row.childNodes.length)root.appendChild(row);
+    if(cap.deleteRequiresPin)root.appendChild(el("div","calendar-writeback-note","Set and unlock a Dashboard Control PIN to allow deleting one-time events."));
+  }).catch(()=>{if(root.isConnected)root.remove();});
   return root;
 }
 function calendarWritebackConfirm(ev,action){

@@ -31,15 +31,17 @@ func (a *app) eventService() *eventspkg.Service {
 	defer a.eventsInitMu.Unlock()
 	if a.events == nil {
 		a.events = eventspkg.New(eventspkg.ServiceConfig{
-			DashDir:        a.dash,
-			CalendarDir:    a.calDir,
-			CacheDir:       a.cacheDir,
-			OutputEnabled:  a.calendarOutputEnabledForURL,
-			SourceIdentity: calendarSourceIdentity,
-			OwnedSource:    ownedCalendarSource,
-			WritableSource: a.calendarWritebackSourceWritable,
-			DeleteAllowed:  a.calendarWritebackDeleteAllowed,
-			Now:            time.Now,
+			DashDir:               a.dash,
+			CalendarDir:           a.calDir,
+			CacheDir:              a.cacheDir,
+			OutputEnabled:         a.calendarOutputEnabledForURL,
+			SourceIdentity:        calendarSourceIdentity,
+			OwnedSource:           ownedCalendarSource,
+			WritableSource:        a.calendarWritebackSourceWritable,
+			KnownWritebackSource:  a.calendarWritebackService().RegisteredSource,
+			DeleteAllowed:         a.calendarWritebackDeleteAllowed,
+			CapabilityFingerprint: a.calendarWritebackCacheFingerprint,
+			Now:                   time.Now,
 		})
 	}
 	return a.events

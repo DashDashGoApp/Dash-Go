@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.6-beta.7"
+VERSION="1.5.6-beta.8"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -243,7 +243,9 @@ Choose **Add private calendar** from the installer’s calendar-sync menu for iC
 
 Connect Google, iCloud, or another CalDAV account first, then use **Dashboard Control → Calendars → Discover available calendars**. Discovery is review-only: it does not activate, display, synchronize, edit, hide, or delete anything. Add each wanted remote calendar deliberately as either **display-only** or **editable**. Every selected collection receives its own exact local vdir mapping and its own Dashboard source, so two calendars with the same display name remain distinct.
 
-For an editable selected collection, Dash-Go writes a supported normal event to the local vdir first, refreshes its local dashboard mirror, and queues synchronization only for that collection. In the selected-calendar row, you can later switch between display-only and editable without reconnecting the provider. The global **Dashboard calendar edits** switch remains the final safety gate. A provider conflict stops safely and becomes **Needs attention**; Dash-Go does not silently choose a Google, iCloud, or local version.
+For an editable selected collection, Dash-Go writes a supported normal event to the local vdir first, refreshes its local dashboard mirror, and queues synchronization only for that collection. Choosing **Add & enable edits**, or later enabling a selected calendar, also turns on the master **Dashboard calendar edits** guard and refreshes local event actions. A supported normal one-time event then shows **Edit event**; a full-day popup shows **+ Add event**; deletion remains PIN-gated. In the selected-calendar row, you can later switch between display-only and editable without reconnecting the provider. A provider conflict stops safely and becomes **Needs attention**; Dash-Go does not silently choose a Google, iCloud, or local version.
+
+Calendar Manager uses one continuous Calendar-page scroll surface. It does not create separate scroll panes for selected calendars, global edit settings, or Calendar Trash. If a selected calendar’s local edit registration needs repair, the row says **Needs attention** and offers a local repair action that does not change the remote calendar.
 
 Private calendars synchronize one at a time every 15 minutes through Dash-Go’s gentle CPU/I/O launcher, so vdirsyncer, mirror merging, and event-cache refreshes yield to the kiosk. Routine sync never discovers newly created remote calendars. Use Discover when you want to review a changed provider collection list.
 

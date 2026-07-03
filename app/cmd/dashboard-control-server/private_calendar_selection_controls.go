@@ -60,6 +60,12 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 	if parseErr != nil {
 		return nil, parseErr
 	}
+	if editable {
+		current := a.calendarWritebackStatus()
+		if _, err := a.calendarWritebackService().Configure(true, current["requirePin"] == true, nil); err != nil {
+			return nil, fmt.Errorf("enable Dashboard calendar edits: %w", err)
+		}
+	}
 	if err := a.generateCalendarManifest(); err != nil {
 		return nil, fmt.Errorf("refresh calendar manifest: %w", err)
 	}
@@ -99,6 +105,15 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 	output, err := cmd.CombinedOutput()
 	if err != nil || !strings.HasPrefix(string(output), "updated\t") {
 		return nil, errors.New("could not update Dashboard edit permission for this private calendar")
+	}
+	if editable {
+		current := a.calendarWritebackStatus()
+		if _, err := a.calendarWritebackService().Configure(true, current["requirePin"] == true, nil); err != nil {
+			return nil, fmt.Errorf("enable Dashboard calendar edits: %w", err)
+		}
+	}
+	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
 	a.recordAction("calendars", "Update private calendar edits", "success", fmt.Sprintf("%s is now %s in Dashboard Control", source, map[bool]string{true: "editable", false: "display-only"}[editable]), nil)
 	return a.privateCalendarStatus(), nil

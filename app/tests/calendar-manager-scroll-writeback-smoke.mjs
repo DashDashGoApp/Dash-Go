@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
+
+const root=resolve(process.argv[2]||".");
+const read=rel=>readFileSync(resolve(root,rel),"utf8");
+const calendars=read("ui/js/control-calendars.js");
+const privateCalendars=read("ui/js/control-private-calendars.js");
+const writebackControls=read("ui/js/control-calendar-writeback.js");
+const writeback=read("ui/js/calendar-writeback.js");
+const tap=read("ui/js/tap.js");
+const css=read("ui/css/control/consistency.css");
+
+assert.match(calendars,/calendar-manager-shell/,'Calendar Manager needs a non-scrolling shell');
+assert.match(calendars,/calendar-manager-group/,'Calendar Manager must use structural groups instead of nested managers');
+assert.match(calendars,/ctrlCalendarManagerScrollRoot/,'Calendar actions must use the Calendar page scroll root');
+assert.match(calendars,/ctrlCalendarManagerAnchor/,'Calendar actions must preserve the visible row');
+assert.match(calendars,/ctrlCalendarManagerRefresh/,'routine Calendar actions must avoid a full page refresh');
+assert.match(privateCalendars,/Add & enable edits/,'new selections must make the master-edit effect explicit');
+assert.match(privateCalendars,/Turn on Dashboard edits/,'selected writable calendars must recover from a disabled master switch');
+assert.match(privateCalendars,/Repair edit setup/,'a selected calendar missing registration must have a non-destructive repair path');
+assert.match(privateCalendars,/ctrlCalendarWritebackSave/,'selected calendar controls must update the live writeback registry');
+assert.match(writebackControls,/Dashboard calendar edits/,'the global writeback guard must remain visible');
+assert.doesNotMatch(writebackControls,/calendarWritebackSourceRow/,'per-source controls must not be duplicated in a separate scrolling panel');
+assert.match(writeback,/calendarWritebackEventCapability/,'event actions must evaluate current local capability state');
+assert.match(writeback,/master-off/,'event actions must explain a disabled master edit setting');
+assert.match(tap,/scrollRoot/,'shared taps must optionally observe a scroll root');
+assert.match(tap,/scrolledSinceDown/,'a swipe across an action must cancel activation');
+assert.match(css,/calendar-manager-shell[\s\S]*?overflow:visible/,'manager shell must not claim vertical scrolling');
+assert.match(css,/calendar-manager-group[\s\S]*?overflow:visible/,'manager groups must not claim vertical scrolling');
+assert.doesNotMatch(css,/\.calmanager\{[\s\S]*?overflow:auto/,'retired manager class must not create a nested scroll port');
+console.log('calendar manager scroll/writeback smoke: one scroll root, focused refreshes, live capabilities, and swipe-safe actions hold');

@@ -184,8 +184,8 @@ func (s *Service) sourceMeta(url, name, color, tag, owner, path string) SourceMe
 	return item
 }
 
-func eventFingerprint(sources []SourceMeta, start, end time.Time) string {
-	payload := map[string]any{"sources": sources, "windowStart": epochMs(start), "windowEnd": epochMs(end), "version": FingerprintVersion}
+func eventFingerprint(sources []SourceMeta, start, end time.Time, capability string) string {
+	payload := map[string]any{"sources": sources, "windowStart": epochMs(start), "windowEnd": epochMs(end), "capability": capability, "version": FingerprintVersion}
 	b, _ := json.Marshal(payload)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])

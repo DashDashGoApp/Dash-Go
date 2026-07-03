@@ -2,7 +2,7 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.6-beta.7] — 2026-07-02
+## [1.5.6-beta.8] — 2026-07-02
 
 ### Selected private calendars and safe two-way management
 
@@ -11,6 +11,10 @@ This changelog records stable Dash-Go milestones. Detailed development increment
 - Added selected-calendar management controls to change a source between display-only and editable, queue a sync for that one collection, or stop future sync without deleting the provider calendar or the preserved local mirror.
 - Changed local-first writeback to queue the affected generated pair rather than every private calendar, with serial coalescing, per-calendar status, and conflict-safe behavior. New private pairs no longer use remote-wins conflict resolution; a conflict leaves both sides intact and surfaces a needs-attention state.
 - Added migration refresh after an update, isolated-discovery, exact-selection, edit-permission, targeted-sync, and private-calendar installer smokes. Updated Google documentation to describe the actual vdirsyncer CalDAV/OAuth route, collection selection, and two-way acceptance expectations.
+- Corrected Calendar Manager edit-state behavior: adding or enabling an exact private calendar now activates the master Dashboard edit guard, refreshes local event capabilities, and evaluates current local permissions when an event popup opens. Eligible normal one-time events regain Edit/Delete actions, and full-day popups regain `+ Add event`, without relying on an old cache record.
+- Reworked Calendar Manager into one continuous Calendar-page scroll surface. Removed nested bounded manager panes, preserve the affected row across focused updates, suppress a button action after a real page swipe, and show a **Needs attention** repair action when a selected editable source has lost its local writeback registration.
+
+- Corrected the beta.8 source boundary test so it verifies the event-service policy seam through Go syntax rather than fragile formatter-dependent spacing; runtime behavior is unchanged.
 
 ## [1.5.6-beta.6] — 2026-07-02
 

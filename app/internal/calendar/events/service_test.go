@@ -62,3 +62,41 @@ func TestRefreshPreservesCompactCacheContract(t *testing.T) {
 		t.Fatalf("cache contract=%#v", cache)
 	}
 }
+
+func TestPrivateCalendarCapabilityIsCachedIndependentlyFromMasterEditState(t *testing.T) {
+	s := testService(t)
+	const source = "calendars/private.green.ics"
+	ics := "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:private-one@test\nDTSTART:20260621T120000\nDTEND:20260621T123000\nSUMMARY:Private one-time event\nEND:VEVENT\nEND:VCALENDAR\n"
+	if err := os.WriteFile(filepath.Join(s.CalendarDir(), "private.green.ics"), []byte(ics), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := "master-off"
+	s.knownWritebackSource = func(url string) bool { return url == source }
+	s.capabilityFingerprint = func() string { return fingerprint }
+
+	result, err := s.Refresh(true, 30, 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jsonutil.Truthy(result["unchanged"]) {
+		t.Fatalf("forced refresh unexpectedly unchanged: %#v", result)
+	}
+	cache := jsonutil.Map(readJSONDefault(filepath.Join(s.CacheDir(), "events.cache.json"), map[string]any{}))
+	events := jsonutil.List(cache["events"])
+	if len(events) != 1 {
+		t.Fatalf("events=%#v", events)
+	}
+	writeback := jsonutil.Map(jsonutil.Map(events[0])["writeback"])
+	if !jsonutil.Truthy(writeback["candidate"]) || !jsonutil.Truthy(writeback["canEdit"]) {
+		t.Fatalf("private one-time event did not retain static writeback eligibility: %#v", writeback)
+	}
+
+	fingerprint = "master-on"
+	result, err = s.Refresh(false, 30, 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jsonutil.Truthy(result["unchanged"]) {
+		t.Fatalf("writeback capability fingerprint change must rebuild cache: %#v", result)
+	}
+}

@@ -26,7 +26,7 @@ func (s *Service) refresh(force bool, daysPast int, daysFuture int) (map[string]
 	start, end := cacheWindow(s.now(), daysPast, daysFuture)
 	cals := s.loadCalendars()
 	sources := s.statSources(cals)
-	fp := eventFingerprint(sources, start, end)
+	fp := eventFingerprint(sources, start, end, s.capabilityFingerprint())
 	cachePath := filepath.Join(s.cacheDir, "events.cache.json")
 	metaPath := filepath.Join(s.cacheDir, ".events-cache.meta.json")
 	oldMeta := jsonutil.Map(readJSONDefault(metaPath, map[string]any{}))
@@ -136,10 +136,14 @@ func (s *Service) serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[s
 		calMeta["owner"] = owner
 	}
 	item := map[string]any{"id": ident, "title": defaultString(ev.Title, "(no title)"), "desc": ev.Desc, "location": ev.Location, "start": startMs, "end": endAny, "allDay": ev.AllDay, "uid": uid, "calUrl": cal.URL, "cal": calMeta}
-	if s.writableSource(cal.URL) && owner == "" && uid != "" && !ev.HasScheduling {
+	// Calendar edit eligibility is intrinsic event metadata. Keep it in the
+	// cache whenever a source is a registered private vdir mirror, even when the
+	// master Dashboard-edit switch is currently off. Popup controls then combine
+	// this safe static eligibility with the current local writeback status, so a
+	// control change cannot strand a previously cached event without actions.
+	if s.knownWritebackSource(cal.URL) && owner == "" && uid != "" && !ev.HasScheduling {
 		canEdit := !ev.Recur && ev.RecurID == nil
-		canDelete := canEdit && s.deleteAllowed(cal.URL)
-		item["writeback"] = map[string]any{"enabled": true, "canEdit": canEdit, "canDelete": canDelete, "canSkip": ev.Recur && ev.RecurID == nil, "deleteRequiresPin": canEdit && !canDelete}
+		item["writeback"] = map[string]any{"candidate": true, "canEdit": canEdit, "canSkip": ev.Recur && ev.RecurID == nil}
 	}
 	if owner != "" {
 		item["appOwner"] = owner
