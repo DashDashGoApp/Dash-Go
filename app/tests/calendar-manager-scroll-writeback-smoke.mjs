@@ -20,6 +20,9 @@ assert.match(privateCalendars,/Add & enable edits/,'new selections must make the
 assert.match(privateCalendars,/Turn on Dashboard edits/,'selected writable calendars must recover from a disabled master switch');
 assert.match(privateCalendars,/Repair edit setup/,'a selected calendar missing registration must have a non-destructive repair path');
 assert.match(privateCalendars,/ctrlCalendarWritebackSave/,'selected calendar controls must update the live writeback registry');
+assert.match(privateCalendars,/Resolve conflict/,'conflicts need a dedicated safe recovery path');
+assert.match(privateCalendars,/Repair connection/,'undiscovered exact pairs need a targeted repair path');
+assert.match(privateCalendars,/Keep both unchanged/,'conflict choices must keep a non-destructive exit');
 assert.match(writebackControls,/Dashboard calendar edits/,'the global writeback guard must remain visible');
 assert.doesNotMatch(writebackControls,/calendarWritebackSourceRow/,'per-source controls must not be duplicated in a separate scrolling panel');
 assert.match(writeback,/calendarWritebackEventCapability/,'event actions must evaluate current local capability state');

@@ -62,13 +62,17 @@ function updateCatalogPresentation(av){
   const status=String(av&&av.status||"");
   if(av&&av.updateAvailable)return {label:av.availableVersion||"Update available",state:"warn"};
   if(status==="current"&&av&&av.ok)return {label:"Up to date",state:"ok"};
+  if(status==="installed-newer")return {label:"Installed version is newer",state:"quiet"};
+  if(status==="recovery")return {label:"Installed version needs repair",state:"warn"};
   if(status==="unconfigured")return {label:"Not configured",state:"unknown"};
   if(status==="unreachable"||status==="forbidden")return {label:av.label||"Check failed",state:"bad"};
   return {label:(av&&av.label)||"Not checked",state:(av&&av.ok)?"warn":"unknown"};
 }
 function updateActionPresentation(pre,active){
   if(active)return {label:"In progress",state:"warn"};
-  if(pre&&pre.ready)return {label:"Ready",state:"ok"};
+  if(pre&&pre.canStart)return {label:"Ready",state:"ok"};
+  if(pre&&pre.label==="No downgrade")return {label:"No downgrade",state:"quiet"};
+  if(pre&&pre.label==="No update needed")return {label:"No update needed",state:"ok"};
   return {label:(pre&&pre.label)==="Update blocked"?"Update setup needed":((pre&&pre.label)||"Update setup needed"),state:"warn"};
 }
 // The updater keeps durable state names deliberately coarse so a dashboard can
@@ -82,8 +86,10 @@ function updateJobPresentation(progress){
 }
 function updateCheckMessage(st){
   const av=st&&st.availability||{},pre=st&&st.preflight||{};
-  if(av.updateAvailable)return `${av.availableVersion||"A newer release"} is available${pre.ready?" and ready to install.":". Update installation still needs setup."}`;
+  if(av.updateAvailable)return `${av.availableVersion||"A newer release"} is available${pre.canStart?" and ready to install.":". Update installation still needs setup."}`;
   if(av.status==="current"&&av.ok)return "No newer release is available on the selected track.";
+  if(av.status==="installed-newer")return av.detail||"Installed Dash-Go is newer than the selected release. Dash-Go will not downgrade.";
+  if(av.status==="recovery")return av.detail||"The installed version needs repair. A verified selected-track release can repair it.";
   return `Could not complete the update check: ${av.detail||av.label||"the selected update source needs attention"}`;
 }
 function ctrlUpdateProgressState(st){
@@ -131,7 +137,7 @@ function ctrlUpdateSetActionState(ui,progress,options){
   ctrlUpdateSetStat(ui.rows.action,"Update action",action.label,action.state);
   ctrlUpdateSetStat(ui.rows.job,"Job",job.label,job.state);
   ctrlUpdateSetButtonDisabled(ui.checkButton,busy);
-  ctrlUpdateSetButtonDisabled(ui.updateButton,busy||!ui.preflight.ready);
+  ctrlUpdateSetButtonDisabled(ui.updateButton,busy||ui.preflight.canStart!==true);
   if(typeof ctrlUpdateSetBackupMutationLocked==="function")ctrlUpdateSetBackupMutationLocked(ui,busy,updateBusy);
   ui.updateButton.classList.remove("armed");
   if(updateBusy){
@@ -232,19 +238,31 @@ function ctrlBuildUpdateCard(wrap,st,log){
     if(refreshed)ctrlMsg(updateCheckMessage(refreshed));
   });
   actions.appendChild(checkButton);
-  const updateDesc=pre.ready?(av.updateAvailable?"Create a verified safety backup, install "+(av.availableVersion||"the newer release")+", then restart the dashboard.":"Create a verified safety backup and reinstall the selected release after integrity checks."):"The selected GitHub Release can still be checked. Update installation stays disabled until the setup issue above is corrected.";
-  const updateButton=confirmBtn("Update dashboard",pre.ready?"Tap again to start the dedicated updater":"Update setup needed",async()=>{
-    if(!pre.ready){ctrlMsg(pre.detail||"Updater installation is not ready. Review the setup detail above.");return;}
+  const canStart=pre.canStart===true;
+  const noUpdate=av&&av.ok===true&&av.updateAvailable!==true;
+  const updateDesc=canStart
+    ?"Create a verified safety backup, install "+(av.availableVersion||"the newer release")+", then restart the dashboard."
+    :noUpdate
+      ?(av.noDowngrade===true?"The installed Dash-Go version is newer than this selected release. Downgrades are blocked.":"No newer release is available. Checking for updates remains available; no backup, download, restart, or kiosk recycle will start.")
+      :"The selected GitHub Release can still be checked. Update installation stays disabled until the setup issue above is corrected.";
+  const updateButton=confirmBtn("Update dashboard",canStart?"Tap again to start the dedicated updater":(noUpdate?"No update needed":"Update setup needed"),async()=>{
+    if(!canStart){ctrlMsg(pre.detail||"No newer eligible release is available. Check for updates remains available.");return;}
     try{
       ctrlUpdateSetButtonDisabled(checkButton,true);
       ctrlUpdateSetButtonDisabled(updateButton,true);
-      const r=await api("/api/update","POST",{}),started=ctrlUpdateProgressState(r||{});
+      const r=await api("/api/update","POST",{});
+      if(r&&r.noUpdate===true){
+        ctrlMsg(r.detail||r.label||"Already up to date. No update work was started.");
+        await renderCtrlUpdateRestore({fresh:true});
+        return;
+      }
+      const started=ctrlUpdateProgressState(r||{});
       ctrlUpdateApplyProgress(wrap,{...(r||{}),...started,active:true},{finalizing:false});
       ctrlMsg(started.job&&started.job.id?"Safety backup verified. Update job started; the browser will restart only after local readiness passes.":"Safety backup verified. Update started.");
       scheduleCtrlUpdatePoll(350);
     }catch(e){
       ctrlUpdateSetButtonDisabled(checkButton,false);
-      ctrlUpdateSetButtonDisabled(updateButton,!pre.ready);
+      ctrlUpdateSetButtonDisabled(updateButton,pre.canStart!==true);
       ctrlMsg("Could not start update: "+e.message);
     }
   });

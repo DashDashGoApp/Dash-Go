@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -155,172 +154,23 @@ func (a *app) updateUnitSnapshot() map[string]any {
 	return out
 }
 
-func (a *app) updateBackupWritable() (bool, string) {
-	if err := a.ensureBackupDir(); err != nil {
-		return false, err.Error()
-	}
-	probe, err := os.CreateTemp(a.backupDir(), ".update-preflight-")
-	if err != nil {
-		return false, err.Error()
-	}
-	name := probe.Name()
-	if err := probe.Chmod(0600); err != nil {
-		_ = probe.Close()
-		_ = os.Remove(name)
-		return false, err.Error()
-	}
-	_, err = probe.WriteString("ok\n")
-	closeErr := probe.Close()
-	removeErr := os.Remove(name)
-	if err != nil {
-		return false, err.Error()
-	}
-	if closeErr != nil {
-		return false, closeErr.Error()
-	}
-	if removeErr != nil {
-		return false, removeErr.Error()
-	}
-	return true, ""
-}
-
-func copyUpdateAvailability(value map[string]any) map[string]any {
-	copy := make(map[string]any, len(value))
-	maps.Copy(copy, value)
-	return copy
-}
-
-// Dashboard Control polls update status while a job is active. Cache catalog
-// checks briefly so a single progress view never turns into repeated network
-// requests on a Pi; POST /api/update always forces a fresh preflight.
-func (a *app) cachedUpdateAvailability(maxAge time.Duration) map[string]any {
-	a.updateAvailabilityMu.Lock()
-	defer a.updateAvailabilityMu.Unlock()
-	if a.updateAvailabilityCache != nil && time.Since(a.updateAvailabilityAt) < maxAge {
-		return copyUpdateAvailability(a.updateAvailabilityCache)
-	}
-	availability := a.checkUpdateAvailability()
-	a.updateAvailabilityCache = copyUpdateAvailability(availability)
-	a.updateAvailabilityAt = time.Now()
-	return availability
-}
-
-// githubReleaseCatalogProblems keeps Dashboard Control's install preflight in
-// lockstep with the canonical GitHub Release resolver. The retired
-// catalog exposed a tarball, manifest, and installer checksum separately;
-// GitHub releases instead expose a self-contained versioned bundle and the
-// release-wide SHA256SUMS asset. Resolver validation already proves exact asset
-// names, upload state, URLs, and digest syntax. This narrow preflight confirms
-// that its safe summary still has every field the installer transaction needs.
-func githubReleaseCatalogProblems(availability map[string]any) []string {
-	if availability["ok"] != true {
-		return []string{strOr(availability["detail"], "GitHub Release discovery is unavailable")}
-	}
-	problems := []string{}
-	for _, item := range []struct {
-		field string
-		label string
-	}{
-		{field: "releaseAsset", label: "release bundle"},
-		{field: "releaseDigest", label: "release-bundle SHA-256"},
-		{field: "checksumsAsset", label: "SHA256SUMS asset"},
-		{field: "checksumsDigest", label: "SHA256SUMS SHA-256"},
-		{field: "releaseUrl", label: "release URL"},
-	} {
-		if jsonutil.StringValue(availability[item.field]) == "" {
-			problems = append(problems, "GitHub Release metadata is missing the "+item.label)
-		}
-	}
-	if availability["immutable"] != true {
-		problems = append(problems, "the resolved GitHub Release is not immutable")
-	}
-	return problems
-}
-
-func (a *app) updatePreflightWithAvailability(availability map[string]any) map[string]any {
-	problems := []string{}
-	installer := filepath.Join(a.home, "install.sh")
-	installerPresent := fileio.Exists(installer)
-	installerReady, installerDetail := canonicalGitHubInstaller(installer)
-	trackProfilePresent := fileio.Exists(a.updateProfilePath())
-	runnerPresent := executableRegularFile(a.updateRunnerPath())
-	unit := a.updateUnitSnapshot()
-	job := a.readUpdateJob()
-	lockHeld, lockErr := a.updateLockHeld()
-	if !installerReady {
-		problems = append(problems, installerDetail)
-	}
-	// The selected track has a safe installed-version fallback and the installer
-	// recreates its owner-only record on update. Its absence is informative but
-	// never a credential gate or an automatic-update blocker.
-	if !runnerPresent {
-		problems = append(problems, "dedicated updater runner is missing; complete one SSH update or repair")
-	}
-	catalogProblems := githubReleaseCatalogProblems(availability)
-	problems = append(problems, catalogProblems...)
-	if unit["present"] != true {
-		problems = append(problems, strOr(unit["detail"], "dedicated updater service is missing"))
-	}
-	if unit["sudoReady"] != true {
-		problems = append(problems, "Dashboard Control cannot start the dedicated updater service without a password")
-	}
-	lockProbeError := ""
-	if lockErr != nil {
-		lockProbeError = lockErr.Error()
-		problems = append(problems, "could not inspect the update lock: "+lockProbeError)
-	}
-	updateActive := updateStateActive(strOr(job["state"], "")) || unit["active"] == true || lockHeld
-	if updateActive {
-		problems = append(problems, "an update is already running")
-	}
-	backupWritable, backupDetail := a.updateBackupWritable()
-	if !backupWritable {
-		problems = append(problems, "backup storage is not writable: "+backupDetail)
-	}
-	catalogReady := len(catalogProblems) == 0
-	ready := len(problems) == 0
-	label, detail := "Ready", "Updater, safety backup, and selected GitHub Release metadata are ready."
-	if !ready {
-		switch {
-		case updateActive:
-			label, detail = "Update in progress", "An existing update job must finish before another can start."
-		case !catalogReady:
-			label = strOr(availability["label"], "GitHub Release needs attention")
-			detail = strOr(availability["detail"], problems[0])
-		default:
-			label, detail = "Update setup needed", problems[0]
-		}
-	}
-	return map[string]any{
-		"ok": ready, "ready": ready, "catalogReady": catalogReady, "label": label, "detail": detail, "problems": problems,
-		"installerPresent": installerPresent, "installerReady": installerReady, "updateTrackProfilePresent": trackProfilePresent, "runnerPresent": runnerPresent,
-		"backupWritable": backupWritable, "availability": availability, "unit": unit, "job": job, "lockHeld": lockHeld,
-		"lockProbeError": lockProbeError,
-	}
-}
-
-func (a *app) updatePreflight() map[string]any {
-	return a.updatePreflightWithAvailability(a.cachedUpdateAvailability(30 * time.Second))
-}
-
-func (a *app) updatePreflightFresh() map[string]any {
-	availability := a.checkUpdateAvailability()
-	a.updateAvailabilityMu.Lock()
-	a.updateAvailabilityCache = copyUpdateAvailability(availability)
-	a.updateAvailabilityAt = time.Now()
-	a.updateAvailabilityMu.Unlock()
-	return a.updatePreflightWithAvailability(availability)
-}
-
 func (a *app) startDashboardUpdate() (map[string]any, error) {
 	a.updateMu.Lock()
 	defer a.updateMu.Unlock()
 	a.reconcileInterruptedUpdateStateLocked()
 	preflight := a.updatePreflightFresh()
-	if preflight["ok"] != true {
-		if updateStateActive(strOr(jsonutil.Map(preflight["job"])["state"], "")) || jsonutil.Map(preflight["unit"])["active"] == true || preflight["lockHeld"] == true {
-			return nil, errDashboardUpdateRunning
-		}
+	availability := jsonutil.Map(preflight["availability"])
+	if updateStateActive(strOr(jsonutil.Map(preflight["job"])["state"], "")) || jsonutil.Map(preflight["unit"])["active"] == true || preflight["lockHeld"] == true {
+		return nil, errDashboardUpdateRunning
+	}
+	// The API is authoritative even when a stale browser still shows an armed
+	// button. Do not create a backup, update job, action-history row, systemd
+	// request, payload stage, or kiosk restart unless a strict/recovery upgrade
+	// is still available at the moment this POST is handled.
+	if availability["ok"] == true && availability["updateAvailable"] != true {
+		return dashboardNoUpdateResponse(availability), nil
+	}
+	if preflight["ready"] != true || preflight["canStart"] != true {
 		return nil, dashboardUpdatePreflightError{detail: strOr(preflight["detail"], "update preflight failed")}
 	}
 	backup, err := a.createConfigBackup("pre-update", "Automatic backup before dashboard update", "update", true)
@@ -329,8 +179,8 @@ func (a *app) startDashboardUpdate() (map[string]any, error) {
 	}
 	job := map[string]any{
 		"id": updateID(), "state": "queued", "label": "Queued", "detail": "Safety backup verified; waiting for the dedicated updater service.",
-		"source": "control", "track": strOr(jsonutil.Map(preflight["availability"])["track"], ""), "installedVersion": fileio.ReadString(filepath.Join(a.dash, "VERSION"), ""),
-		"target": firstNonEmpty(strOr(jsonutil.Map(preflight["availability"])["availableVersion"], ""), "latest"), "backup": backup["name"], "backupFiles": backup["validatedFiles"],
+		"source": "control", "track": strOr(availability["track"], ""), "installedVersion": fileio.ReadString(filepath.Join(a.dash, "VERSION"), ""),
+		"target": firstNonEmpty(strOr(availability["availableVersion"], ""), "latest"), "backup": backup["name"], "backupFiles": backup["validatedFiles"],
 		"unit": "dash-go-update.service", "logFile": filepath.Join(a.logDir, "update.log"),
 	}
 	if err := a.writeUpdateJob(job); err != nil {

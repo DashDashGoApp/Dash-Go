@@ -181,6 +181,8 @@ function renderMaintenanceNotice(st){
   detail="No newer dashboard release is currently available.";
   if(st.error){ cls="bad"; title="Status unavailable"; detail=st.error; }
   else if(av.updateAvailable){ cls="warn"; title="Update Available"; detail=(av.availableVersion||"A newer release")+" is available."; }
+  else if(av.status==="installed-newer"){ cls="ok"; title="Installed version is newer"; detail=av.detail||"Dash-Go will not downgrade to the selected release."; }
+  else if(av.status==="recovery"){ cls="warn"; title="Installed version needs repair"; detail=av.detail||"A verified selected-track release can repair the installation."; }
   else if(av.status==="blocked" || av.status==="unreachable" || av.status==="unconfigured" || av.ok===false){ cls="warn"; title=av.label||"Update check needs attention"; detail=av.detail||"The saved update source could not be checked."; }
   else if(st.problems && st.problems.length){ cls="warn"; title="Check before updating"; detail=st.problems.join(" · "); }
   else if(!st.updateReady){ cls="warn"; title="Setup needed"; detail="The updater needs ~/install.sh and its local update service before Dashboard Control can run a verified update."; }

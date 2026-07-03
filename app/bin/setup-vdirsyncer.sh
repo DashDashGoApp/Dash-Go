@@ -306,13 +306,43 @@ write_vdirsyncer_config(){
 }
 
 write_writeback_registry(){
-  local temp first name color tag pair collection writable remote_id display_name provider connection local_id source exact enabled require_pin row_enabled previous
+  local temp first name color tag pair collection writable remote_id display_name provider connection local_id source exact enabled require_pin row_enabled previous disabled_sources
   enabled=false
   require_pin=false
+  disabled_sources="|"
   # Rebuild source metadata without resetting the user's edit/PIN choices.
+  # The dashboard server rewrites this file with indented JSON, so previous
+  # per-calendar flags are read with a JSON parser; the whitespace-tolerant
+  # greps remain only as a fallback for a python3-free environment.
   if [ -r "$WRITEBACK_REGISTRY" ]; then
     enabled="$(grep -Eo '"enabled"[[:space:]]*:[[:space:]]*(true|false)' "$WRITEBACK_REGISTRY" | head -n1 | sed -E 's/.*(true|false)$/\1/' || true)"
     require_pin="$(grep -Eo '"requirePin"[[:space:]]*:[[:space:]]*(true|false)' "$WRITEBACK_REGISTRY" | head -n1 | sed -E 's/.*(true|false)$/\1/' || true)"
+    if have python3; then
+      previous="$(python3 - "$WRITEBACK_REGISTRY" <<'PYREG' 2>/dev/null || true
+import json,sys
+try:
+    reg=json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+print("master_enabled=%s" % ("true" if reg.get("enabled") is True else "false"))
+print("require_pin=%s" % ("true" if reg.get("requirePin") is True else "false"))
+for cal in reg.get("calendars") or []:
+    if isinstance(cal,dict) and cal.get("enabled") is False:
+        source=str(cal.get("source",""))
+        if source and "|" not in source and "\n" not in source:
+            print("disabled=%s" % source)
+PYREG
+)"
+      if [ -n "$previous" ]; then
+        enabled="$(printf '%s\n' "$previous" | sed -n 's/^master_enabled=//p' | head -n1)"
+        require_pin="$(printf '%s\n' "$previous" | sed -n 's/^require_pin=//p' | head -n1)"
+        while IFS= read -r source; do
+          [ -n "$source" ] && disabled_sources="${disabled_sources}${source}|"
+        done <<EOF
+$(printf '%s\n' "$previous" | sed -n 's/^disabled=//p')
+EOF
+      fi
+    fi
   fi
   case "$enabled" in true|false) ;; *) enabled=false;; esac
   case "$require_pin" in true|false) ;; *) require_pin=false;; esac
@@ -335,7 +365,8 @@ write_writeback_registry(){
       fi
       if [ -n "$tag" ]; then source="calendars/$name.$color.$tag.ics"; else source="calendars/$name.$color.ics"; fi
       row_enabled=true
-      if [ -r "$WRITEBACK_REGISTRY" ]; then
+      case "$disabled_sources" in *"|$source|"*) row_enabled=false;; esac
+      if [ "$row_enabled" = "true" ] && [ "$disabled_sources" = "|" ] && [ -r "$WRITEBACK_REGISTRY" ] && ! have python3; then
         previous="$(grep -F "\"source\":\"$source\"" "$WRITEBACK_REGISTRY" | head -n1 || true)"
         case "$previous" in *'"enabled":false'*) row_enabled=false;; esac
       fi
@@ -378,22 +409,42 @@ umask 077
 mkdir -p "\$CAL_DIR" "\$LOG_DIR" "\$VDIR_HOME"
 log(){ printf '%s %s\\n' "\$(date '+%Y-%m-%d %H:%M:%S')" "\$*" >> "\$LOG"; }
 
+# Preserve the original command line across the low-priority re-exec below.
+# Parsing shifts positional arguments, so reusing $@ after validation would
+# silently turn a targeted sync or one-shot conflict resolution into a full run.
+ORIGINAL_ARGS=("\$@")
 TARGET_PAIR=""
-case "\${1:-}" in
-  "") ;;
-  --pair)
-    TARGET_PAIR="\${2:-}"
-    [ -n "\$TARGET_PAIR" ] && [ "\$#" -eq 2 ] || { log 'invalid targeted sync request'; exit 2; }
-    case "\$TARGET_PAIR" in *[!A-Za-z0-9_-]*|'') log 'invalid targeted sync pair'; exit 2;; esac
-    ;;
-  *) log 'invalid sync-vdir arguments'; exit 2;;
+ALLOW_EMPTY_ONCE=0
+RESOLVE_CONFLICT=""
+while [ "\$#" -gt 0 ]; do
+  case "\$1" in
+    --pair)
+      [ "\$#" -ge 2 ] || { log 'invalid targeted sync request'; exit 2; }
+      TARGET_PAIR="\$2"; shift 2
+      ;;
+    --allow-empty-once)
+      ALLOW_EMPTY_ONCE=1; shift
+      ;;
+    --resolve-conflict)
+      [ "\$#" -ge 2 ] || { log 'invalid conflict-resolution request'; exit 2; }
+      RESOLVE_CONFLICT="\$2"; shift 2
+      ;;
+    *) log 'invalid sync-vdir arguments'; exit 2;;
+  esac
+done
+case "\$TARGET_PAIR" in *[!A-Za-z0-9_-]*|'')
+  if [ -n "\$TARGET_PAIR" ]; then log 'invalid targeted sync pair'; exit 2; fi
+  ;;
 esac
+case "\$RESOLVE_CONFLICT" in ""|remote|dashboard) ;; *) log 'invalid conflict-resolution winner'; exit 2;; esac
+[ -z "\$RESOLVE_CONFLICT" ] || [ -n "\$TARGET_PAIR" ] || { log 'conflict resolution requires one selected pair'; exit 2; }
+[ "\$ALLOW_EMPTY_ONCE" -eq 0 ] || [ -n "\$TARGET_PAIR" ] || { log 'empty-collection permission requires one selected pair'; exit 2; }
 
 # Every entry point enters through the shared low-priority helper. The marker
 # prevents recursion after dashboard-lowprio.sh execs this script.
 if [ "\${DASH_VDIR_LOWPRIO_ACTIVE:-}" != "1" ] && [ -x "\$LOWPRIO" ]; then
   export DASH_VDIR_LOWPRIO_ACTIVE=1
-  exec "\$LOWPRIO" "\$0" "\$@"
+  exec "\$LOWPRIO" "\$0" "\${ORIGINAL_ARGS[@]}"
 fi
 
 acquire_lock(){
@@ -420,6 +471,68 @@ declare -A PAIR_RESULT=()
 known_target=0
 sync_rc=0
 ready_pairs=0
+RESULTS="\$VDIR_HOME/last-sync-results"
+RESOLVE_CONFIG=""
+cleanup_resolve_config(){ [ -z "\$RESOLVE_CONFIG" ] || rm -f "\$RESOLVE_CONFIG"; }
+trap 'cleanup_resolve_config; rm -rf "\$LOCK_DIR"' EXIT
+
+# Conflict resolution is an explicit, one-run recovery operation. Normal pair
+# configuration intentionally contains no conflict winner. This copy injects a
+# vdirsyncer-native policy into only the selected pair and is deleted by trap
+# on every success, failure, and interruption path.
+make_resolve_config(){
+  winner="\$1"; pair="\$2"
+  RESOLVE_CONFIG="\$(mktemp "\$VDIR_HOME/resolve-vdir.XXXXXX")" || return 1
+  case "\$winner" in
+    remote) policy="a wins";;
+    dashboard) policy="b wins";;
+    *) rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1;;
+  esac
+  if ! awk -v want="\$pair" -v policy="\$policy" '
+    function flush(){ if(active && !injected){ print "conflict_resolution = \"" policy "\""; injected=1 } }
+    /^\[pair[[:space:]]+/ {
+      flush(); active = (\$0 == "[pair " want "]"); next
+    }
+    { if(active && \$0 ~ /^conflict_resolution[[:space:]]*=/){ next } print }
+    END { flush(); if(!seen && !active){} }
+  ' "\$VDIR_CFG" > "\$RESOLVE_CONFIG"; then
+    rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1
+  fi
+  # Verify the exact pair section was seen before the temporary config is ever
+  # passed to vdirsyncer. A malformed user-owned config must fail safely.
+  if ! grep -Fqx "[pair \$pair]" "\$VDIR_CFG"; then
+    rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1
+  fi
+  chmod 600 "\$RESOLVE_CONFIG" || { rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1; }
+}
+
+# Failures are classified from this pair's own captured output so the
+# dashboard can state what actually happened instead of a generic retry
+# promise. Classification is conservative: anything unrecognized is 'failed'.
+classify_failure(){
+  if grep -qi 'changed on both sides' "\$1"; then printf 'conflict'; return; fi
+  if grep -qi 'completely emptied' "\$1"; then printf 'attention-empty'; return; fi
+  if grep -qiE 'run .vdirsyncer discover' "\$1"; then printf 'attention-undiscovered'; return; fi
+  if grep -qiE '401|unauthorized|invalid_grant' "\$1"; then printf 'attention-auth'; return; fi
+  printf 'failed'
+}
+record_result(){
+  # RESULT lines on stdout feed the dashboard's queued targeted sync; the
+  # results file makes cron-run outcomes visible to Dashboard Control too.
+  PAIR_RESULT["\$1"]="\$2"
+  printf 'RESULT\t%s\t%s\n' "\$1" "\$2"
+  printf '%s|%s|%s\n' "\$1" "\$2" "\$(date +%s)" >> "\$RESULTS.tmp"
+}
+# Preserve last-known results for pairs a targeted run does not touch.
+: > "\$RESULTS.tmp"
+if [ -r "\$RESULTS" ]; then
+  while IFS='|' read -r rpair rstate repoch _; do
+    [ -n "\$rpair" ] || continue
+    [ -n "\$TARGET_PAIR" ] && [ "\$rpair" != "\$TARGET_PAIR" ] || continue
+    printf '%s|%s|%s\n' "\$rpair" "\$rstate" "\$repoch" >> "\$RESULTS.tmp"
+  done < "\$RESULTS"
+fi
+
 while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _ _ credential_ref _; do
   [ -n "\$pname" ] || continue
   [ -n "\$ppair" ] || continue
@@ -427,30 +540,53 @@ while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _ _ credential_ref _; do
   [ "\$ppair" = "\$TARGET_PAIR" ] && known_target=1
   [ -n "\$credential_ref" ] || credential_ref="\$pname"
   if [ "\$pprovider" = "google" ] && [ ! -s "\$GOOGLE_TOKENS/\$credential_ref.json" ]; then
-    PAIR_RESULT["\$ppair"]="skipped"
+    record_result "\$ppair" "skipped"
     log "google calendar \$pname awaits its one-time authorization; skipped this run"
     continue
   fi
   ready_pairs=\$((ready_pairs + 1))
-  if run_bounded "\$VDIRSYNCER_BIN" -c "\$VDIR_CFG" sync "\$ppair" >> "\$LOG" 2>&1; then
-    PAIR_RESULT["\$ppair"]="synced"
+  sync_args=(sync "\$ppair")
+  if [ "\$ALLOW_EMPTY_ONCE" -eq 1 ] && [ "\$ppair" = "\$TARGET_PAIR" ]; then
+    sync_args=(sync --force-delete "\$ppair")
+  fi
+  config_for_pair="\$VDIR_CFG"
+  if [ -n "\$RESOLVE_CONFLICT" ] && [ "\$ppair" = "\$TARGET_PAIR" ]; then
+    if ! make_resolve_config "\$RESOLVE_CONFLICT" "\$ppair"; then
+      record_result "\$ppair" "failed"
+      sync_rc=1
+      log "could not prepare one-run conflict resolution for \$pname; retained its previous calendar data"
+      continue
+    fi
+    config_for_pair="\$RESOLVE_CONFIG"
+  fi
+  CAPTURE="\$(mktemp "\$VDIR_HOME/sync-vdir.XXXXXX")" || {
+    record_result "\$ppair" "failed"
+    sync_rc=1
+    log "could not create private-calendar sync capture for \$pname; retained its previous calendar data"
+    continue
+  }
+  if run_bounded "\$VDIRSYNCER_BIN" -c "\$config_for_pair" "\${sync_args[@]}" > "\$CAPTURE" 2>&1; then
+    record_result "\$ppair" "synced"
   else
-    PAIR_RESULT["\$ppair"]="failed"
+    record_result "\$ppair" "\$(classify_failure "\$CAPTURE")"
     sync_rc=1
     log "vdirsyncer sync reported errors for \$pname; retained its previous calendar data"
   fi
+  cat "\$CAPTURE" >> "\$LOG"
+  rm -f "\$CAPTURE"
 done < "\$VDIR_PAIRS"
+mv "\$RESULTS.tmp" "\$RESULTS" 2>/dev/null || rm -f "\$RESULTS.tmp"
 if [ -n "\$TARGET_PAIR" ] && [ "\$known_target" -ne 1 ]; then log "unknown selected pair \$TARGET_PAIR"; exit 2; fi
 [ "\$ready_pairs" -gt 0 ] || log 'no pairs are ready to sync; retained existing local calendar data'
 
 merge_collection(){
-  src="\$1"; dest="\$2"; tmp="\$(mktemp)"
+  src="\$1"; dest="\$2"; tmp="\$(mktemp "\$dest.tmp.XXXXXX")" || return 1
   if ! find "\$src" -type f -name '*.ics' -print -quit 2>/dev/null | grep -q .; then
-    printf 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Dash-Go//vdirsyncer//EN\nCALSCALE:GREGORIAN\nEND:VCALENDAR\n' > "\$tmp"
-    mv "\$tmp" "\$dest"; return 0
+    printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Dash-Go//vdirsyncer//EN\r\nCALSCALE:GREGORIAN\r\nEND:VCALENDAR\r\n' > "\$tmp"
+    chmod 644 "\$tmp" && mv "\$tmp" "\$dest"; return 0
   fi
   {
-    printf 'BEGIN:VCALENDAR\\nVERSION:2.0\\nPRODID:-//Dash-Go//vdirsyncer//EN\\nCALSCALE:GREGORIAN\\n'
+    printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Dash-Go//vdirsyncer//EN\r\nCALSCALE:GREGORIAN\r\n'
     find "\$src" -type f -name '*.ics' -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0r awk '
       { sub(/\\r\$/, "") }
       /^BEGIN:VCALENDAR/ { next }
@@ -458,10 +594,10 @@ merge_collection(){
       /^BEGIN:V/ { depth++; print; next }
       /^END:V/   { print; if (depth>0) depth--; next }
       depth>0 { print }
-    '
-    printf 'END:VCALENDAR\\n'
+    ' | sed 's/$/\r/'
+    printf 'END:VCALENDAR\r\n'
   } > "\$tmp"
-  mv "\$tmp" "\$dest"
+  chmod 644 "\$tmp" && mv "\$tmp" "\$dest"
 }
 
 while IFS='|' read -r name color tag pair collection writable remote_id display_name provider connection local_id _; do
@@ -475,7 +611,8 @@ while IFS='|' read -r name color tag pair collection writable remote_id display_
       if merge_collection "\$src" "\$dest"; then log "merged \$name -> \$(basename "\$dest")"; else log "could not merge \$name; kept previous calendar file"; fi
       ;;
     skipped) log "calendar \$name awaits authorization; kept previous calendar file";;
-    failed) log "calendar \$name failed remote sync; kept previous calendar file";;
+    conflict) log "calendar \$name has a local/remote conflict; kept previous calendar file";;
+    failed|attention-*) log "calendar \$name failed remote sync; kept previous calendar file";;
     *) log "calendar \$name has no eligible sync pair; kept previous calendar file";;
   esac
 done < "\$MAP"

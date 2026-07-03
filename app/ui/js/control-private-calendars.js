@@ -30,15 +30,54 @@ function ctrlPrivateCalendarSettings(state,writeback){
 }
 function ctrlPrivateCalendarProvider(item){return String(item.providerLabel||((item.provider==="google")?"Google":"iCloud / CalDAV"));}
 function ctrlPrivateCalendarRegistry(item,writeback){return (Array.isArray(writeback&&writeback.calendars)?writeback.calendars:[]).find(row=>row&&row.source===item.source)||null;}
+function ctrlPrivateCalendarSync(item){return String(item&&item.sync||"");}
+function ctrlPrivateCalendarConflict(item){return ctrlPrivateCalendarSync(item)==="conflict"||String(item&&item.state||"")==="conflict";}
+function ctrlPrivateCalendarNeedsRepair(item){return ctrlPrivateCalendarSync(item)==="attention-undiscovered";}
+function ctrlPrivateCalendarAuthHelp(item){
+  const sync=ctrlPrivateCalendarSync(item);
+  if(sync!=="attention-auth"&&sync!=="skipped")return "";
+  return item&&item.provider==="google"
+    ?"Google authorization is required. Reconnect this account through private-calendar setup from SSH, then return here and use Sync now."
+    :"The calendar server rejected authentication. Update the account or app password through private-calendar setup from SSH, then return here and use Sync now.";
+}
 function ctrlPrivateCalendarState(item,writeback){
   const bits=[ctrlPrivateCalendarProvider(item)];
   const registered=ctrlPrivateCalendarRegistry(item,writeback);
-  if(item.writable!==true)bits.push("display-only");
+  const sync=ctrlPrivateCalendarSync(item);
+  if(ctrlPrivateCalendarConflict(item))bits.push("conflict needs attention");
+  else if(ctrlPrivateCalendarNeedsRepair(item))bits.push("connection repair needed");
+  else if(item.writable!==true)bits.push("display-only");
   else if(!registered)bits.push("edit setup needs attention");
   else if(writeback&&writeback.enabled!==true)bits.push("Dashboard edits off");
   else if(registered.enabled===false)bits.push("edits disabled");
   else bits.push("editable");
-  if(item.state)bits.push(String(item.state));return bits.join(" · ");
+  if(sync&&sync!=="synced")bits.push(sync.replace(/^attention-/,""));
+  else if(item.state)bits.push(String(item.state));
+  return bits.join(" · ");
+}
+function ctrlPrivateCalendarConflictActions(item,row){
+  const reveal=ctrlCalendarManagerAction("Resolve conflict","Choose which version wins for every unresolved conflict in this one calendar. A Dashboard Control PIN is required.","primary",async()=>{
+    reveal.hidden=true;
+    const panel=el("section","calmanager-conflict-options");
+    panel.appendChild(el("p","calmanager-note",`Normal sync is paused to protect both versions. A choice applies to every unresolved conflict in ${item.name||"this calendar"}.`));
+    if(item.deleteAllowed!==true){
+      panel.appendChild(el("p","calmanager-note","Configure and unlock a Dashboard Control PIN before choosing a version. Both versions remain unchanged until then."));
+    }else{
+      const choices=el("div","calmanager-actions");
+      choices.appendChild(ctrlCalendarManagerConfirmAction("Use phone / remote version","Replace the local conflicting items with the remote calendar’s version. An owner-only local snapshot is kept.","Tap again: use remote version",async()=>{
+        await api("/api/calendars/private/resolve","POST",{source:item.source,winner:"remote"});
+        await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} conflict resolved using the remote version.`,item.source,true);
+      }));
+      choices.appendChild(ctrlCalendarManagerConfirmAction("Use this dashboard’s version","Push this dashboard’s local conflicting items to the remote calendar. An owner-only local snapshot is kept.","Tap again: use Dashboard version",async()=>{
+        await api("/api/calendars/private/resolve","POST",{source:item.source,winner:"dashboard"});
+        await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} conflict resolved using the Dashboard version.`,item.source,true);
+      }));
+      panel.appendChild(choices);
+    }
+    const keep=ctrlCalendarManagerAction("Keep both unchanged","Close these choices. You can decide later; normal sync remains paused.","",async()=>{panel.remove();reveal.hidden=false;});
+    panel.appendChild(keep);row.insertBefore(panel,reveal.nextSibling);
+  });
+  return reveal;
 }
 function ctrlPrivateCalendarCandidateRow(item){
   const row=el("article","calmanager-row calmanager-private");
@@ -53,12 +92,21 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
   const row=el("article","calmanager-row calmanager-private");row.dataset.calendarSource=String(item.source||"");
   const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));
   const registered=ctrlPrivateCalendarRegistry(item,writeback);
-  const live=item.writable===true&&registered&&writeback&&writeback.enabled===true&&registered.enabled!==false;
-  const statusText=live?"Editable":item.writable!==true?"Display-only":!registered?"Needs attention":"Edits off";
+  const conflict=ctrlPrivateCalendarConflict(item),repair=ctrlPrivateCalendarNeedsRepair(item);
+  const live=item.writable===true&&registered&&writeback&&writeback.enabled===true&&registered.enabled!==false&&!conflict&&!repair;
+  const statusText=conflict?"Conflict":repair?"Needs attention":live?"Editable":item.writable!==true?"Display-only":!registered?"Needs attention":"Edits off";
   head.append(title,el("span","calmanager-state "+(live?"on":"off"),statusText));row.append(head,el("div","calmanager-detail",ctrlPrivateCalendarState(item,writeback)));
   if(item.detail)row.appendChild(el("p","calmanager-note",String(item.detail)));
+  const authHelp=ctrlPrivateCalendarAuthHelp(item);if(authHelp)row.appendChild(el("p","calmanager-note",authHelp));
   const actions=el("div","calmanager-actions");
-  if(item.writable!==true){
+  if(conflict){
+    actions.appendChild(ctrlPrivateCalendarConflictActions(item,row));
+  }else if(repair){
+    actions.appendChild(ctrlCalendarManagerAction("Repair connection","Run one deliberate discovery and sync for this exact selected calendar. It does not change calendar selections or remote events.","primary",async()=>{
+      await api("/api/calendars/private/repair","POST",{source:item.source});
+      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} connection repaired.`,item.source,true);
+    }));
+  }else if(item.writable!==true){
     actions.appendChild(ctrlCalendarManagerAction("Enable Dashboard edits","Allow supported normal events in this exact selected calendar to be created, edited, and deleted from Dash-Go.","primary",async()=>{
       await api("/api/calendars/private/editable","POST",{source:item.source,editable:true});
       await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} is editable and Dashboard edits are on.`,item.source);
@@ -78,10 +126,12 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
       await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} is now display-only.`,item.source);
     }));
   }
-  actions.appendChild(ctrlCalendarManagerAction("Sync now","Synchronize only this selected private calendar.","",async()=>{
-    await api("/api/calendars/private/sync","POST",{source:item.source});
-    await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} sync queued.`,item.source);
-  }));
+  if(!conflict&&!repair){
+    actions.appendChild(ctrlCalendarManagerAction("Sync now","Synchronize only this selected private calendar.","",async()=>{
+      await api("/api/calendars/private/sync","POST",{source:item.source});
+      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} sync queued.`,item.source);
+    }));
+  }
   actions.appendChild(ctrlCalendarManagerConfirmAction("Stop syncing","Stop future sync for this Dash-Go source. The remote calendar is not changed and the local mirror is preserved.","Tap again to stop sync",async()=>{
     await api("/api/calendars/private/deactivate","POST",{source:item.source});
     await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} stopped syncing. Remote calendar unchanged.`,item.source,true);

@@ -148,3 +148,78 @@ func TestWritebackStatusTracksCalendarsIndependently(t *testing.T) {
 		t.Fatalf("targeted pair metadata missing: %#v", status.Calendars[0])
 	}
 }
+
+func TestWritebackUpdatesOneRecurringOccurrenceAndRejectsDuplicateUIDFiles(t *testing.T) {
+	svc, collection, _ := newTestService(t)
+	raw := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:weekly\r\nDTSTART;TZID=America/Chicago:20260706T153000\r\nDTEND;TZID=America/Chicago:20260706T163000\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nSUMMARY:Piano\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	item := filepath.Join(collection, "weekly.ics")
+	if err := os.WriteFile(item, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	occurrence := time.Date(2026, 7, 13, 20, 30, 0, 0, time.UTC)
+	if _, err := svc.UpdateOccurrence("calendars/family.blue.ics", "weekly", occurrence, icalwrite.Event{UID: "weekly", Title: "Piano moved", Start: time.Date(2026, 7, 14, 21, 0, 0, 0, time.UTC), End: time.Date(2026, 7, 14, 22, 0, 0, 0, time.UTC)}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "RECURRENCE-ID;TZID=America/Chicago:20260713T153000") || strings.Count(string(body), "BEGIN:VEVENT") != 2 {
+		t.Fatalf("occurrence update did not create one detached override:\n%s", body)
+	}
+	if err := os.WriteFile(filepath.Join(collection, "duplicate.ics"), []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateOccurrence("calendars/family.blue.ics", "weekly", occurrence, icalwrite.Event{UID: "weekly", Title: "unsafe", Start: occurrence, End: occurrence.Add(time.Hour)}); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("duplicate UID source must fail closed, err=%v", err)
+	}
+}
+
+func TestWritebackStatusMergesBoundedCronOutcomeWithoutOverwritingNewerState(t *testing.T) {
+	svc, collection, _ := newTestService(t)
+	reg := Registry{Version: RegistryVersion, Enabled: true, Calendars: []Calendar{{Source: "calendars/family.blue.ics", Collection: collection, Writable: true, Enabled: true, Name: "Family", Pair: "dash_family", Provider: "google", Connection: "google", RemoteID: "family"}}}
+	if err := svc.writeLocked(reg); err != nil {
+		t.Fatal(err)
+	}
+	resultPath := filepath.Join(filepath.Dir(collection), "..", "last-sync-results")
+	resultPath = filepath.Clean(resultPath)
+	if err := os.WriteFile(resultPath, []byte("dash_family|conflict|1783035660\nunknown|synced|1783035661\ninvalid|danger|0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := status.States["calendars/family.blue.ics"]
+	if state.State != "conflict" || state.Sync != "conflict" {
+		t.Fatalf("cron conflict not surfaced safely: %#v", state)
+	}
+	newer := CalendarState{UpdatedAt: time.Unix(1783035720, 0).UTC().Format(time.RFC3339), State: "synced", Detail: "newer dashboard result"}
+	if err := os.MkdirAll(filepath.Dir(svc.statusPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(svc.statusPath, []byte(`{"version":1,"calendars":{"calendars/family.blue.ics":{"updatedAt":"`+newer.UpdatedAt+`","state":"`+newer.State+`","detail":"`+newer.Detail+`"}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, err = svc.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = status.States["calendars/family.blue.ics"]
+	if state.State != "synced" || state.Sync != "" {
+		t.Fatalf("older cron outcome overwrote newer state: %#v", state)
+	}
+}
+
+func TestWritebackSkipRefusesOccurrenceWithDetachedOverride(t *testing.T) {
+	svc, collection, _ := newTestService(t)
+	item := filepath.Join(collection, "weekly.ics")
+	raw := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:weekly\r\nSEQUENCE:4\r\nDTSTART;TZID=America/Chicago:20260706T153000\r\nDTEND;TZID=America/Chicago:20260706T163000\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:Piano\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:weekly\r\nRECURRENCE-ID;TZID=America/Chicago:20260713T153000\r\nDTSTART;TZID=America/Chicago:20260714T153000\r\nDTEND;TZID=America/Chicago:20260714T163000\r\nSUMMARY:Moved\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	if err := os.WriteFile(item, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.SkipOccurrence("calendars/family.blue.ics", "weekly", time.Date(2026, 7, 13, 20, 30, 0, 0, time.UTC))
+	if err == nil || !strings.Contains(err.Error(), "custom change") {
+		t.Fatalf("skip with existing override should explain edit path, err=%v", err)
+	}
+}

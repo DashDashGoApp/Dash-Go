@@ -58,23 +58,45 @@ func (a *app) checkUpdateAvailability() map[string]any {
 	}
 	current, currentErr := releasepkg.ParseVersion(curRaw)
 	available, availableErr := releasepkg.ParseVersion(resolved.Version)
-	if currentErr != nil || availableErr != nil {
-		detail := "Installed or resolved Dash-Go version is invalid; update is blocked until the local installation is repaired."
+	if availableErr != nil {
+		detail := "Resolved Dash-Go release metadata contains an invalid version; no update can start."
 		return map[string]any{"ok": false, "status": "blocked", "label": "Version check blocked", "detail": detail, "track": trackName, "currentVersion": curRaw, "availableVersion": resolved.Version, "fetchedAt": now, "profileSource": profileSource, "problems": []string{detail}}
-	}
-	updateAvailable := available.Compare(current) > 0
-	status, label := "current", "Up to date"
-	detail := fmt.Sprintf("%s is current.", curRaw)
-	if updateAvailable {
-		status, label, detail = "available", "Update Available", fmt.Sprintf("%s is available.", resolved.Version)
 	}
 	releaseAsset := resolved.Assets["release"]
 	checksumsAsset := resolved.Assets["checksums"]
-	return map[string]any{
-		"ok": true, "status": status, "label": label, "detail": detail,
-		"source": "GitHub Releases", "repository": resolved.Repository, "releaseUrl": resolved.ReleaseURL,
-		"track": trackName, "currentVersion": curRaw, "availableVersion": resolved.Version, "updateAvailable": updateAvailable,
+	base := map[string]any{
+		"ok": true, "source": "GitHub Releases", "repository": resolved.Repository, "releaseUrl": resolved.ReleaseURL,
+		"track": trackName, "currentVersion": curRaw, "availableVersion": resolved.Version,
 		"releaseAsset": releaseAsset.Name, "releaseDigest": releaseAsset.Digest, "checksumsAsset": checksumsAsset.Name, "checksumsDigest": checksumsAsset.Digest,
 		"immutable": resolved.Immutable, "fetchedAt": now, "profileSource": profileSource,
 	}
+	// A missing or malformed installed VERSION is the one recovery exception to
+	// normal strict-monotonic updates. The installer will still stage/verify the
+	// resolved immutable release before replacing anything, but Control must not
+	// force the user into an unsafe manual same-version reinstall first.
+	if currentErr != nil {
+		base["status"] = "recovery"
+		base["label"] = "Installed version needs repair"
+		base["detail"] = "The installed Dash-Go version is missing or invalid. A verified selected-track release can repair the installation."
+		base["comparison"] = "invalid-installed"
+		base["updateAvailable"] = true
+		base["recoveryUpdate"] = true
+		return base
+	}
+	comparison := "equal"
+	status, label := "current", "Up to date"
+	detail := fmt.Sprintf("%s is current.", curRaw)
+	updateAvailable := false
+	if cmp := available.Compare(current); cmp > 0 {
+		comparison, status, label, detail, updateAvailable = "newer", "available", "Update available", fmt.Sprintf("%s is available.", resolved.Version), true
+	} else if cmp < 0 {
+		comparison, status, label, detail = "installed-newer", "installed-newer", "Installed version is newer", fmt.Sprintf("Installed %s is newer than selected %s release %s. Dash-Go will not downgrade.", curRaw, trackName, resolved.Version)
+	}
+	base["status"] = status
+	base["label"] = label
+	base["detail"] = detail
+	base["comparison"] = comparison
+	base["updateAvailable"] = updateAvailable
+	base["noDowngrade"] = comparison == "installed-newer"
+	return base
 }

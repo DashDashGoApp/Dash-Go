@@ -61,11 +61,12 @@ printf 'family\nblue\nn\n1\nhttps://caldav.example/\nfamily@example.com\nfixture
 
 CAL="$HOME/dashboard/calendars/family.blue.ics"
 [ -f "$CAL" ] || { cat "$TMP/setup.out" >&2; echo 'FAIL: merged calendar missing' >&2; exit 1; }
-[ "$(grep -c '^BEGIN:VCALENDAR$' "$CAL")" -eq 1 ]
-[ "$(grep -c '^END:VCALENDAR$' "$CAL")" -eq 1 ]
-[ "$(grep -c '^BEGIN:VEVENT$' "$CAL")" -eq 2 ]
+[ "$(tr -d '\r' < "$CAL" | grep -c '^BEGIN:VCALENDAR$')" -eq 1 ]
+[ "$(tr -d '\r' < "$CAL" | grep -c '^END:VCALENDAR$')" -eq 1 ]
+[ "$(tr -d '\r' < "$CAL" | grep -c '^BEGIN:VEVENT$')" -eq 2 ]
 grep -Fq 'BEGIN:VTIMEZONE' "$CAL"
-! grep -q $'\r' "$CAL"
+grep -q $'\r' "$CAL"
+[ "$(stat -c '%a' "$CAL")" = 644 ]
 test -f "$HOME/gen-calendars.called"
 test -f "$HOME/gen-events-cache.called"
 [ "$(stat -c '%a' "$HOME/.dashboard-vdirsyncer/config")" = 600 ]
@@ -80,5 +81,5 @@ grep -Fq 'sync-vdir.sh >/dev/null 2>&1' "$FAKE_CRONTAB"
 bash -n "$HOME/dashboard/bin/sync-vdir.sh"
 # A second run is safe and leaves a single merged VCALENDAR wrapper.
 "$HOME/dashboard/bin/sync-vdir.sh"
-[ "$(grep -c '^BEGIN:VCALENDAR$' "$CAL")" -eq 1 ]
-printf 'PASS: CalDAV vdirsyncer setup keeps secrets private and merges calendar files safely\n'
+[ "$(tr -d '\r' < "$CAL" | grep -c '^BEGIN:VCALENDAR$')" -eq 1 ]
+printf 'PASS: CalDAV vdirsyncer setup keeps secrets private and writes a consistent CRLF dashboard mirror\n'

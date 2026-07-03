@@ -18,7 +18,7 @@ func TestUpdateStateActive(t *testing.T) {
 			t.Fatalf("%q must be active", state)
 		}
 	}
-	for _, state := range []string{"", "success", "rolledback", "failed", "cancelled"} {
+	for _, state := range []string{"", "success", "rolledback", "failed", "no-update", "cancelled"} {
 		if updateStateActive(state) {
 			t.Fatalf("%q must be terminal/inactive", state)
 		}

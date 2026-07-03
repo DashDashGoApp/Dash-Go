@@ -32,7 +32,7 @@ terminal_state(){
   local state
   [ -x "$SERVER" ] || return 1
   state="$("$SERVER" --json-get "$JOB" state 2>/dev/null || true)"
-  case "$state" in success|rolledback|failed) return 0;; esac
+  case "$state" in success|rolledback|failed|no-update) return 0;; esac
   return 1
 }
 if ! command -v flock >/dev/null 2>&1; then

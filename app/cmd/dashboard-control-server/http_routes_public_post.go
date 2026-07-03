@@ -51,7 +51,7 @@ func (a *app) handlePublicPost(w http.ResponseWriter, r *http.Request, path stri
 	if a.handleRoutinesPost(w, r, path, body) {
 		return true
 	}
-	if path == "/api/calendar/event/create" || path == "/api/calendar/event/update" || path == "/api/calendar/event/skip-occurrence" {
+	if path == "/api/calendar/event/create" || path == "/api/calendar/event/update" || path == "/api/calendar/event/occurrence/update" || path == "/api/calendar/event/series/update" || path == "/api/calendar/event/skip-occurrence" {
 		if a.calendarWritebackRequirePIN() {
 			return false
 		}

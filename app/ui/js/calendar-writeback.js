@@ -16,9 +16,13 @@ async function calendarWritebackStatus(){
     .finally(()=>{CALENDAR_WRITEBACK_STATUS_PROMISE=null;});
   return CALENDAR_WRITEBACK_STATUS_PROMISE;
 }
+function calendarWritebackCalendarBlocked(calendar){
+  const sync=String(calendar&&calendar.sync||"");
+  return sync==="conflict"||sync==="attention-undiscovered"||String(calendar&&calendar.state||"")==="conflict";
+}
 function calendarWritebackActiveCalendars(status){
   return status&&status.enabled===true&&Array.isArray(status.calendars)
-    ?status.calendars.filter(cal=>cal&&cal.writable===true&&cal.enabled!==false):[];
+    ?status.calendars.filter(cal=>cal&&cal.writable===true&&cal.enabled!==false&&!calendarWritebackCalendarBlocked(cal)):[];
 }
 function calendarWritebackButton(label,kind,run){
   const button=el("button","calendar-writeback-btn "+(kind||""),label);button.type="button";
@@ -48,15 +52,51 @@ function calendarWritebackEventCapability(ev,status){
   const calendars=Array.isArray(status&&status.calendars)?status.calendars:[];
   const calendar=calendars.find(item=>item&&String(item.source||"")===source);
   if(!calendar||calendar.writable!==true)return null;
+  if(calendarWritebackCalendarBlocked(calendar)){
+    const sync=String(calendar.sync||"");
+    return {state:sync==="attention-undiscovered"?"repair-needed":"conflict"};
+  }
   if(status&&status.enabled!==true)return {state:"master-off"};
   if(calendar.enabled===false)return {state:"calendar-off"};
+  const occurrenceMs=Number(cached.occurrenceMs)||Number(ev&&ev.start)||0;
   return {
     state:"ready",
     canEdit:cached.canEdit===true,
-    canSkip:cached.canSkip===true,
+    canOccurrenceEdit:cached.canOccurrenceEdit===true&&occurrenceMs>0,
+    canSeriesEdit:cached.canSeriesEdit===true,
+    canSkip:cached.canSkip===true&&occurrenceMs>0,
+    occurrenceMs,
     canDelete:cached.canEdit===true&&calendar.deleteAllowed===true,
     deleteRequiresPin:cached.canEdit===true&&calendar.deleteAllowed!==true,
   };
+}
+function calendarWritebackRecurringManage(ev,cap){
+  const occurrenceLabel=FMT.popDay.format(new Date(cap.occurrenceMs||+ev.start));
+  popupOpenTransaction({mode:"calendarrecurringmanage",title:"Manage recurring event",when:occurrenceLabel,loading:"Preparing recurring event…"},()=>{
+    const root=el("section","calendar-writeback-recurring");
+    root.appendChild(el("p","calendar-writeback-note","Choose whether this change affects only the selected occurrence or the repeating series."));
+    const occurrence=el("section","calendar-writeback-recurring-scope");
+    occurrence.appendChild(el("h3","","This occurrence"));
+    occurrence.appendChild(el("p","",`${occurrenceLabel} only. Future occurrences stay unchanged.`));
+    const occurrenceActions=el("div","calendar-writeback-action-row");
+    if(cap.canOccurrenceEdit)occurrenceActions.appendChild(calendarWritebackButton("Edit this occurrence","primary",()=>openCalendarEventForm({event:ev,scope:"occurrence",occurrenceMs:cap.occurrenceMs})));
+    if(cap.canSkip)occurrenceActions.appendChild(calendarWritebackButton("Skip this occurrence","",()=>calendarWritebackConfirm(ev,"skip",cap.occurrenceMs)));
+    if(occurrenceActions.childNodes.length)occurrence.appendChild(occurrenceActions);
+    root.appendChild(occurrence);
+    const series=el("section","calendar-writeback-recurring-scope");
+    series.appendChild(el("h3","","Entire series"));
+    if(cap.canSeriesEdit){
+      series.appendChild(el("p","","Change the title, date, time, location, or notes for this simple repeating series. Its repeat rule stays unchanged."));
+      const seriesActions=el("div","calendar-writeback-action-row");
+      seriesActions.appendChild(calendarWritebackButton("Edit entire series","",()=>openCalendarEventForm({event:ev,scope:"series"})));
+      series.appendChild(seriesActions);
+    }else{
+      series.appendChild(el("p","calendar-writeback-note","This series has an advanced repeat pattern. You can change this occurrence here; manage the repeating rule in Google, iCloud, or its original calendar app."));
+    }
+    root.appendChild(series);
+    const back=el("div","calendar-writeback-form-actions");back.appendChild(calendarWritebackButton("Back to event","",()=>showEventPopup(ev)));root.appendChild(back);
+    return root;
+  });
 }
 function calendarWritebackEventActions(ev,token){
   // Eligibility stays in the cache, but the current local writeback registry is
@@ -70,6 +110,14 @@ function calendarWritebackEventActions(ev,token){
     const cap=calendarWritebackEventCapability(ev,status);
     if(!cap){root.remove();return;}
     root.hidden=false;root.replaceChildren();
+    if(cap.state==="conflict"){
+      root.appendChild(el("div","calendar-writeback-note error","This calendar has a sync conflict. Normal event changes are paused to protect both versions; resolve it in Calendar Manager."));
+      return;
+    }
+    if(cap.state==="repair-needed"){
+      root.appendChild(el("div","calendar-writeback-note error","This calendar needs one deliberate connection repair before it can sync. Use Repair connection in Calendar Manager."));
+      return;
+    }
     if(cap.state==="master-off"){
       root.appendChild(el("div","calendar-writeback-note","Dashboard calendar edits are off. Turn them on in Calendar Manager to edit this private calendar."));
       return;
@@ -80,17 +128,18 @@ function calendarWritebackEventActions(ev,token){
     }
     root.appendChild(el("div","calendar-writeback-note","Dashboard edits save locally first. Remote calendar sync follows."));
     const row=el("div","calendar-writeback-action-row");
-    if(cap.canEdit)row.appendChild(calendarWritebackButton("Edit event","",()=>openCalendarEventForm({event:ev})));
-    if(cap.canDelete)row.appendChild(calendarWritebackButton("Delete event","danger",()=>calendarWritebackConfirm(ev,"delete",token)));
-    if(cap.canSkip)row.appendChild(calendarWritebackButton("Skip this occurrence","",()=>calendarWritebackConfirm(ev,"skip",token)));
+    if(cap.canEdit)row.appendChild(calendarWritebackButton("Manage event","primary",()=>openCalendarEventForm({event:ev,scope:"single"})));
+    if(cap.canOccurrenceEdit||cap.canSeriesEdit||cap.canSkip)row.appendChild(calendarWritebackButton("Manage recurring event","primary",()=>calendarWritebackRecurringManage(ev,cap)));
+    if(cap.canDelete)row.appendChild(calendarWritebackButton("Delete event","danger",()=>calendarWritebackConfirm(ev,"delete",0)));
     if(row.childNodes.length)root.appendChild(row);
     if(cap.deleteRequiresPin)root.appendChild(el("div","calendar-writeback-note","Set and unlock a Dashboard Control PIN to allow deleting one-time events."));
   }).catch(()=>{if(root.isConnected)root.remove();});
   return root;
 }
-function calendarWritebackConfirm(ev,action){
+function calendarWritebackConfirm(ev,action,occurrenceMs){
   const skipping=action==="skip", title=skipping?"Skip this occurrence?":"Delete this event?";
-  const copy=skipping?`Skip ${FMT.popDay.format(ev.start)} only. Future occurrences remain unchanged.`:`Delete “${ev.title||"this event"}” from ${ev.cal&&ev.cal.name||"this calendar"}?`;
+  const when=new Date(Number(occurrenceMs)||+ev.start);
+  const copy=skipping?`Skip ${FMT.popDay.format(when)} only. Future occurrences remain unchanged.`:`Delete “${ev.title||"this event"}” from ${ev.cal&&ev.cal.name||"this calendar"}?`;
   popupOpenTransaction({mode:"calendarconfirm",title,when:"Calendar change",loading:"Preparing confirmation…"},()=>{
     const root=el("div","calendar-writeback-confirm");root.appendChild(el("p","",copy));
     const actions=el("div","calendar-writeback-action-row");
@@ -99,7 +148,7 @@ function calendarWritebackConfirm(ev,action){
       try{
         const payload={calUrl:ev.cal&&ev.cal.url||ev.calUrl,uid:ev.uid};
         const path=skipping?"/api/calendar/event/skip-occurrence":"/api/calendar/event/delete";
-        if(skipping)payload.occurrenceMs=+ev.start;
+        if(skipping)payload.occurrenceMs=Number(occurrenceMs)||Number(ev&&ev.writeback&&ev.writeback.occurrenceMs)||+ev.start;
         const result=await calendarWritebackRequest(path,payload);
         if(result.warning)calendarWritebackShowError(root,result.warning);
         await calendarWritebackRefresh();closeScrim();

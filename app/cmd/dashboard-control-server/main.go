@@ -64,7 +64,7 @@ type app struct {
 	writeback                  *writebackpkg.Service
 	writebackSyncMu            sync.Mutex
 	writebackSyncing           bool
-	writebackPending           map[string]string
+	writebackPending           map[string]writebackPendingSync
 	privateCalendarMu          sync.Mutex
 	privateCalendarDiscovering bool
 	mapsInitMu                 sync.Mutex

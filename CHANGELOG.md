@@ -2,6 +2,32 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.10] — 2026-07-03
+
+### Truthful private-sync outcomes and recurring-edit correctness
+
+- Corrected private-calendar sync reporting end to end. The generated wrapper now captures each pair's own vdirsyncer output, classifies the outcome (synced, conflict, emptied-collection guard, missing discovery, rejected credentials), reports it as structured `RESULT` lines to the dashboard's queued sync, and records it in a durable per-pair results file. Previously all vdirsyncer output went only to the log file, so a real conflict was reported to the household as a generic "will retry automatically" and the conflict state was unreachable.
+- Fixed Control-selected calendars never synchronizing: activation now performs the one bounded, noninteractive vdirsyncer discovery its new exact pair requires before the initial targeted sync. Without it, vdirsyncer refused every subsequent sync of a calendar added through Calendar Manager until interactive setup was re-run over SSH.
+- Fixed deleting a calendar's final event permanently wedging its sync on vdirsyncer's emptied-storage guard. A dashboard-initiated delete now carries a one-run `--allow-empty-once` permission that maps to `--force-delete` for exactly that targeted sync; an unexpectedly emptied collection remains blocked and is reported as needing attention instead of retrying forever.
+- Fixed `setup-vdirsyncer.sh --refresh` (which runs automatically after updates) silently re-enabling per-calendar Dashboard edits the user had turned off: the previous registry flags are now read with a JSON parser instead of format-sensitive text matching against the server's indented registry.
+- Corrected recurring series edits to re-render `EXDATE` exclusions onto the same civil days in the new start time, zone, and value form. Previously a series time change orphaned every exclusion and silently resurrected skipped occurrences on the dashboard and on provider clients; the series writer also now enforces the simple-rule boundary itself.
+- Corrected detached-occurrence matching to compare parsed instants rather than exact text, so a provider-written UTC-form `RECURRENCE-ID` over a TZID master is revised in place instead of duplicated, and an existing `RANGE=THISANDFUTURE` override now refuses the edit instead of gaining a conflicting sibling.
+- Calendar event form: an all-day event now displays its inclusive last day and converts to the exclusive contract on save, an edit keeps targeting its own calendar when the cached event carries only `calUrl`, and buttons gained the dashboard's standard press feedback.
+- Integrated cron-originated private-calendar outcomes into Dashboard Control status, using a bounded and strict per-pair result parser so a newer background conflict, missing-discovery, authorization, empty-collection guard, or failure state appears on the affected calendar row without exposing raw vdirsyncer output or provider paths.
+- Added scoped recovery controls for exact selected sources. **Repair connection** runs one targeted discovery and sync for an `attention-undiscovered` pair without broad account discovery or selection changes. A conflict exposes PIN-gated, themed one-shot choices to retain the remote or Dashboard side for that one pair; normal configurations remain conflict-safe, temporary resolver configuration is removed on every exit path, and a bounded owner-only local snapshot is taken before a remote-winner run.
+- Hardened recurring exceptions: Skip refuses an occurrence that already has a detached override, new overrides inherit the master `SEQUENCE`, simple-series forms warn when retained excluded dates may need review after a date move, and vdir lookup prefilters nonmatching items before strict UID parsing while retaining duplicate-UID failure behavior.
+- Made generated shell mirrors match the Go mirror path's atomic CRLF and `0644` output contract; moved shared popup/OSK spacing to the common popup stylesheet; replaced the calendar writeback error note's `color-mix()` dependency with existing theme tokens; and added secret-safe Google versus iCloud/CalDAV authorization guidance.
+
+## [1.5.6-beta.9] — 2026-07-03
+
+### Recurring private-calendar management and truthful updates
+
+- Added a scoped **Manage recurring event** flow for exact editable Google, iCloud, and compatible CalDAV sources. An eligible recurring event can now update one occurrence through a detached `RECURRENCE-ID` exception, or update a deliberately constrained series while retaining its existing repeat rule, exclusions, alarms, and unknown provider properties. Existing exceptions, attendees/organizers, `RDATE`, advanced selectors, and ambiguous provider-managed series remain explicitly read-only with an explanation.
+- Replaced the one-time-event-only primary wording with **Manage event** and added clear **This occurrence**, **Entire series**, and **Skip this occurrence** actions. Each accepted change remains local-first, refreshes only the affected mirror/cache, and queues only the selected vdirsyncer pair.
+- Added strict normal-update planning for SSH and Dashboard Control. Equal releases now exit as a successful no-op, older selected releases never downgrade the device, and the Dashboard API rechecks eligibility before it creates a backup, job, action-history row, systemd request, download, replacement, or browser restart. Explicit repair retains its intentional same-version recovery behavior.
+- Removed the unrelated Open-Meteo internet probe from private-calendar preflight. Calendar setup now verifies connectivity at the actual APT, pipx, Google OAuth/CalDAV, iCloud, or selected CalDAV operation and describes that operation rather than declaring the whole device offline.
+- Added recurrence writer, server capability, installer no-op, update-card, and source-contract regressions; preserved beta.8’s exact-selection, live capability, and one-scroll-root Calendar Manager behavior.
+
 ## [1.5.6-beta.8] — 2026-07-02
 
 ### Selected private calendars and safe two-way management

@@ -30,14 +30,19 @@ if grep -Fq 'Fetching release catalog' "$INSTALL" || grep -Fq 'Fetching release 
   echo 'FAIL: legacy catalog progress wording remains in the installer' >&2
   exit 1
 fi
-payload_block="$(sed -n '/^download_release_payload(){/,/^install_local_release_bundle(){/p' "$INSTALL")"
+# Normal updates now resolve once before the no-op decision and pass that
+# validated metadata into the downloader. The resolve and download phases live
+# in separate helpers by design, so assert their local ordering instead of
+# treating source-file declaration order as execution order.
+resolve_block="$(sed -n '/^download_release_payload(){/,/^install_local_release_bundle(){/p' "$INSTALL")"
+payload_block="$(sed -n '/^download_release_payload_from_resolution(){/,/^download_release_payload(){/p' "$INSTALL")"
 phase_line(){ printf '%s\n' "$payload_block" | grep -n -m1 -F -- "$1" | cut -d: -f1; }
-resolve_at="$(phase_line 'Resolving GitHub Release')"
+resolve_at="$(printf '%s\n' "$resolve_block" | grep -n -m1 -F -- 'Resolving GitHub Release' | cut -d: -f1)"
 download_at="$(phase_line 'Downloading GitHub Release assets')"
 verify_at="$(phase_line 'Verifying GitHub Release assets')"
-[ -n "$resolve_at" ] && [ -n "$download_at" ] && [ -n "$verify_at" ] || { echo 'FAIL: GitHub Release phase ordering tokens are incomplete' >&2; exit 1; }
-[ "$resolve_at" -lt "$download_at" ] && [ "$download_at" -lt "$verify_at" ] || {
-  echo 'FAIL: resolve -> download -> digest verification phases are out of order' >&2
+[ -n "$resolve_at" ] && [ -n "$download_at" ] && [ -n "$verify_at" ] || { echo 'FAIL: GitHub Release phase tokens are incomplete' >&2; exit 1; }
+[ "$download_at" -lt "$verify_at" ] || {
+  echo 'FAIL: download -> digest verification phases are out of order' >&2
   exit 1
 }
 install_block="$(sed -n '/^install_release_payload(){/,/^retain_update_rollback_stage(){/p' "$INSTALL")"

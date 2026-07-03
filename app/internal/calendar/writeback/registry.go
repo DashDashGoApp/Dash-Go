@@ -7,9 +7,11 @@ package writeback
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +47,10 @@ type CalendarState struct {
 	UpdatedAt string `json:"updatedAt"`
 	State     string `json:"state"`
 	Detail    string `json:"detail"`
+	// Sync is a safe, provider-neutral machine state copied from the bounded
+	// vdirsyncer wrapper result file. It is intentionally optional so existing
+	// persisted status envelopes remain valid.
+	Sync string `json:"sync,omitempty"`
 }
 type Status struct {
 	Enabled    bool                     `json:"enabled"`
@@ -220,6 +226,134 @@ func (s *Service) loadStatesLocked() (map[string]CalendarState, map[string]any) 
 	}
 	return states, nil
 }
+
+const (
+	maxSyncResultBytes = 64 * 1024
+	maxSyncResultRows  = 256
+)
+
+type syncOutcome struct {
+	State string
+	At    time.Time
+}
+
+func knownSyncOutcome(value string) bool {
+	switch value {
+	case "synced", "conflict", "attention-empty", "attention-undiscovered", "attention-auth", "failed", "skipped":
+		return true
+	default:
+		return false
+	}
+}
+
+// loadSyncOutcomesLocked reads the wrapper's cron-safe summary rather than its
+// raw log. The file is treated as untrusted input: its size, row count, pair
+// grammar, state vocabulary, and epoch are all bounded before it can affect a
+// Dashboard Control row. Reading status never writes or repairs the file.
+func (s *Service) loadSyncOutcomesLocked(reg Registry) map[string]syncOutcome {
+	byPair := map[string]string{}
+	for _, calendar := range reg.Calendars {
+		if calendar.Writable && validPair(calendar.Pair) && validSource(calendar.Source) {
+			byPair[calendar.Pair] = calendar.Source
+		}
+	}
+	if len(byPair) == 0 {
+		return map[string]syncOutcome{}
+	}
+	file, err := os.Open(filepath.Join(s.vdirHome, "last-sync-results"))
+	if err != nil {
+		return map[string]syncOutcome{}
+	}
+	defer file.Close()
+	bytes, err := io.ReadAll(io.LimitReader(file, maxSyncResultBytes+1))
+	if err != nil || len(bytes) > maxSyncResultBytes {
+		return map[string]syncOutcome{}
+	}
+	out := map[string]syncOutcome{}
+	rows := 0
+	for _, line := range strings.Split(string(bytes), "\n") {
+		if rows >= maxSyncResultRows {
+			break
+		}
+		rows++
+		parts := strings.Split(strings.TrimSpace(line), "|")
+		if len(parts) != 3 {
+			continue
+		}
+		pair, state := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if !validPair(pair) || !knownSyncOutcome(state) {
+			continue
+		}
+		source, ok := byPair[pair]
+		if !ok {
+			continue
+		}
+		epoch, err := strconv.ParseInt(strings.TrimSpace(parts[2]), 10, 64)
+		if err != nil || epoch <= 0 {
+			continue
+		}
+		at := time.Unix(epoch, 0).UTC()
+		if previous, exists := out[source]; !exists || at.After(previous.At) {
+			out[source] = syncOutcome{State: state, At: at}
+		}
+	}
+	return out
+}
+
+func calendarStateTime(value CalendarState) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, strings.TrimSpace(value.UpdatedAt)); err == nil {
+			return parsed.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+func outcomePresentation(outcome string, provider string) (state, detail, sync string) {
+	sync = outcome
+	providerName := "The calendar provider"
+	if provider == "google" {
+		providerName = "Google"
+	} else if provider == "caldav" {
+		providerName = "The calendar server"
+	}
+	switch outcome {
+	case "synced":
+		return "synced", "The last scheduled private-calendar sync completed.", sync
+	case "conflict":
+		return "conflict", "Dash-Go and the remote calendar changed before the last sync. Nothing was overwritten. Resolve this calendar before syncing normally again.", sync
+	case "attention-undiscovered":
+		return "attention", "This selected calendar needs one deliberate connection repair before it can sync.", sync
+	case "attention-empty":
+		return "attention", "This local calendar became unexpectedly empty. Sync is paused to protect remote events.", sync
+	case "attention-auth":
+		return "attention", providerName + " rejected this calendar's authorization. Reconnect it through private-calendar setup, then sync again.", sync
+	case "skipped":
+		return "attention", providerName + " authorization is required before this calendar can sync.", sync
+	case "failed":
+		return "waiting", "The last scheduled private-calendar sync failed safely. Existing dashboard events were kept.", sync
+	default:
+		return "", "", ""
+	}
+}
+
+func (s *Service) mergeSyncOutcomesLocked(reg Registry, states map[string]CalendarState) {
+	providerBySource := map[string]string{}
+	for _, calendar := range reg.Calendars {
+		providerBySource[calendar.Source] = calendar.Provider
+	}
+	for source, outcome := range s.loadSyncOutcomesLocked(reg) {
+		if existing, ok := states[source]; ok && !outcome.At.After(calendarStateTime(existing)) {
+			continue
+		}
+		state, detail, sync := outcomePresentation(outcome.State, providerBySource[source])
+		if state == "" {
+			continue
+		}
+		states[source] = CalendarState{UpdatedAt: outcome.At.Format(time.RFC3339), State: state, Detail: detail, Sync: sync}
+	}
+}
+
 func (s *Service) Status() (Status, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -230,6 +364,7 @@ func (s *Service) Status() (Status, error) {
 	rows := append([]Calendar(nil), reg.Calendars...)
 	slices.SortFunc(rows, func(a, b Calendar) int { return strings.Compare(strings.ToLower(a.Source), strings.ToLower(b.Source)) })
 	states, last := s.loadStatesLocked()
+	s.mergeSyncOutcomesLocked(reg, states)
 	return Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: rows, States: states, Last: last}, nil
 }
 
@@ -273,6 +408,26 @@ func (s *Service) RequirePIN() bool {
 	reg, err := s.loadLocked()
 	return err == nil && reg.Enabled && reg.RequirePIN
 }
+
+// RegisteredCalendar resolves a trusted exact private source without requiring
+// the global Dashboard edit switch. Recovery paths such as conflict resolution
+// and connection repair must remain available even when ordinary event editing
+// has been temporarily turned off.
+func (s *Service) RegisteredCalendar(source string) (Calendar, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reg, err := s.loadLocked()
+	if err != nil {
+		return Calendar{}, err
+	}
+	source = filepath.ToSlash(source)
+	for _, item := range reg.Calendars {
+		if item.Source == source && item.Writable && validPair(item.Pair) {
+			return item, nil
+		}
+	}
+	return Calendar{}, errors.New("selected private calendar is no longer registered")
+}
 func (s *Service) Resolve(source string) (Calendar, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -310,6 +465,7 @@ func (s *Service) Configure(enabled, requirePIN bool, requested map[string]bool)
 		return Status{}, err
 	}
 	states, last := s.loadStatesLocked()
+	s.mergeSyncOutcomesLocked(reg, states)
 	return Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: append([]Calendar(nil), reg.Calendars...), States: states, Last: last}, nil
 }
 func (s *Service) Record(source, state, detail string) {

@@ -143,7 +143,24 @@ func (s *Service) serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[s
 	// control change cannot strand a previously cached event without actions.
 	if s.knownWritebackSource(cal.URL) && owner == "" && uid != "" && !ev.HasScheduling {
 		canEdit := !ev.Recur && ev.RecurID == nil
-		item["writeback"] = map[string]any{"candidate": true, "canEdit": canEdit, "canSkip": ev.Recur && ev.RecurID == nil}
+		canOccurrence := ev.Recur || ev.RecurID != nil
+		occurrenceMS := startMs
+		if ev.RecurID != nil {
+			occurrenceMS = *ev.RecurID
+		}
+		seriesRule := false
+		if ev.Recur && ev.RecurID == nil {
+			seriesRule = simpleSeriesRule(ev)
+		}
+		item["writeback"] = map[string]any{
+			"candidate":         true,
+			"canEdit":           canEdit,
+			"canOccurrenceEdit": canOccurrence,
+			"canSeriesEdit":     seriesRule,
+			"canSkip":           ev.Recur && ev.RecurID == nil,
+			"hasExclusions":     len(ev.Exdates) > 0 || len(ev.ExdateDays) > 0,
+			"occurrenceMs":      occurrenceMS,
+		}
 	}
 	if owner != "" {
 		item["appOwner"] = owner
@@ -158,6 +175,29 @@ func (s *Service) serializeEvent(ev ICSEvent, cal CalendarSource, idx int) map[s
 		}
 	}
 	return item
+}
+
+// simpleSeriesRule matches the deliberate server-side series-edit scope. The
+// full RRULE remains untouched during a field edit; selector-heavy or RDATE
+// series can still manage one occurrence but stay provider-managed as series.
+func simpleSeriesRule(ev ICSEvent) bool {
+	if strings.TrimSpace(ev.RRule) == "" || len(ev.Rdates) != 0 {
+		return false
+	}
+	rule := parseRRule(ev.RRule)
+	for key := range rule {
+		switch key {
+		case "FREQ", "INTERVAL", "COUNT", "UNTIL":
+		default:
+			return false
+		}
+	}
+	switch rule["FREQ"] {
+	case "DAILY", "WEEKLY", "MONTHLY", "YEARLY":
+		return true
+	default:
+		return false
+	}
 }
 
 func compareInt64(left, right int64) int {

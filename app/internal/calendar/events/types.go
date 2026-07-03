@@ -9,8 +9,8 @@ import "time"
 // CacheVersion advances when recurrence expansion semantics change. A previous
 // cache remains structurally readable, but must be rebuilt before it can be
 // reused with the current parser.
-const CacheVersion = 8
-const FingerprintVersion = 6
+const CacheVersion = 9
+const FingerprintVersion = 7
 const maxRecurrenceSteps = 50000
 
 // CalendarSource is the stable source descriptor persisted inside

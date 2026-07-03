@@ -1,6 +1,7 @@
 package writeback
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -71,6 +72,58 @@ func (s *Service) Update(source, uid string, event icalwrite.Event) (Result, err
 	}
 	return Result{Source: cal.Source, UID: uid, Action: "updated", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
 }
+func (s *Service) UpdateSeries(source, uid string, event icalwrite.Event) (Result, error) {
+	cal, err := s.Resolve(source)
+	if err != nil {
+		return Result{}, err
+	}
+	if strings.TrimSpace(uid) == "" {
+		return Result{}, errors.New("event identifier required")
+	}
+	path, src, err := s.findItem(cal, uid)
+	if err != nil {
+		return Result{}, err
+	}
+	event.UID = uid
+	if !icalwrite.SeriesEditable(src, uid) {
+		return Result{}, errors.New("this repeating schedule uses an advanced repeat pattern; manage the series in its calendar app")
+	}
+	body, err := icalwrite.ApplySeriesEdit(src, event, s.now())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := fileio.WriteAtomic(path, []byte(body), 0600); err != nil {
+		return Result{}, fmt.Errorf("save recurring series: %w", err)
+	}
+	return Result{Source: cal.Source, UID: uid, Action: "series-updated", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
+}
+
+func (s *Service) UpdateOccurrence(source, uid string, occurrence time.Time, event icalwrite.Event) (Result, error) {
+	cal, err := s.Resolve(source)
+	if err != nil {
+		return Result{}, err
+	}
+	if strings.TrimSpace(uid) == "" || occurrence.IsZero() {
+		return Result{}, errors.New("calendar occurrence required")
+	}
+	path, src, err := s.findItem(cal, uid)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := icalwrite.ValidateOccurrenceTarget(src, uid, occurrence); err != nil {
+		return Result{}, err
+	}
+	event.UID = uid
+	body, err := icalwrite.ApplyOccurrenceEdit(src, uid, occurrence, event, s.now())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := fileio.WriteAtomic(path, []byte(body), 0600); err != nil {
+		return Result{}, fmt.Errorf("save calendar occurrence: %w", err)
+	}
+	return Result{Source: cal.Source, UID: uid, Action: "occurrence-updated", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
+}
+
 func (s *Service) Delete(source, uid string) (Result, error) {
 	cal, err := s.Resolve(source)
 	if err != nil {
@@ -100,6 +153,11 @@ func (s *Service) SkipOccurrence(source, uid string, occurrence time.Time) (Resu
 	if err != nil {
 		return Result{}, err
 	}
+	if overridden, err := icalwrite.OccurrenceHasOverride(src, uid, occurrence); err != nil {
+		return Result{}, err
+	} else if overridden {
+		return Result{}, errors.New("this occurrence already has a custom change; edit this occurrence instead")
+	}
 	body, err := icalwrite.AppendExdate(src, occurrence, false, s.now())
 	if err != nil {
 		return Result{}, err
@@ -123,24 +181,32 @@ func (s *Service) findItem(cal Calendar, uid string) (string, string, error) {
 	if strings.TrimSpace(uid) == "" || strings.ContainsAny(uid, "/\\\r\n") {
 		return "", "", errors.New("invalid event identifier")
 	}
-	candidate := filepath.Join(cal.Collection, uid+".ics")
-	if body, err := safeReadItem(candidate); err == nil && icalwrite.UID(string(body)) == uid {
-		return candidate, string(body), nil
-	}
+	// Do not trust the conventional <UID>.ics filename as unique. Providers may
+	// choose different filenames, and a duplicate UID must fail closed rather
+	// than letting a recurrence edit touch whichever file happens to be first.
 	files, err := collectionFiles(cal.Collection)
 	if err != nil {
 		return "", "", err
 	}
+	var foundPath, foundBody string
+	needle := []byte(uid)
 	for _, path := range files {
 		body, err := safeReadItem(path)
-		if err != nil {
+		// Avoid full iCalendar parsing for the overwhelming majority of unrelated
+		// vdir items. A byte match is only a prefilter: every possible match still
+		// passes HasUID, preserving the existing duplicate-UID fail-closed rule.
+		if err != nil || !bytes.Contains(body, needle) || !icalwrite.HasUID(string(body), uid) {
 			continue
 		}
-		if icalwrite.UID(string(body)) == uid {
-			return path, string(body), nil
+		if foundPath != "" {
+			return "", "", errors.New("calendar event identifier is ambiguous")
 		}
+		foundPath, foundBody = path, string(body)
 	}
-	return "", "", errors.New("calendar event is no longer available")
+	if foundPath == "" {
+		return "", "", errors.New("calendar event is no longer available")
+	}
+	return foundPath, foundBody, nil
 }
 func safeReadItem(path string) ([]byte, error) {
 	info, err := os.Lstat(path)

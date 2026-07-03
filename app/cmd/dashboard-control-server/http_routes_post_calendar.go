@@ -41,7 +41,7 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 		}
 		moon := a.generateMoonCalendar(true)
 		a.json(w, map[string]any{"ok": true, "lat": lat, "lon": lon, "city": city, "moon": moon, "generator": "go"})
-	case "/api/calendar/event/create", "/api/calendar/event/update", "/api/calendar/event/delete", "/api/calendar/event/skip-occurrence":
+	case "/api/calendar/event/create", "/api/calendar/event/update", "/api/calendar/event/occurrence/update", "/api/calendar/event/series/update", "/api/calendar/event/delete", "/api/calendar/event/skip-occurrence":
 		result, err := a.handleCalendarWritebackMutation(path, body)
 		if err != nil {
 			code := http.StatusBadRequest
@@ -94,7 +94,33 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 	case "/api/calendars/private/sync":
 		result, err := a.syncPrivateCalendar(body)
 		if err != nil {
-			a.err(w, err.Error(), http.StatusBadRequest)
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "already running") {
+				code = http.StatusConflict
+			}
+			a.err(w, err.Error(), code)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/repair":
+		result, err := a.repairPrivateCalendar(body)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "already running") {
+				code = http.StatusConflict
+			}
+			a.err(w, err.Error(), code)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/resolve":
+		result, err := a.resolvePrivateCalendarConflict(body)
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "already running") {
+				code = http.StatusConflict
+			}
+			a.err(w, err.Error(), code)
 			return true
 		}
 		a.json(w, result)

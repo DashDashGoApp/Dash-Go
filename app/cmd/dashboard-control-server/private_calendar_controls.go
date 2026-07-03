@@ -202,6 +202,12 @@ func (a *app) privateCalendarStatus() map[string]any {
 				row["state"] = state["state"]
 				row["detail"] = state["detail"]
 				row["updatedAt"] = state["updatedAt"]
+				if state["deleteAllowed"] != nil {
+					row["deleteAllowed"] = state["deleteAllowed"]
+				}
+				if state["sync"] != nil {
+					row["sync"] = state["sync"]
+				}
 			}
 		}
 		candidates = append(candidates, row)
@@ -213,6 +219,12 @@ func (a *app) privateCalendarStatus() map[string]any {
 			row["state"] = state["state"]
 			row["detail"] = state["detail"]
 			row["updatedAt"] = state["updatedAt"]
+			if state["deleteAllowed"] != nil {
+				row["deleteAllowed"] = state["deleteAllowed"]
+			}
+			if state["sync"] != nil {
+				row["sync"] = state["sync"]
+			}
 		}
 		selectedRows = append(selectedRows, row)
 	}

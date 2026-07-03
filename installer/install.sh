@@ -137,6 +137,37 @@ version_at_least(){
   [ -z "$fbeta" ] && return 1
   ((10#$cbeta >= 10#$fbeta))
 }
+
+# release_version_relation compares candidate against installed Dash-Go versions.
+# It prints one of newer, equal, or older. Stable releases sort after prereleases
+# with the same numeric base (for example 1.5.6 > 1.5.6-beta.9). Invalid values
+# deliberately fail closed so a damaged install uses the verified recovery path.
+release_version_relation(){
+  local candidate="$1" installed="$2" cmaj cmin cpatch cbeta imaj imin ipatch ibeta index c i
+  [[ "$candidate" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]] || return 2
+  cmaj="${BASH_REMATCH[1]}"; cmin="${BASH_REMATCH[2]}"; cpatch="${BASH_REMATCH[3]}"; cbeta="${BASH_REMATCH[5]:-}"
+  [[ "$installed" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]] || return 2
+  imaj="${BASH_REMATCH[1]}"; imin="${BASH_REMATCH[2]}"; ipatch="${BASH_REMATCH[3]}"; ibeta="${BASH_REMATCH[5]:-}"
+  for index in 1 2 3; do
+    case "$index" in
+      1) c="$cmaj"; i="$imaj";;
+      2) c="$cmin"; i="$imin";;
+      *) c="$cpatch"; i="$ipatch";;
+    esac
+    if ((10#$c > 10#$i)); then printf 'newer\n'; return 0; fi
+    if ((10#$c < 10#$i)); then printf 'older\n'; return 0; fi
+  done
+  if [ -z "$cbeta" ] && [ -n "$ibeta" ]; then printf 'newer\n'; return 0; fi
+  if [ -n "$cbeta" ] && [ -z "$ibeta" ]; then printf 'older\n'; return 0; fi
+  if [ -z "$cbeta" ]; then printf 'equal\n'; return 0; fi
+  if ((10#$cbeta > 10#$ibeta)); then printf 'newer\n'; return 0; fi
+  if ((10#$cbeta < 10#$ibeta)); then printf 'older\n'; return 0; fi
+  printf 'equal\n'
+}
+
+valid_release_version(){
+  [[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]
+}
 updater_capability_query_is_safe(){
   version_at_least "$(installed_dashboard_version)" "$UPDATER_CAPABILITY_FLOOR"
 }
@@ -1280,6 +1311,7 @@ update_exit_cleanup(){
     warn "update ended while the kiosk was paused; releasing the Dash-Go kiosk pause marker"
     resume_kiosk_after_runtime_transition
   fi
+  update_plan_cleanup || true
   return "$rc"
 }
 
@@ -2912,12 +2944,120 @@ validate_github_release_resolution(){
   return 0
 }
 
-download_release_payload(){
-  local target="${1:-latest}" work meta version release_name sums_name release_url sums_url release_digest sums_digest release_file sums_file sums_expected
-  work="$(mktemp -d "$DASH/.github-release.XXXXXX")" || return 1
-  meta="$work/resolved-release.json"
-  write_update_phase validating-payload "Resolving GitHub Release" "Resolving the newest eligible immutable GitHub Release for the selected $RELEASE_TRACK track using bounded ETag metadata caching. No package has been downloaded or installed yet."
+# update_plan_cleanup removes only the short-lived resolved metadata used by one
+# locked update attempt. It never touches GitHub's bounded ETag cache or any
+# staged release/rollback evidence.
+update_plan_cleanup(){
+  if [ -n "${UPDATE_PLAN_DIR:-}" ] && [ -d "$UPDATE_PLAN_DIR" ]; then rm -rf "$UPDATE_PLAN_DIR"; fi
+  UPDATE_PLAN_DIR=""; UPDATE_PLAN_META=""; UPDATE_PLAN_KIND=""; UPDATE_PLAN_VERSION=""; UPDATE_PLAN_COMPARISON=""; UPDATE_PLAN_NOOP=0
+}
+
+update_plan_local_bundle(){
+  local target="${1:-latest}" version
+  [ -f "$INSTALLER_SOURCE_DIR/app/index.html" ] || return 1
+  [ -f "$INSTALLER_SOURCE_DIR/app/manifest.json" ] || return 1
+  version="$(bundle_release_version 2>/dev/null || true)"
+  valid_release_version "$version" || return 1
+  [ "$target" = "latest" ] || [ "$target" = "$version" ] || return 1
+  UPDATE_PLAN_KIND="local"; UPDATE_PLAN_VERSION="$version"
+  return 0
+}
+
+update_plan_github_release(){
+  local target="${1:-latest}" meta
+  mkdir -p "$DASH" "$CACHE_DIR" 2>/dev/null || return 1
+  UPDATE_PLAN_DIR="$(mktemp -d "$CACHE_DIR/.update-release-plan.XXXXXX")" || return 1
+  meta="$UPDATE_PLAN_DIR/resolved-release.json"
   if ! resolve_github_release "$meta" "$target" || ! validate_github_release_resolution "$meta" "$target"; then
+    rm -rf "$UPDATE_PLAN_DIR"; UPDATE_PLAN_DIR=""; return 1
+  fi
+  UPDATE_PLAN_KIND="github"; UPDATE_PLAN_META="$meta"; UPDATE_PLAN_VERSION="$(json_field "$meta" version 2>/dev/null || true)"
+  valid_release_version "$UPDATE_PLAN_VERSION" || { update_plan_cleanup; return 1; }
+  return 0
+}
+
+# plan_normal_update_candidate resolves once while the shared update lock is
+# held, then decides whether a strictly newer payload exists. A newer local
+# bundle remains usable offline; an equal/older local bundle is never applied
+# and falls through to the selected immutable GitHub Release. The private
+# DASHGO_INSTALLER_SMOKE switch is builder-only and permits package validation
+# of a same-version local bundle; it is not exposed by any user-facing flag.
+plan_normal_update_candidate(){
+  local target="${1:-latest}" installed relation local_kind=""
+  update_plan_cleanup
+  installed="$(installed_dashboard_version)"
+  UPDATE_PREVIOUS_VERSION="$installed"
+  DASH_INSTALLED_VERSION="$installed"
+  export UPDATE_PREVIOUS_VERSION DASH_INSTALLED_VERSION
+
+  if update_plan_local_bundle "$target"; then
+    local_kind="$UPDATE_PLAN_KIND"
+    if [ "${DASHGO_INSTALLER_SMOKE:-0}" = "1" ]; then
+      UPDATE_PLAN_COMPARISON="smoke-same-version"
+      return 0
+    fi
+    relation="$(release_version_relation "$UPDATE_PLAN_VERSION" "$installed" 2>/dev/null || true)"
+    if [ -z "$relation" ]; then
+      # A damaged/missing installed VERSION is a recovery case; a verified
+      # local release bundle may safely restore it.
+      UPDATE_PLAN_COMPARISON="invalid-installed"
+      return 0
+    fi
+    if [ "$relation" = "newer" ]; then
+      UPDATE_PLAN_COMPARISON="$relation"
+      return 0
+    fi
+    # Do not use equal/older local bytes. Retain no plan so GitHub can provide
+    # a newer eligible selected-track release when the network is available.
+    local_kind="$UPDATE_PLAN_KIND"
+    UPDATE_PLAN_KIND=""; UPDATE_PLAN_VERSION=""; UPDATE_PLAN_COMPARISON="$relation"
+  fi
+
+  if ! update_plan_github_release "$target"; then
+    [ -n "$local_kind" ] && warn "the local Dash-Go release bundle is not newer, and canonical GitHub Release discovery did not complete"
+    return 1
+  fi
+  relation="$(release_version_relation "$UPDATE_PLAN_VERSION" "$installed" 2>/dev/null || true)"
+  if [ -z "$relation" ]; then
+    UPDATE_PLAN_COMPARISON="invalid-installed"
+    return 0
+  fi
+  UPDATE_PLAN_COMPARISON="$relation"
+  if [ "$relation" = "newer" ]; then return 0; fi
+  UPDATE_PLAN_NOOP=1
+  return 0
+}
+
+record_no_update_needed(){
+  local installed="$1" candidate="$2" relation="$3" label detail
+  if [ "$relation" = "older" ]; then
+    label="Installed version is newer"
+    detail="Installed ${installed}; selected ${RELEASE_TRACK} release ${candidate} is older. Dash-Go will not downgrade, download, replace files, restart services, or recycle the kiosk."
+  else
+    label="Already up to date"
+    detail="Installed ${installed}; selected ${RELEASE_TRACK} release ${candidate} is the same version. No download, replacement, restart, or dashboard refresh was performed."
+  fi
+  UPDATE_TARGET="$candidate"
+  DASH_INSTALLED_VERSION="$installed"
+  export UPDATE_TARGET DASH_INSTALLED_VERSION
+  write_update_status no-update "$label" "$detail" 0 || true
+  # Dashboard Control normally blocks a no-op before creating a job. This
+  # terminal record handles only a stale/racing Control request already handed
+  # to the dedicated runner, so its linked action can finish truthfully.
+  if [ "${DASH_UPDATE_SOURCE:-ssh}" = "control" ] && [ -n "${DASH_UPDATE_JOB_ID:-}" ]; then
+    write_update_job no-update "$label" "$detail" 0 || true
+  fi
+  say "$label"
+  ok "$detail"
+}
+
+# Download/install from a previously validated resolution so normal updates do
+# not resolve GitHub metadata a second time after the no-op decision.
+download_release_payload_from_resolution(){
+  local meta="$1" target="${2:-latest}" work version release_name sums_name release_url sums_url release_digest sums_digest release_file sums_file sums_expected
+  [ -r "$meta" ] || return 1
+  work="$(mktemp -d "$DASH/.github-release.XXXXXX")" || return 1
+  if ! validate_github_release_resolution "$meta" "$target"; then
     warn "canonical GitHub Release resolution failed for the selected $RELEASE_TRACK track"
     rm -rf "$work"; return 1
   fi
@@ -2944,6 +3084,20 @@ download_release_payload(){
   fi
   if install_release_payload "$release_file" "$version"; then rm -rf "$work"; return 0; fi
   rm -rf "$work"; return 1
+}
+
+download_release_payload(){
+  local target="${1:-latest}" plan_dir meta rc
+  plan_dir="$(mktemp -d "$CACHE_DIR/.adhoc-release-plan.XXXXXX")" || return 1
+  meta="$plan_dir/resolved-release.json"
+  write_update_phase validating-payload "Resolving GitHub Release" "Resolving the newest eligible immutable GitHub Release for the selected $RELEASE_TRACK track using bounded ETag metadata caching. No package has been downloaded or installed yet."
+  if ! resolve_github_release "$meta" "$target"; then
+    warn "canonical GitHub Release resolution failed for the selected $RELEASE_TRACK track"
+    rm -rf "$plan_dir"; return 1
+  fi
+  download_release_payload_from_resolution "$meta" "$target"; rc=$?
+  rm -rf "$plan_dir"
+  return "$rc"
 }
 
 install_local_release_bundle(){
@@ -2975,6 +3129,14 @@ repair_bundle_recovery_recipe(){
 download_app_files(){
   local target="${1:-latest}"
   RELEASE_PAYLOAD_FATAL=0
+  case "${UPDATE_PLAN_KIND:-}" in
+    local) install_local_release_bundle "$target" && return 0 ;;
+    github) download_release_payload_from_resolution "${UPDATE_PLAN_META:-}" "$target" && return 0 ;;
+  esac
+  if [ -n "${UPDATE_PLAN_KIND:-}" ]; then
+    warn "the selected update candidate could not be staged or verified; the running dashboard was left unchanged"
+    return 1
+  fi
   if install_local_release_bundle "$target"; then return 0; fi
   download_release_payload "$target" && return 0
   warn "GitHub Release update failed; staged verification did not complete and the running dashboard was left unchanged"
@@ -4348,8 +4510,10 @@ fi
 # dash-go-update.service, outside dashboard-server.service. Direct SSH updates
 # take the same lock and write the same durable job/status records.
 if [ "$UPDATE_MODE" = "1" ]; then
-  start_update_logging
-  trap 'update_exit_cleanup "$?"' EXIT
+  # Resolve and compare while holding the same flock used for the destructive
+  # transaction. A direct SSH update therefore cannot race a second invocation
+  # into reinstalling an equal release, and a no-op never creates the normal
+  # update log, payload stage, data refresh, or kiosk restart.
   if ! require_update_compatibility_tools; then
     write_update_status failed "Updater preflight failed" "The installed updater is missing a required compatibility tool; no release files were changed." 1 || true
     write_update_job failed "Updater preflight failed" "The installed updater is missing a required compatibility tool; no release files were changed." 1 || true
@@ -4369,16 +4533,37 @@ if [ "$UPDATE_MODE" = "1" ]; then
     if [ "${DASH_UPDATE_SOURCE:-ssh}" = "control" ]; then
       DASH_UPDATE_JOB_ID="$(read_dashboard_update_job_id)"
     fi
-    [ -n "${DASH_UPDATE_JOB_ID:-}" ] || DASH_UPDATE_JOB_ID="ssh-$(date +%s)-$$"
+    # The outer branch has already established that no job ID was supplied.
+    # A Dashboard Control caller may have had no durable job ID yet, so use an
+    # SSH-style locally unique fallback without putting an assignment inside
+    # a test expression.
+    DASH_UPDATE_JOB_ID="${DASH_UPDATE_JOB_ID:-ssh-$(date +%s)-$$}"
     export DASH_UPDATE_JOB_ID
   fi
-  write_update_status running "Starting update" "Safety backup is ready; the dedicated updater is preparing the selected release." 0 || true
-  write_update_job running "Starting update" "Safety backup is ready; the dedicated updater is preparing the selected release." 0 || true
+  mkdir -p "$DASH" "$CACHE_DIR" || { warn "cannot prepare the Dash-Go update workspace"; exit 1; }
+  if ! plan_normal_update_candidate "$UPDATE_TARGET"; then
+    write_update_status failed "Release check failed" "The selected release could not be resolved and no live release files were changed." 1 || true
+    if [ "${DASH_UPDATE_SOURCE:-ssh}" = "control" ]; then write_update_job failed "Release check failed" "The selected release could not be resolved and no live release files were changed." 1 || true; fi
+    warn "could not resolve the selected Dash-Go release before update"
+    update_plan_cleanup || true
+    exit 1
+  fi
+  if [ "${UPDATE_PLAN_NOOP:-0}" = "1" ]; then
+    record_no_update_needed "$UPDATE_PREVIOUS_VERSION" "$UPDATE_PLAN_VERSION" "$UPDATE_PLAN_COMPARISON"
+    update_plan_cleanup || true
+    exit 0
+  fi
+  # A verified recovery candidate is allowed only when VERSION is missing or
+  # malformed. Normal valid installs reach this point only for a strict upgrade.
+  UPDATE_TARGET="$UPDATE_PLAN_VERSION"
+  export UPDATE_TARGET
+  start_update_logging
+  trap 'update_exit_cleanup "$?"' EXIT
+  write_update_status running "Starting update" "A newer selected release was confirmed; preparing the verified update transaction." 0 || true
+  write_update_job running "Starting update" "A newer selected release was confirmed; preparing the verified update transaction." 0 || true
 
   say "Unattended update from canonical GitHub Releases ($RELEASE_TRACK track, $UPDATE_TARGET)"
-  mkdir -p "$DASH"
   cd "$DASH" || { write_update_status failed "Failed" "Cannot enter $DASH." 1; write_update_job failed "Failed" "Cannot enter $DASH." 1; warn "cannot enter $DASH"; exit 1; }
-  UPDATE_PREVIOUS_VERSION="$(cat "$DASH/VERSION" 2>/dev/null | head -1 || true)"
   if [ "${DASHGO_INSTALLER_SMOKE:-0}" != 1 ]; then DASH_UPDATE_RUNTIME_ROLLBACK=1; export DASH_UPDATE_RUNTIME_ROLLBACK; fi
   if ! download_app_files "$UPDATE_TARGET"; then
     write_update_status failed "Release validation failed" "The selected release could not be downloaded or verified; no live release files were changed." 1 || true
@@ -4419,7 +4604,6 @@ if [ "$UPDATE_MODE" = "1" ]; then
     rollback_update_runtime_failure "The newly installed local server did not become ready before the bounded deadline." || true
     exit 1
   fi
-
   resume_kiosk_after_runtime_transition
   write_update_status recycling-browser "Recycling dashboard display" "The updated local server is ready; restarting the kiosk browser." 0 || true
   write_update_job recycling-browser "Recycling dashboard display" "The updated local server is ready; restarting the kiosk browser." 0 || true
@@ -4437,7 +4621,7 @@ if [ "$UPDATE_MODE" = "1" ]; then
     exit 1
   fi
   DASH_UPDATE_HEALTH_CHECKED=1 write_update_status success "Update complete" "Installed ${DASH_INSTALLED_VERSION:-latest}; runtime and bounded post-update health checks passed." 0 || true
-  write_update_job success "Update complete" "Installed ${DASH_INSTALLED_VERSION:-latest}; runtime and bounded post-update health checks passed." 0 || true
+  DASH_UPDATE_HEALTH_CHECKED=1 write_update_job success "Update complete" "Installed ${DASH_INSTALLED_VERSION:-latest}; runtime and bounded post-update health checks passed." 0 || true
   ok "update complete — local runtime and post-update health checks passed"
   exit 0
 fi
@@ -4461,13 +4645,12 @@ run_interactive_preflight(){
       PREFLIGHT_OK=0
     fi
   done
-  # Internet: needed for downloads, weather, and calendar sync.
-  if curl -fsSL --max-time 8 -A "$UA" "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m" >/dev/null 2>&1; then
-    ok "internet connection works"
-  else
-    warn "couldn't reach the internet. Check WiFi/network and try again."
-    if [ "$IS_PI" = "1" ]; then warn "On Raspberry Pi OS: sudo raspi-config > System > Wireless LAN may help."; fi
-    warn "Continuing anyway in case only that one site is down."
+  # Do not use an unrelated weather provider as a generic connectivity test.
+  # Each selected workflow verifies its own real dependency at the operation
+  # that needs it, so a blocked Open-Meteo endpoint cannot falsely report that
+  # Google, iCloud, APT, or the device internet connection is unavailable.
+  if [ "${DO_VDIR:-0}" = "1" ]; then
+    echo "  Private calendar setup will verify the selected provider when you choose Google, iCloud, or CalDAV."
   fi
   # Disk space: a full install + system update wants a bit of headroom.
   FREE_MB="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"

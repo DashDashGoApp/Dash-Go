@@ -153,6 +153,8 @@ func updateActionTerminalDetail(job map[string]any) string {
 		return "The update did not pass verification; the prior release was restored."
 	case "failed":
 		return "The update failed. Review the update log for the retained transaction evidence."
+	case "no-update":
+		return "No newer release was available; no backup, download, replacement, restart, or kiosk recycle was performed."
 	default:
 		return "Update finished with an unrecognized terminal state. Review the update log."
 	}
@@ -160,7 +162,7 @@ func updateActionTerminalDetail(job map[string]any) string {
 
 func updateActionTerminal(state string) bool {
 	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "success", "rolledback", "failed":
+	case "success", "rolledback", "failed", "no-update":
 		return true
 	default:
 		return false

@@ -261,7 +261,7 @@ body.ctrl-lite #ctrlcals .calchip{
 #ctrl .actiongroup-grid,#ctrl .ctrlrow.compact{gap:8px;}
 #ctrl details.ctrlsec > summary{min-height:48px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 
-/* 1.5.6-beta.8: Calendar Manager extends the Calendar Control page instead of
+/* 1.5.6-beta.9: Calendar Manager extends the Calendar Control page instead of
    becoming a stack of independently scrolling panes. The visible Calendar page
    is the one vertical scroll root; groups are ordinary static content. */
 #ctrlcals .calmanager-top-actions{margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
@@ -284,6 +284,8 @@ body.ctrl-lite #ctrlcals .calchip{
 #ctrlcals .calmanager-actions .cbtn.actionbtn .bt{font-size:15px;line-height:1.12;}
 #ctrlcals .calmanager-actions .cbtn.actionbtn .bd{font-size:12px;line-height:1.22;}
 #ctrlcals .calmanager-actions .calmanager-stop{border-color:rgba(255,213,138,.34);}
+#ctrlcals .calmanager-conflict-options{display:grid;gap:10px;padding:12px;border:1px solid var(--danger);border-radius:12px;background:var(--panel);}
+#ctrlcals .calmanager-conflict-options .calmanager-actions{margin:0;}
 #ctrlcals .caltrash{display:grid;gap:10px;}
 #ctrlcals .caltrash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px dashed var(--line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);}
 #ctrlcals .caltrash-copy{display:grid;gap:4px;min-width:0;}

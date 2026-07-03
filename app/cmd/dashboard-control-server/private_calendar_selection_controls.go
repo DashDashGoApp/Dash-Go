@@ -156,7 +156,10 @@ func (a *app) syncPrivateCalendar(body map[string]any) (map[string]any, error) {
 		if selection.Source != source {
 			continue
 		}
-		a.queueCalendarWritebackSync(selection.Source, selection.Pair)
+		if err := a.calendarWritebackSourceBlocked(selection.Source); err != nil {
+			return nil, err
+		}
+		a.queueCalendarWritebackSync(selection.Source, selection.Pair, false)
 		a.recordAction("calendars", "Sync private calendar", "success", "Selected private calendar sync queued.", nil)
 		return a.privateCalendarStatus(), nil
 	}

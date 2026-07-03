@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -64,6 +61,27 @@ func (a *app) calendarWritebackDeleteAllowed(source string) bool {
 	}
 	return a.lockConfig()["enabled"] == true
 }
+
+func (a *app) calendarWritebackSourceBlocked(source string) error {
+	status, err := a.calendarWritebackService().Status()
+	if err != nil {
+		return nil
+	}
+	state, ok := status.States[strings.TrimSpace(source)]
+	if !ok {
+		return nil
+	}
+	switch state.Sync {
+	case "conflict":
+		return errors.New("this calendar has a sync conflict; resolve it in Calendar Manager before changing events")
+	case "attention-undiscovered":
+		return errors.New("this calendar needs connection repair in Calendar Manager before changing events")
+	}
+	if state.State == "conflict" {
+		return errors.New("this calendar has a sync conflict; resolve it in Calendar Manager before changing events")
+	}
+	return nil
+}
 func (a *app) calendarWritebackStatus() map[string]any {
 	status, err := a.calendarWritebackService().Status()
 	if err != nil {
@@ -77,6 +95,9 @@ func (a *app) calendarWritebackStatus() map[string]any {
 			row["state"] = state.State
 			row["detail"] = state.Detail
 			row["updatedAt"] = state.UpdatedAt
+			if state.Sync != "" {
+				row["sync"] = state.Sync
+			}
 		}
 		rows = append(rows, row)
 	}
@@ -117,23 +138,31 @@ func (a *app) configureCalendarWriteback(body map[string]any) (map[string]any, e
 }
 
 type calendarWritebackInput struct {
-	Source   string
-	UID      string
-	Title    string
-	Desc     string
-	Location string
-	AllDay   bool
-	Start    time.Time
-	End      time.Time
+	Source     string
+	UID        string
+	Title      string
+	Desc       string
+	Location   string
+	AllDay     bool
+	Start      time.Time
+	End        time.Time
+	Occurrence time.Time
 }
 
-func parseCalendarWritebackInput(body map[string]any, needUID bool) (calendarWritebackInput, error) {
+func parseCalendarWritebackInput(body map[string]any, needUID, needOccurrence bool) (calendarWritebackInput, error) {
 	input := calendarWritebackInput{Source: strings.TrimSpace(jsonutil.BodyString(body, "calUrl")), UID: strings.TrimSpace(jsonutil.BodyString(body, "uid")), Title: jsonutil.BodyString(body, "title"), Desc: jsonutil.BodyString(body, "desc"), Location: jsonutil.BodyString(body, "location"), AllDay: jsonutil.Truthy(body["allDay"])}
 	if input.Source == "" {
 		return input, errors.New("calendar required")
 	}
 	if needUID && input.UID == "" {
 		return input, errors.New("event identifier required")
+	}
+	if needOccurrence {
+		ms := anyInt64(body["occurrenceMs"], 0)
+		if ms <= 0 {
+			return input, errors.New("calendar occurrence required")
+		}
+		input.Occurrence = time.UnixMilli(ms)
 	}
 	if input.AllDay {
 		start, err := time.ParseInLocation("2006-01-02", jsonutil.BodyString(body, "startDate"), time.Local)
@@ -163,6 +192,29 @@ func parseCalendarWritebackInput(body map[string]any, needUID bool) (calendarWri
 	return input, nil
 }
 
+// calendarWritebackCacheCapability validates that a browser-provided recurring
+// occurrence still exists in the local dashboard window and retains the
+// server-declared capability. This prevents a stale or crafted request from
+// creating a detached override for an arbitrary date.
+func (a *app) calendarWritebackCacheCapability(source, uid string, occurrence time.Time, field string) bool {
+	cache := jsonutil.Map(a.readJSONDefault(filepath.Join(a.cacheDir, "events.cache.json"), map[string]any{}))
+	for _, raw := range jsonutil.List(cache["events"]) {
+		item := jsonutil.Map(raw)
+		if strings.TrimSpace(jsonutil.StringValue(item["calUrl"])) != strings.TrimSpace(source) || strings.TrimSpace(jsonutil.StringValue(item["uid"])) != strings.TrimSpace(uid) {
+			continue
+		}
+		capability := jsonutil.Map(item["writeback"])
+		if capability["candidate"] != true || capability[field] != true {
+			continue
+		}
+		if !occurrence.IsZero() && anyInt64(capability["occurrenceMs"], 0) != occurrence.UnixMilli() {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) (map[string]any, error) {
 	service := a.calendarWritebackService()
 	var result writebackpkg.Result
@@ -172,21 +224,54 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 	err = service.WithSyncLock(func() error {
 		switch path {
 		case "/api/calendar/event/create":
-			input, err = parseCalendarWritebackInput(body, false)
+			input, err = parseCalendarWritebackInput(body, false, false)
 			if err != nil {
+				return err
+			}
+			if err = a.calendarWritebackSourceBlocked(input.Source); err != nil {
 				return err
 			}
 			result, err = service.Create(input.Source, icalwrite.Event{Title: input.Title, Desc: input.Desc, Location: input.Location, Start: input.Start, End: input.End, AllDay: input.AllDay})
 		case "/api/calendar/event/update":
-			input, err = parseCalendarWritebackInput(body, true)
+			input, err = parseCalendarWritebackInput(body, true, false)
 			if err != nil {
 				return err
 			}
+			if err = a.calendarWritebackSourceBlocked(input.Source); err != nil {
+				return err
+			}
 			result, err = service.Update(input.Source, input.UID, icalwrite.Event{UID: input.UID, Title: input.Title, Desc: input.Desc, Location: input.Location, Start: input.Start, End: input.End, AllDay: input.AllDay})
+		case "/api/calendar/event/occurrence/update":
+			input, err = parseCalendarWritebackInput(body, true, true)
+			if err != nil {
+				return err
+			}
+			if err = a.calendarWritebackSourceBlocked(input.Source); err != nil {
+				return err
+			}
+			if !a.calendarWritebackCacheCapability(input.Source, input.UID, input.Occurrence, "canOccurrenceEdit") {
+				return errors.New("this calendar occurrence is no longer available for Dash-Go editing")
+			}
+			result, err = service.UpdateOccurrence(input.Source, input.UID, input.Occurrence, icalwrite.Event{UID: input.UID, Title: input.Title, Desc: input.Desc, Location: input.Location, Start: input.Start, End: input.End, AllDay: input.AllDay})
+		case "/api/calendar/event/series/update":
+			input, err = parseCalendarWritebackInput(body, true, false)
+			if err != nil {
+				return err
+			}
+			if err = a.calendarWritebackSourceBlocked(input.Source); err != nil {
+				return err
+			}
+			if !a.calendarWritebackCacheCapability(input.Source, input.UID, time.Time{}, "canSeriesEdit") {
+				return errors.New("this repeating series uses an advanced pattern; manage the series in its calendar app")
+			}
+			result, err = service.UpdateSeries(input.Source, input.UID, icalwrite.Event{UID: input.UID, Title: input.Title, Desc: input.Desc, Location: input.Location, Start: input.Start, End: input.End, AllDay: input.AllDay})
 		case "/api/calendar/event/delete":
 			source, uid := strings.TrimSpace(jsonutil.BodyString(body, "calUrl")), strings.TrimSpace(jsonutil.BodyString(body, "uid"))
 			if source == "" || uid == "" {
 				return errors.New("calendar event required")
+			}
+			if err = a.calendarWritebackSourceBlocked(source); err != nil {
+				return err
 			}
 			if !a.calendarWritebackDeleteAllowed(source) {
 				return errors.New("configure and unlock a Dashboard Control PIN before deleting calendar events")
@@ -197,6 +282,12 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 			occurrence := time.UnixMilli(anyInt64(body["occurrenceMs"], 0))
 			if source == "" || uid == "" || occurrence.UnixMilli() <= 0 {
 				return errors.New("calendar occurrence required")
+			}
+			if err = a.calendarWritebackSourceBlocked(source); err != nil {
+				return err
+			}
+			if !a.calendarWritebackCacheCapability(source, uid, occurrence, "canSkip") {
+				return errors.New("this calendar occurrence is no longer available for Dash-Go skipping")
 			}
 			result, err = service.SkipOccurrence(source, uid, occurrence)
 		default:
@@ -225,8 +316,8 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 		message = "Saved locally; remote sync queued. Dashboard refresh will retry automatically."
 	}
 	service.Record(result.Source, "saved", message)
-	a.queueCalendarWritebackSync(result.Source, result.Pair)
-	action := map[string]string{"created": "Add calendar event", "updated": "Edit calendar event", "deleted": "Delete calendar event", "skipped": "Skip calendar occurrence"}[result.Action]
+	a.queueCalendarWritebackSync(result.Source, result.Pair, result.Action == "deleted")
+	action := map[string]string{"created": "Add calendar event", "updated": "Manage calendar event", "occurrence-updated": "Edit calendar occurrence", "series-updated": "Edit recurring series", "deleted": "Delete calendar event", "skipped": "Skip calendar occurrence"}[result.Action]
 	severity := "success"
 	if refreshErr != nil {
 		severity = "warning"
@@ -237,77 +328,4 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 		response["warning"] = message
 	}
 	return response, nil
-}
-
-func (a *app) queueCalendarWritebackSync(source, pair string) {
-	script := filepath.Join(a.binDir, "sync-vdir.sh")
-	if info, err := os.Stat(script); err != nil || info.Mode()&0111 == 0 {
-		a.calendarWritebackService().Record(source, "saved", "Saved locally; run private calendar sync to push remote changes.")
-		return
-	}
-	key := strings.TrimSpace(pair)
-	if key == "" {
-		// A migrated beta.6 row has no pair until setup refresh. Keep its
-		// behavior safe while avoiding a guessed remote collection target.
-		key = "__legacy__"
-	}
-	a.writebackSyncMu.Lock()
-	if a.writebackPending == nil {
-		a.writebackPending = map[string]string{}
-	}
-	a.writebackPending[key] = source
-	if a.writebackSyncing {
-		a.writebackSyncMu.Unlock()
-		a.calendarWritebackService().Record(source, "syncing", "Saved locally; this calendar is queued behind the active private sync.")
-		return
-	}
-	a.writebackSyncing = true
-	a.writebackSyncMu.Unlock()
-	go a.runCalendarWritebackQueue(script)
-}
-
-func (a *app) runCalendarWritebackQueue(script string) {
-	defer func() {
-		a.writebackSyncMu.Lock()
-		a.writebackSyncing = false
-		a.writebackSyncMu.Unlock()
-	}()
-	for {
-		a.writebackSyncMu.Lock()
-		if len(a.writebackPending) == 0 {
-			a.writebackSyncMu.Unlock()
-			return
-		}
-		keys := make([]string, 0, len(a.writebackPending))
-		for key := range a.writebackPending {
-			keys = append(keys, key)
-		}
-		slices.Sort(keys)
-		key := keys[0]
-		source := a.writebackPending[key]
-		delete(a.writebackPending, key)
-		a.writebackSyncMu.Unlock()
-
-		a.calendarWritebackService().Record(source, "syncing", "Saved locally; synchronizing the selected private calendar.")
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		args := []string{}
-		if key != "__legacy__" {
-			args = []string{"--pair", key}
-		}
-		output, err := exec.CommandContext(ctx, script, args...).CombinedOutput()
-		timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
-		cancel()
-		if err != nil {
-			text := strings.ToLower(string(output))
-			if strings.Contains(text, "conflict") {
-				a.calendarWritebackService().Record(source, "conflict", "This calendar changed locally and remotely before sync. Nothing was overwritten automatically.")
-			} else if timedOut {
-				a.calendarWritebackService().Record(source, "waiting", "Saved locally; the selected remote sync timed out and will retry later.")
-			} else {
-				a.calendarWritebackService().Record(source, "waiting", "Saved locally; remote sync will retry automatically.")
-			}
-			continue
-		}
-		a.calendarWritebackService().Record(source, "synced", "Saved locally and synchronized.")
-	}
 }

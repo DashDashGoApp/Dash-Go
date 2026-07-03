@@ -85,56 +85,32 @@ func directLines(src string) ([]string, map[int]bool, error) {
 	return lines, direct, nil
 }
 
-func HasSchedulingProperties(src string) bool {
-	lines, direct, err := directLines(src)
-	if err != nil {
-		return false
-	}
-	for i := range direct {
-		switch propName(lines[i]) {
-		case "ORGANIZER", "ATTENDEE":
-			return true
-		}
-	}
-	return false
-}
+func HasSchedulingProperties(src string) bool { return documentHasScheduling(src) }
 func IsRecurring(src string) bool {
-	lines, direct, err := directLines(src)
+	_, components, err := parseDocument(src)
 	if err != nil {
 		return false
 	}
-	for i := range direct {
-		switch propName(lines[i]) {
-		case "RRULE", "RDATE":
+	for _, component := range components {
+		if component.recurrenceID == "" && component.recurring {
 			return true
 		}
 	}
 	return false
 }
 func HasRecurrenceID(src string) bool {
-	lines, direct, err := directLines(src)
+	_, components, err := parseDocument(src)
 	if err != nil {
 		return false
 	}
-	for i := range direct {
-		if propName(lines[i]) == "RECURRENCE-ID" {
+	for _, component := range components {
+		if component.recurrenceID != "" {
 			return true
 		}
 	}
 	return false
 }
-func UID(src string) string {
-	lines, direct, err := directLines(src)
-	if err != nil {
-		return ""
-	}
-	for i := range direct {
-		if propName(lines[i]) == "UID" {
-			return strings.TrimSpace(propValue(lines[i]))
-		}
-	}
-	return ""
-}
+func UID(src string) string { return documentUID(src) }
 
 func bumpSequence(lines []string, direct map[int]bool) []string {
 	for i := range direct {
@@ -191,7 +167,7 @@ func ApplyEdit(src string, e Event, now time.Time) (string, error) {
 		return "", errors.New("events with attendees are read-only on this dashboard")
 	}
 	if IsRecurring(src) || HasRecurrenceID(src) {
-		return "", errors.New("recurring events can only have single dates removed on this dashboard")
+		return "", errors.New("recurring events require the recurring-event manager")
 	}
 	if got := UID(src); got != e.UID {
 		return "", fmt.Errorf("uid mismatch: file has %q", got)
@@ -200,23 +176,12 @@ func ApplyEdit(src string, e Event, now time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	stamp := utcStamp(now)
-	lines = replaceDirect(lines, "DTSTAMP", prop("DTSTAMP", stamp))
-	lines = replaceDirect(lines, "LAST-MODIFIED", prop("LAST-MODIFIED", stamp))
-	if e.AllDay {
-		lines = replaceDirect(lines, "DTSTART", prop("DTSTART;VALUE=DATE", dateStamp(e.Start)))
-		lines = replaceDirect(lines, "DTEND", prop("DTEND;VALUE=DATE", dateStamp(e.End)))
-	} else {
-		lines = replaceDirect(lines, "DTSTART", prop("DTSTART", utcStamp(e.Start)))
-		lines = replaceDirect(lines, "DTEND", prop("DTEND", utcStamp(e.End)))
+	_ = direct
+	edited, err := editEventComponent(lines, e, now, true)
+	if err != nil {
+		return "", err
 	}
-	lines = replaceDirect(lines, "DURATION", "")
-	lines = replaceDirect(lines, "SUMMARY", prop("SUMMARY", escapeText(strings.TrimSpace(e.Title))))
-	lines = replaceDirect(lines, "DESCRIPTION", textOrEmpty("DESCRIPTION", e.Desc))
-	lines = replaceDirect(lines, "LOCATION", textOrEmpty("LOCATION", e.Location))
-	direct, _ = directVEVENTIndices(lines)
-	lines = bumpSequence(lines, direct)
-	return refold(lines), nil
+	return refold(edited), nil
 }
 func textOrEmpty(name, value string) string {
 	if strings.TrimSpace(value) == "" {
@@ -287,40 +252,58 @@ func recurrenceStamp(form startForm, occurrence time.Time) string {
 }
 
 // AppendExdate removes exactly one occurrence while retaining DTSTART's value
-// form: DATE, UTC, TZID, or floating time. Detached instances are refused.
+// form: DATE, UTC, TZID, or floating time. A master may retain existing
+// detached overrides; the popup offers skip only for normal master occurrences.
 func AppendExdate(src string, occurrence time.Time, allDayIgnored bool, now time.Time) (string, error) {
-	if !IsRecurring(src) {
+	if occurrence.IsZero() {
+		return "", errors.New("occurrence time required")
+	}
+	uid := UID(src)
+	if uid == "" {
+		return "", errors.New("recurrence master is no longer available")
+	}
+	lines, components, master, err := documentMaster(src, uid)
+	if err != nil {
+		return "", err
+	}
+	if !master.recurring {
 		return "", errors.New("event is not recurring")
 	}
-	if HasSchedulingProperties(src) {
-		return "", errors.New("events with attendees are read-only on this dashboard")
+	for _, component := range components {
+		if component.scheduling {
+			return "", errors.New("events with attendees are read-only on this dashboard")
+		}
 	}
-	if HasRecurrenceID(src) {
-		return "", errors.New("detached recurring instances are read-only on this dashboard")
-	}
-	lines, direct, err := directLines(src)
+	masterLines := componentLines(lines, master)
+	part, direct, err := directLines(refold(masterLines))
 	if err != nil {
 		return "", err
 	}
-	form, err := masterStartForm(lines, direct)
+	form, err := masterStartForm(part, direct)
 	if err != nil {
 		return "", err
 	}
+	stamp := recurrenceStamp(form, occurrence)
 	exName := "EXDATE"
 	if form.allDay {
 		exName += ";VALUE=DATE"
 	} else if form.tzid != "" {
 		exName += ";TZID=" + form.tzid
 	}
-	ex := exName + ":" + recurrenceStamp(form, occurrence)
-	for i := range direct {
-		if propName(lines[i]) == "EXDATE" && strings.Contains(propValue(lines[i]), recurrenceStamp(form, occurrence)) {
-			return "", errors.New("occurrence already removed")
+	for index := range direct {
+		if propName(part[index]) != "EXDATE" {
+			continue
+		}
+		for value := range strings.SplitSeq(propValue(part[index]), ",") {
+			if strings.TrimSpace(value) == stamp {
+				return "", errors.New("occurrence already removed")
+			}
 		}
 	}
+	ex := exName + ":" + stamp
 	inserted := false
-	out := make([]string, 0, len(lines)+1)
-	for i, line := range lines {
+	out := make([]string, 0, len(part)+1)
+	for i, line := range part {
 		out = append(out, line)
 		if direct[i] && !inserted && (propName(line) == "RRULE" || propName(line) == "RDATE") {
 			out = append(out, ex)
@@ -334,5 +317,5 @@ func AppendExdate(src string, occurrence time.Time, allDayIgnored bool, now time
 	out = replaceDirect(out, "LAST-MODIFIED", prop("LAST-MODIFIED", utcStamp(now)))
 	direct, _ = directVEVENTIndices(out)
 	out = bumpSequence(out, direct)
-	return refold(out), nil
+	return refold(replaceComponent(lines, master, out)), nil
 }

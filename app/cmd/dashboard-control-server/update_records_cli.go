@@ -104,7 +104,7 @@ func runUpdateRecordCLI(args []string, kind string) int {
 		setString("jobId", *jobID)
 	}
 	setString("stage", *stage)
-	if *code != 0 || *state == "failed" || *state == "rolledback" || *state == "success" {
+	if *code != 0 || *state == "failed" || *state == "rolledback" || *state == "success" || *state == "no-update" {
 		current["exitCode"] = *code
 	}
 	if *healthChecked != "" {

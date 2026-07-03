@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Explicit private-calendar activation/deactivation. This helper changes only
-# saved pair/map configuration after a Dashboard Control selection. It never
-# discovers remote collections automatically and never deletes a remote
+# saved pair/map configuration after a Dashboard Control selection. Routine
+# sync never discovers remote collections. Activating a newly selected exact
+# collection deliberately performs one bounded initial discovery, then never
+# discovers it again during recurring sync. This helper never deletes a remote
 # calendar. New selected collections are exact vdir mappings with safe local
 # keys, so the dashboard can resolve writeback without a broad mirror.
 set -u
@@ -14,6 +16,7 @@ MAP="${DASH_VDIR_MAP:-$VDIR_HOME/calendars.map}"
 VDIR_COLLECTIONS="$VDIR_HOME/collections"
 SETUP="$BIN_DIR/setup-vdirsyncer.sh"
 SYNC="$BIN_DIR/sync-vdir.sh"
+LOWPRIO="$BIN_DIR/dashboard-lowprio.sh"
 umask 077
 
 valid_name(){ printf '%s' "$1" | grep -qE '^[A-Za-z0-9_-]{1,96}$'; }
@@ -80,10 +83,30 @@ case "$mode" in
       printf 'error\tCould not activate the selected calendar safely.\n'; exit 1
     fi
     rm -f "$backup_pairs" "$backup_map"
+    # vdirsyncer refuses `sync` for a pair it has never discovered, and routine
+    # syncs deliberately never discover. Activation is an explicit
+    # administrator action, so run the one bounded, noninteractive discovery
+    # this exact pair needs; without it the selected calendar could never sync.
+    VDIRSYNCER_BIN="${DASH_VDIRSYNCER_BIN:-$VDIR_HOME/bin/vdirsyncer}"
+    VDIR_CFG="$VDIR_HOME/config"
+    discovered=1
+    if [ -x "$VDIRSYNCER_BIN" ]; then
+      if command -v timeout >/dev/null 2>&1; then
+        yes | timeout 300 "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$pair" >/dev/null 2>&1 || discovered=0
+      else
+        yes | "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$pair" >/dev/null 2>&1 || discovered=0
+      fi
+    else
+      discovered=0
+    fi
     # Initial sync is targeted. It may fail without changing the selected
     # mapping; the UI can show the safe waiting state and offer Sync now.
     initial="ready"
-    if [ -x "$SYNC" ] && ! "$SYNC" --pair "$pair" >/dev/null 2>&1; then initial="waiting"; fi
+    if [ "$discovered" -ne 1 ]; then
+      initial="waiting"
+    elif [ -x "$SYNC" ] && ! "$SYNC" --pair "$pair" >/dev/null 2>&1; then
+      initial="waiting"
+    fi
     "$SETUP" --refresh >/dev/null 2>&1 || true
     printf 'activated\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(source_for "$name" "$color" "")" "$display_name" "$provider" "$pair" "$remote_id" "$initial"
     ;;
@@ -137,5 +160,35 @@ case "$mode" in
     rm -f "$backup_map"
     printf 'updated\t%s\t%s\n' "$source" "$editable"
     ;;
-  *) printf 'error\tUsage: private-calendar-selection.sh --activate ... | --deactivate source | --set-editable source 0|1\n'; exit 2;;
+  --repair)
+    [ "$#" -eq 2 ] || { printf 'error\tInvalid calendar source.\n'; exit 2; }
+    source="$2"; valid_source "$source" || { printf 'error\tInvalid calendar source.\n'; exit 2; }
+    pair=""
+    while IFS='|' read -r name color tag row_pair collection writable remote_id display_name provider connection local_id _; do
+      [ "$(source_for "$name" "$color" "$tag")" = "$source" ] || continue
+      pair="$row_pair"; break
+    done < "$MAP"
+    [ -n "$pair" ] || { printf 'error\tThis selected calendar is no longer available.\n'; exit 1; }
+    VDIRSYNCER_BIN="${DASH_VDIRSYNCER_BIN:-$VDIR_HOME/bin/vdirsyncer}"
+    VDIR_CFG="$VDIR_HOME/config"
+    [ -x "$VDIRSYNCER_BIN" ] && [ -r "$VDIR_CFG" ] && [ -x "$SYNC" ] || { printf 'error\tPrivate calendar repair is unavailable.\n'; exit 1; }
+    # Repair is an explicit administrator action. It deliberately discovers
+    # only this exact pair; it never inventories every account calendar and is
+    # never called from the recurring sync wrapper.
+    if [ -x "$LOWPRIO" ]; then
+      discover_cmd=("$LOWPRIO" "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$pair")
+    else
+      discover_cmd=("$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$pair")
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+      yes | timeout 300 "${discover_cmd[@]}" >/dev/null 2>&1 || { printf 'error\tCould not repair this calendar connection. Check its provider authorization, then try again.\n'; exit 1; }
+    else
+      yes | "${discover_cmd[@]}" >/dev/null 2>&1 || { printf 'error\tCould not repair this calendar connection. Check its provider authorization, then try again.\n'; exit 1; }
+    fi
+    if ! "$SYNC" --pair "$pair" >/dev/null 2>&1; then
+      printf 'error\tThe calendar connection was discovered, but its first sync still needs attention.\n'; exit 1
+    fi
+    printf 'repaired\t%s\t%s\n' "$source" "$pair"
+    ;;
+  *) printf 'error\tUsage: private-calendar-selection.sh --activate ... | --deactivate source | --set-editable source 0|1 | --repair source\n'; exit 2;;
 esac

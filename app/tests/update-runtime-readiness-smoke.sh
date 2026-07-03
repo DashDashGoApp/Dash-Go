@@ -7,6 +7,7 @@ INSTALLER="${1:-$ROOT/../installer/install.sh}"
 RUNNER="$ROOT/bin/dashboard-update-runner.sh"
 VERIFIER="$ROOT/bin/dashboard-post-update-verify.sh"
 UPDATE_GO="$ROOT/cmd/dashboard-control-server/dashboard_update.go"
+UPDATE_PREFLIGHT_GO="$ROOT/cmd/dashboard-control-server/dashboard_update_preflight.go"
 UPDATE_RECOVERY_GO="$ROOT/cmd/dashboard-control-server/dashboard_update_recovery.go"
 MANIFEST_CLI_GO="$ROOT/cmd/dashboard-control-server/release_manifest_cli.go"
 PURGE_CLI_GO="$ROOT/cmd/dashboard-control-server/release_stale_purge_cli.go"
@@ -19,7 +20,7 @@ BRIDGE_SMOKE="$ROOT/tests/updater-capability-bridge-smoke.sh"
 [ -x "$VERIFIER" ] || { echo "post-update verifier missing or not executable" >&2; exit 1; }
 bash -n "$INSTALLER" "$RUNNER" "$VERIFIER"
 require_inst(){ grep -Fq -- "$1" "$INSTALLER" || { echo "FAIL: missing installer update contract: $1" >&2; exit 1; }; }
-require_go(){ grep -Fq -- "$1" "$UPDATE_GO" || { echo "FAIL: missing Go update contract: $1" >&2; exit 1; }; }
+require_go(){ grep -Fq -- "$1" "$UPDATE_GO" || grep -Fq -- "$1" "$UPDATE_PREFLIGHT_GO" || { echo "FAIL: missing Go update contract: $1" >&2; exit 1; }; }
 require_recovery_go(){ grep -Fq -- "$1" "$UPDATE_RECOVERY_GO" || { echo "FAIL: missing Go update-recovery contract: $1" >&2; exit 1; }; }
 require_manifest_cli(){ grep -Fq -- "$1" "$MANIFEST_CLI_GO" || { echo "FAIL: missing release-manifest CLI contract: $1" >&2; exit 1; }; }
 require_purge_cli(){ grep -Fq -- "$1" "$PURGE_CLI_GO" || { echo "FAIL: missing stale-cleanup CLI contract: $1" >&2; exit 1; }; }
@@ -71,7 +72,7 @@ grep -Fq 'runFinalizeUpdateActionCLI' "$ROOT/cmd/dashboard-control-server/main.g
 grep -Fq 'runUpdaterCapabilitiesCLI' "$CAPABILITIES_CLI_GO" || { echo 'FAIL: updater capability CLI is missing' >&2; exit 1; }
 grep -Fq 'update-action-history-v1' "$CAPABILITIES_CLI_GO" || { echo 'FAIL: updater does not advertise update-history finalization' >&2; exit 1; }
 grep -Fq 'runWriteUpdaterMigrationCLI' "$CAPABILITIES_CLI_GO" || { echo 'FAIL: updater migration receipt writer is missing' >&2; exit 1; }
-grep -Fq 'LoadState' "$UPDATE_GO" || { echo 'FAIL: updater preflight does not distinguish a missing systemd unit' >&2; exit 1; }
+require_go 'LoadState'
 if grep -Fq 'systemd-run --user' "$INSTALLER" || grep -Fq 'relaunch_update_outside_dashboard_service' "$INSTALLER"; then
   echo 'FAIL: updater still depends on a per-user systemd handoff' >&2; exit 1
 fi

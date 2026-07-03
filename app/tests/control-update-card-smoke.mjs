@@ -37,6 +37,10 @@ assert.match(lifecycle,/function closeCtrl\(\)[\s\S]*stopCtrlUpdatePoll\(\)/,"cl
 assert.match(updates,/Check for updates/,"update card must expose an explicit read-only catalog check independent of updater setup");
 assert.match(updates,/\/api\/update\/status\?fresh=1/,"explicit catalog checks must bypass the short update-status cache");
 assert.match(updates,/Update installation setup:/,"update card must distinguish privileged updater setup from catalog availability");
+assert.match(updates,/pre\.canStart/,"Update dashboard must require a strict newer/recovery candidate, not merely a ready updater");
+assert.match(updates,/r&&r\.noUpdate===true/,"a stale Dashboard Control tap must handle the server no-op response without starting progress polling");
+assert.doesNotMatch(updates,/reinstall the selected release after integrity checks/,"Update card must not invite same-version reinstalls");
+assert.match(updates,/Installed version is newer/,"Update card must explain a downgrade block");
 assert.doesNotMatch(health,/saved update credentials/i,"health messaging must not describe the token-free GitHub updater as credential-gated");
 assert.match(health,/local update service/,"health messaging must name the local updater setup requirement");
 assert.match(updates,/ctrlBuildBackupRestoreSection/,"Update card must compose the durable Backup & Restore subsection");
@@ -104,7 +108,7 @@ const context={
     return {
       installedVersion:"installed-test-version",
       availability:{availableVersion:"available-test-version",updateAvailable:true,ok:true,track:selectedTrack,fetchedAt:1,status:"available"},
-      preflight:{ready:true,label:"Ready",problems:[]},
+      preflight:{ready:true,canStart:true,label:"Ready",problems:[]},
       job:statusActive?{id:"update-test",state:"starting",detail:"Dedicated updater service accepted the job.",source:"control",track:selectedTrack}:{id:"update-test",state:"success",label:"Complete",detail:"Update complete.",source:"control",track:selectedTrack},
       updateLogMtime:1,
     };
