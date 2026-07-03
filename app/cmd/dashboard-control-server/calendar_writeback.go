@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,7 +57,13 @@ func (a *app) calendarWritebackStatus() map[string]any {
 	}
 	rows := make([]any, 0, len(status.Calendars))
 	for _, cal := range status.Calendars {
-		rows = append(rows, map[string]any{"source": cal.Source, "name": cal.Name, "writable": cal.Writable, "enabled": cal.Enabled})
+		row := map[string]any{"source": cal.Source, "name": cal.Name, "writable": cal.Writable, "enabled": cal.Enabled, "pair": cal.Pair, "provider": cal.Provider, "connection": cal.Connection, "remoteId": cal.RemoteID}
+		if state, ok := status.States[cal.Source]; ok {
+			row["state"] = state.State
+			row["detail"] = state.Detail
+			row["updatedAt"] = state.UpdatedAt
+		}
+		rows = append(rows, row)
 	}
 	out := map[string]any{"enabled": status.Enabled, "requirePin": status.RequirePIN, "calendars": rows}
 	if status.Last != nil {
@@ -200,7 +207,7 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 		message = "Saved locally; remote sync queued. Dashboard refresh will retry automatically."
 	}
 	service.Record(result.Source, "saved", message)
-	a.queueCalendarWritebackSync(result.Source)
+	a.queueCalendarWritebackSync(result.Source, result.Pair)
 	action := map[string]string{"created": "Add calendar event", "updated": "Edit calendar event", "deleted": "Delete calendar event", "skipped": "Skip calendar occurrence"}[result.Action]
 	severity := "success"
 	if refreshErr != nil {
@@ -214,28 +221,75 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 	return response, nil
 }
 
-func (a *app) queueCalendarWritebackSync(source string) {
+func (a *app) queueCalendarWritebackSync(source, pair string) {
 	script := filepath.Join(a.binDir, "sync-vdir.sh")
 	if info, err := os.Stat(script); err != nil || info.Mode()&0111 == 0 {
-		a.calendarWritebackService().Record(source, "saved", "Saved locally; run CalDAV sync to push remote changes.")
+		a.calendarWritebackService().Record(source, "saved", "Saved locally; run private calendar sync to push remote changes.")
 		return
 	}
+	key := strings.TrimSpace(pair)
+	if key == "" {
+		// A migrated beta.6 row has no pair until setup refresh. Keep its
+		// behavior safe while avoiding a guessed remote collection target.
+		key = "__legacy__"
+	}
 	a.writebackSyncMu.Lock()
+	if a.writebackPending == nil {
+		a.writebackPending = map[string]string{}
+	}
+	a.writebackPending[key] = source
 	if a.writebackSyncing {
 		a.writebackSyncMu.Unlock()
+		a.calendarWritebackService().Record(source, "syncing", "Saved locally; this calendar is queued behind the active private sync.")
 		return
 	}
 	a.writebackSyncing = true
 	a.writebackSyncMu.Unlock()
-	go func() {
-		defer func() { a.writebackSyncMu.Lock(); a.writebackSyncing = false; a.writebackSyncMu.Unlock() }()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		err := exec.CommandContext(ctx, script).Run()
-		if err != nil {
-			a.calendarWritebackService().Record(source, "waiting", "Saved locally; remote sync will retry automatically.")
+	go a.runCalendarWritebackQueue(script)
+}
+
+func (a *app) runCalendarWritebackQueue(script string) {
+	defer func() {
+		a.writebackSyncMu.Lock()
+		a.writebackSyncing = false
+		a.writebackSyncMu.Unlock()
+	}()
+	for {
+		a.writebackSyncMu.Lock()
+		if len(a.writebackPending) == 0 {
+			a.writebackSyncMu.Unlock()
 			return
 		}
+		keys := make([]string, 0, len(a.writebackPending))
+		for key := range a.writebackPending {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		key := keys[0]
+		source := a.writebackPending[key]
+		delete(a.writebackPending, key)
+		a.writebackSyncMu.Unlock()
+
+		a.calendarWritebackService().Record(source, "syncing", "Saved locally; synchronizing the selected private calendar.")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		args := []string{}
+		if key != "__legacy__" {
+			args = []string{"--pair", key}
+		}
+		output, err := exec.CommandContext(ctx, script, args...).CombinedOutput()
+		timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
+		cancel()
+		if err != nil {
+			text := strings.ToLower(string(output))
+			if strings.Contains(text, "conflict") {
+				a.calendarWritebackService().Record(source, "conflict", "This calendar changed locally and remotely before sync. Nothing was overwritten automatically.")
+			} else if timedOut {
+				a.calendarWritebackService().Record(source, "waiting", "Saved locally; the selected remote sync timed out and will retry later.")
+			} else {
+				a.calendarWritebackService().Record(source, "waiting", "Saved locally; remote sync will retry automatically.")
+			}
+			continue
+		}
 		a.calendarWritebackService().Record(source, "synced", "Saved locally and synchronized.")
-	}()
+	}
 }

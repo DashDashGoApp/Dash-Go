@@ -100,3 +100,51 @@ func TestWritebackSkipPreservesTZIDMaster(t *testing.T) {
 		t.Fatalf("wrong EXDATE: %s", got)
 	}
 }
+
+func TestRegistryV1MigratesToV2AndKeepsTargetMetadataOptional(t *testing.T) {
+	svc, collection, _ := newTestService(t)
+	legacy := `{"version":1,"enabled":true,"requirePin":false,"calendars":[{"source":"calendars/family.blue.ics","collection":"` + collection + `","writable":true,"enabled":true,"name":"Family"}]}`
+	if err := os.WriteFile(svc.RegistryPath(), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Calendars) != 1 || status.Calendars[0].Pair != "" || status.Calendars[0].Provider != "" {
+		t.Fatalf("legacy registry was not preserved safely: %#v", status.Calendars)
+	}
+	if !svc.SourceWritable("calendars/family.blue.ics") {
+		t.Fatal("migrated legacy source lost edit capability")
+	}
+}
+
+func TestWritebackStatusTracksCalendarsIndependently(t *testing.T) {
+	svc, collection, _ := newTestService(t)
+	second := filepath.Join(filepath.Dir(collection), "personal")
+	if err := os.MkdirAll(second, 0700); err != nil {
+		t.Fatal(err)
+	}
+	reg := Registry{Version: RegistryVersion, Enabled: true, Calendars: []Calendar{
+		{Source: "calendars/family.blue.ics", Collection: collection, Writable: true, Enabled: true, Name: "Family", Pair: "dash_family", Provider: "google", Connection: "google", RemoteID: "family"},
+		{Source: "calendars/personal.green.ics", Collection: second, Writable: true, Enabled: true, Name: "Personal", Pair: "dash_personal", Provider: "caldav", Connection: "icloud", RemoteID: "personal"},
+	}}
+	if err := svc.writeLocked(reg); err != nil {
+		t.Fatal(err)
+	}
+	svc.Record("calendars/family.blue.ics", "synced", "Family synchronized")
+	svc.Record("calendars/personal.green.ics", "waiting", "Personal needs attention")
+	status, err := svc.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := status.States["calendars/family.blue.ics"].State; got != "synced" {
+		t.Fatalf("family state = %q", got)
+	}
+	if got := status.States["calendars/personal.green.ics"].State; got != "waiting" {
+		t.Fatalf("personal state = %q", got)
+	}
+	if status.Calendars[0].Pair == "" || status.Calendars[0].Provider == "" {
+		t.Fatalf("targeted pair metadata missing: %#v", status.Calendars[0])
+	}
+}

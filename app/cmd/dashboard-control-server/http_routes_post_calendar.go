@@ -59,6 +59,45 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 			return true
 		}
 		a.json(w, result)
+	case "/api/calendars/private/discover":
+		result, err := a.discoverPrivateCalendars()
+		if err != nil {
+			code := http.StatusBadRequest
+			if strings.Contains(err.Error(), "already running") {
+				code = http.StatusConflict
+			}
+			a.err(w, err.Error(), code)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/activate":
+		result, err := a.activatePrivateCalendar(body)
+		if err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/editable":
+		result, err := a.setPrivateCalendarEditable(body)
+		if err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/deactivate":
+		result, err := a.deactivatePrivateCalendar(body)
+		if err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		a.json(w, result)
+	case "/api/calendars/private/sync":
+		result, err := a.syncPrivateCalendar(body)
+		if err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		a.json(w, result)
 	case "/api/calendars/toggle":
 		a.handleCalendarToggle(w, body)
 	case "/api/calendars/manage/delete", "/api/calendars/manage/restore", "/api/calendars/manage/app-output", "/api/calendars/manage/repair":

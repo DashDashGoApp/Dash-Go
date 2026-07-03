@@ -29,9 +29,9 @@ if [ "${1:-}" = "--version" ]; then printf 'vdirsyncer, version 0.20.0\n'; exit 
 case " $* " in
   *' sync '*)
     root="$(dirname "${VDIRSYNCER_CONFIG:?}")"
-    mkdir -p "$root/collections/family/nested"
-    printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Fixture\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:one\r\nSUMMARY:First event\r\nDESCRIPTION:Folded\r\n detail\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > "$root/collections/family/one.ics"
-    printf 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:two\nSUMMARY:Second event\nEND:VEVENT\nEND:VCALENDAR\n' > "$root/collections/family/nested/two.ics"
+    mkdir -p "$root/collections/family/collection-1/nested"
+    printf 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Fixture\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:one\r\nSUMMARY:First event\r\nDESCRIPTION:Folded\r\n detail\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n' > "$root/collections/family/collection-1/one.ics"
+    printf 'BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:two\nSUMMARY:Second event\nEND:VEVENT\nEND:VCALENDAR\n' > "$root/collections/family/collection-1/nested/two.ics"
     ;;
 esac
 exit 0

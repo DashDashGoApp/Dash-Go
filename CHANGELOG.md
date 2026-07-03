@@ -2,6 +2,16 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.7] — 2026-07-02
+
+### Selected private calendars and safe two-way management
+
+- Added a user-led **Discover available calendars** flow in Dashboard Control. Discovery runs in a disposable vdirsyncer workspace, returns an inventory only, and never alters active pairs, mirrors, event cache, cron, visibility, write permissions, or remote calendars.
+- Added explicit per-collection activation: each chosen Google, iCloud, or compatible CalDAV collection receives a generated exact vdirsyncer mapping, a safe generated local collection key, and its own Dashboard source. Broad legacy discovery mirrors remain read-only and are retained rather than silently replaced.
+- Added selected-calendar management controls to change a source between display-only and editable, queue a sync for that one collection, or stop future sync without deleting the provider calendar or the preserved local mirror.
+- Changed local-first writeback to queue the affected generated pair rather than every private calendar, with serial coalescing, per-calendar status, and conflict-safe behavior. New private pairs no longer use remote-wins conflict resolution; a conflict leaves both sides intact and surfaces a needs-attention state.
+- Added migration refresh after an update, isolated-discovery, exact-selection, edit-permission, targeted-sync, and private-calendar installer smokes. Updated Google documentation to describe the actual vdirsyncer CalDAV/OAuth route, collection selection, and two-way acceptance expectations.
+
 ## [1.5.6-beta.6] — 2026-07-02
 
 ### Lower-impact private-calendar synchronization

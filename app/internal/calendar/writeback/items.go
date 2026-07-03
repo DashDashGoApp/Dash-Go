@@ -19,6 +19,8 @@ type Result struct {
 	UID        string `json:"uid"`
 	Action     string `json:"action"`
 	Collection string `json:"-"`
+	Pair       string `json:"-"`
+	Provider   string `json:"-"`
 }
 
 func (s *Service) Create(source string, event icalwrite.Event) (Result, error) {
@@ -45,7 +47,7 @@ func (s *Service) Create(source string, event icalwrite.Event) (Result, error) {
 	if err := fileio.WriteAtomic(path, []byte(body), 0600); err != nil {
 		return Result{}, fmt.Errorf("save calendar event: %w", err)
 	}
-	return Result{Source: cal.Source, UID: event.UID, Action: "created", Collection: cal.Collection}, nil
+	return Result{Source: cal.Source, UID: event.UID, Action: "created", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
 }
 func (s *Service) Update(source, uid string, event icalwrite.Event) (Result, error) {
 	cal, err := s.Resolve(source)
@@ -67,7 +69,7 @@ func (s *Service) Update(source, uid string, event icalwrite.Event) (Result, err
 	if err := fileio.WriteAtomic(path, []byte(body), 0600); err != nil {
 		return Result{}, fmt.Errorf("save calendar event: %w", err)
 	}
-	return Result{Source: cal.Source, UID: uid, Action: "updated", Collection: cal.Collection}, nil
+	return Result{Source: cal.Source, UID: uid, Action: "updated", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
 }
 func (s *Service) Delete(source, uid string) (Result, error) {
 	cal, err := s.Resolve(source)
@@ -84,7 +86,7 @@ func (s *Service) Delete(source, uid string) (Result, error) {
 	if err := fileio.RemoveDurable(path); err != nil {
 		return Result{}, fmt.Errorf("delete calendar event: %w", err)
 	}
-	return Result{Source: cal.Source, UID: uid, Action: "deleted", Collection: cal.Collection}, nil
+	return Result{Source: cal.Source, UID: uid, Action: "deleted", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
 }
 func (s *Service) SkipOccurrence(source, uid string, occurrence time.Time) (Result, error) {
 	cal, err := s.Resolve(source)
@@ -105,7 +107,7 @@ func (s *Service) SkipOccurrence(source, uid string, occurrence time.Time) (Resu
 	if err := fileio.WriteAtomic(path, []byte(body), 0600); err != nil {
 		return Result{}, fmt.Errorf("skip calendar occurrence: %w", err)
 	}
-	return Result{Source: cal.Source, UID: uid, Action: "skipped", Collection: cal.Collection}, nil
+	return Result{Source: cal.Source, UID: uid, Action: "skipped", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
 }
 
 func (s *Service) ensureItemPath(cal Calendar, path string) error {

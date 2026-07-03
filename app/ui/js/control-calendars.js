@@ -111,7 +111,7 @@ function ctrlCalendarManagerRow(item){
       }));
     }
   }else if(item.kind==="writeback"){
-    actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this private CalDAV mirror on the dashboard.":"Hide this mirror without altering the remote calendar.","",async()=>{
+    actions.appendChild(caction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this private calendar mirror on the dashboard.":"Hide this mirror without altering the remote calendar.","",async()=>{
       const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.url});
       await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
     }));
@@ -154,6 +154,7 @@ function renderCtrlCalendarManagerData(wrap,manager){
   if(!rows.length)list.appendChild(ctrlStateCard("empty","No managed calendars","Add a local .ics calendar or open an app that creates a local calendar feed."));
   else rows.forEach(item=>list.appendChild(ctrlCalendarManagerRow(item)));
   wrap.appendChild(list);
+  if(typeof ctrlPrivateCalendarSettings==="function")wrap.appendChild(ctrlPrivateCalendarSettings(manager&&manager.privateCalendars));
   if(typeof ctrlCalendarWritebackSettings==="function")wrap.appendChild(ctrlCalendarWritebackSettings(manager&&manager.writeback));
   const trash=Array.isArray(manager&&manager.trash)?manager.trash:[];
   if(trash.length){

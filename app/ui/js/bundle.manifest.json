@@ -88,6 +88,7 @@
       "control-theme.js",
       "control-calendars.js",
       "control-calendar-writeback.js",
+      "control-private-calendars.js",
       "control-household-schedules.js",
       "control-display-weather.js",
       "control-dashboard-typography.js",

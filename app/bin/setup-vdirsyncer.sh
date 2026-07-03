@@ -35,6 +35,27 @@ SYNC_LOG="$LOG_DIR/vdir-sync.log"
 export PATH="$VDIR_PIPX_BIN:$PATH"
 umask 077
 
+# --refresh is intentionally non-interactive. It regenerates only Dash-Go's
+# generated vdirsyncer config, targeted sync wrapper, and writeback registry
+# from existing private state. It never discovers remote collections, starts
+# OAuth, runs a sync, changes cron, or changes selected calendars.
+REFRESH_ONLY=0
+case "${1:-}" in
+  "") ;;
+  --refresh) REFRESH_ONLY=1 ;;
+  --help|-h)
+    cat <<'USAGE'
+Usage: setup-vdirsyncer.sh [--refresh]
+
+Without arguments, add a private CalDAV or Google calendar interactively.
+--refresh regenerates Dash-Go-managed configuration from saved private state
+without contacting a provider or changing selected calendars.
+USAGE
+    exit 0
+    ;;
+  *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+esac
+
 say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
@@ -54,17 +75,21 @@ valid_color(){
   printf '%s' "$1" | grep -qiE '^#?[0-9a-f]{6}$'
 }
 valid_single_line(){
-  case "$1" in *$'\n'*|*$'\r'*|*'|'*) return 1;; esac
+  case "$1" in *$'\n'*|*$'\r'*|*$'\t'*|*'|'*) return 1;; esac
   return 0
 }
 valid_caldav_url(){
   valid_single_line "$1" && printf '%s' "$1" | grep -qE '^https?://[^[:space:]]+$'
 }
 valid_collection_id(){
-  # Google Calendar IDs use the address form user@gmail.com or
-  # hash@group.calendar.google.com, so @ is a legal collection character.
+  # Provider collection IDs are opaque data in the pair/config files, never
+  # filesystem components. CalDAV servers may use URL-like names, so allow
+  # slash/colon/etc. while rejecting delimiters and control characters.
   [ -z "$1" ] && return 0
-  valid_single_line "$1" && printf '%s' "$1" | grep -qE '^[A-Za-z0-9._@-]+$'
+  [ "${#1}" -le 512 ] && valid_single_line "$1"
+}
+valid_local_collection_key(){
+  [ -n "$1" ] && [ "${#1}" -le 160 ] && valid_single_line "$1" && case "$1" in */*|*\\*|*..*) false;; *) true;; esac
 }
 valid_client_id(){
   [ -n "$1" ] && valid_single_line "$1" && printf '%s' "$1" | grep -qE '^[A-Za-z0-9._-]+$'
@@ -225,19 +250,28 @@ ensure_google_support(){
   ok "vdirsyncer Google support restored"
 }
 write_vdirsyncer_config(){
-  local temp name color tag pair collection url username remote local_path coll_spec provider client_id
+  local temp name color tag pair ignored_path url username remote_id provider client_id display_name credential_ref local_id remote local_path coll_spec
   temp="$(mktemp)" || return 1
   {
     printf '[general]\n'
     printf 'status_path = %s\n\n' "$(toml_quote "$VDIR_STATUS")"
-    while IFS='|' read -r name color tag pair local_path url username collection provider client_id _; do
+    while IFS='|' read -r name color tag pair ignored_path url username remote_id provider client_id display_name credential_ref local_id _; do
       [ -n "$name" ] || continue
-      # Rows written before Google support carry no provider field; they are
-      # plain CalDAV pairs and keep exactly their previous configuration.
       [ -n "$provider" ] || provider="caldav"
-      if [ -n "$collection" ]; then
-        coll_spec="[$(toml_quote "$collection")]"
+      [ -n "$credential_ref" ] || credential_ref="$name"
+      [ -n "$display_name" ] || display_name="$name"
+      valid_name "$name" && valid_name "$pair" || { warn "invalid saved private calendar row '$name'; skipped" >&2; continue; }
+      if [ -n "$remote_id" ]; then
+        [ -n "$local_id" ] || local_id="$remote_id"
+        valid_collection_id "$remote_id" && valid_local_collection_key "$local_id" || { warn "invalid saved exact private calendar row '$name'; skipped" >&2; continue; }
+        # Use an explicit three-part mapping: display label, opaque remote ID,
+        # and safe local vdir directory. toml_quote keeps the generated config
+        # data-only even when a provider display name contains punctuation.
+        coll_spec="[[ $(toml_quote "$display_name"), $(toml_quote "$remote_id"), $(toml_quote "$local_id") ]]"
       else
+        # Legacy broad mirrors are deliberately retained as display-only
+        # discovery mirrors. They have no single local collection directory,
+        # so they must not be treated as writeback candidates.
         coll_spec='["from a"]'
       fi
       remote="${pair}_remote"
@@ -245,20 +279,19 @@ write_vdirsyncer_config(){
       printf '[pair %s]\n' "$pair"
       printf 'a = %s\n' "$(toml_quote "$remote")"
       printf 'b = %s\n' "$(toml_quote "$local_path")"
-      printf 'collections = %s\n' "$coll_spec"
-      printf 'conflict_resolution = "a wins"\n\n'
+      printf 'collections = %s\n\n' "$coll_spec"
 
       printf '[storage %s]\n' "$remote"
       if [ "$provider" = "google" ]; then
         printf 'type = "google_calendar"\n'
-        printf 'token_file = %s\n' "$(toml_quote "$GOOGLE_TOKENS/$name.json")"
+        printf 'token_file = %s\n' "$(toml_quote "$GOOGLE_TOKENS/$credential_ref.json")"
         printf 'client_id = %s\n' "$(toml_quote "$client_id")"
-        printf 'client_secret.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$name.google-client-secret")"
+        printf 'client_secret.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref.google-client-secret")"
       else
         printf 'type = "caldav"\n'
         printf 'url = %s\n' "$(toml_quote "$url")"
         printf 'username = %s\n' "$(toml_quote "$username")"
-        printf 'password.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$name")"
+        printf 'password.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref")"
       fi
 
       printf '[storage %s]\n' "$local_path"
@@ -273,27 +306,44 @@ write_vdirsyncer_config(){
 }
 
 write_writeback_registry(){
-  local temp first name color tag pair collection writable collection_id source exact
+  local temp first name color tag pair collection writable remote_id display_name provider connection local_id source exact enabled require_pin row_enabled previous
+  enabled=false
+  require_pin=false
+  # Rebuild source metadata without resetting the user's edit/PIN choices.
+  if [ -r "$WRITEBACK_REGISTRY" ]; then
+    enabled="$(grep -Eo '"enabled"[[:space:]]*:[[:space:]]*(true|false)' "$WRITEBACK_REGISTRY" | head -n1 | sed -E 's/.*(true|false)$/\1/' || true)"
+    require_pin="$(grep -Eo '"requirePin"[[:space:]]*:[[:space:]]*(true|false)' "$WRITEBACK_REGISTRY" | head -n1 | sed -E 's/.*(true|false)$/\1/' || true)"
+  fi
+  case "$enabled" in true|false) ;; *) enabled=false;; esac
+  case "$require_pin" in true|false) ;; *) require_pin=false;; esac
   temp="$(mktemp)" || return 1
   first=1
   {
-    printf '{\n  "version": 1,\n  "enabled": false,\n  "requirePin": false,\n  "calendars": ['
-    while IFS='|' read -r name color tag pair collection writable collection_id _; do
+    printf '{\n  "version": 2,\n  "enabled": %s,\n  "requirePin": %s,\n  "calendars": [' "$enabled" "$require_pin"
+    while IFS='|' read -r name color tag pair collection writable remote_id display_name provider connection local_id _; do
       [ -n "$name" ] || continue
-      # A broad discovery mirror is display-only. Writeback requires one exact
-      # remote collection and a concrete local vdir below its pair root.
-      [ "$writable" = "1" ] && [ -n "$collection_id" ] || continue
-      exact="$collection/$collection_id"
+      [ "$writable" = "1" ] && [ -n "$remote_id" ] || continue
+      [ -n "$display_name" ] || display_name="$name"
+      [ -n "$provider" ] || provider="caldav"
+      [ -n "$connection" ] || connection="$name"
+      [ -n "$local_id" ] || local_id="$remote_id"
+      valid_local_collection_key "$local_id" || { warn "private collection $name has no safe local vdir key; leaving Dashboard edits off" >&2; continue; }
+      exact="$collection/$local_id"
       if [ ! -d "$exact" ]; then
-        # This block's stdout is the registry file itself; the warning must
-        # bypass the redirection or it corrupts the JSON for every calendar.
         warn "private collection $name was not materialized as one exact vdir; leaving Dashboard edits off" >&2
         continue
       fi
       if [ -n "$tag" ]; then source="calendars/$name.$color.$tag.ics"; else source="calendars/$name.$color.ics"; fi
+      row_enabled=true
+      if [ -r "$WRITEBACK_REGISTRY" ]; then
+        previous="$(grep -F "\"source\":\"$source\"" "$WRITEBACK_REGISTRY" | head -n1 || true)"
+        case "$previous" in *'"enabled":false'*) row_enabled=false;; esac
+      fi
       [ "$first" -eq 1 ] || printf ','
       first=0
-      printf '\n    {"source":"%s","collection":"%s","writable":true,"enabled":true,"name":"%s"}' "$source" "$exact" "$name"
+      esc(){ local v="$1"; v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; printf '%s' "$v"; }
+      printf '\n    {"source":"%s","collection":"%s","writable":true,"enabled":%s,"name":"%s","pair":"%s","provider":"%s","connection":"%s","remoteId":"%s"}' \
+        "$(esc "$source")" "$(esc "$exact")" "$row_enabled" "$(esc "$display_name")" "$(esc "$pair")" "$(esc "$provider")" "$(esc "$connection")" "$(esc "$remote_id")"
     done < "$MAP"
     printf '\n  ]\n}\n'
   } > "$temp" || { rm -f "$temp"; return 1; }
@@ -305,8 +355,9 @@ write_writeback_registry(){
 write_sync_wrapper(){
   cat > "$BIN_DIR/sync-vdir.sh" <<WRAPPER
 #!/usr/bin/env bash
-# Generated by setup-vdirsyncer.sh. Pulls private calendar data, merges each
-# local vdir into one Dash-Go calendar file, and rebuilds derived indexes.
+# Generated by setup-vdirsyncer.sh. It synchronizes only explicitly selected
+# private pairs, replaces a mirror only after that pair succeeds, and supports
+# one targeted post-edit pair without turning routine cron into discovery.
 set -u
 DASH=$(printf '%q' "$DASH")
 BIN_DIR="\$DASH/bin"
@@ -327,10 +378,19 @@ umask 077
 mkdir -p "\$CAL_DIR" "\$LOG_DIR" "\$VDIR_HOME"
 log(){ printf '%s %s\\n' "\$(date '+%Y-%m-%d %H:%M:%S')" "\$*" >> "\$LOG"; }
 
-# Every entry point (cron, manual, setup, and post-edit writeback) enters this
-# wrapper. Re-exec once through the shared low-priority helper so vdirsyncer,
-# local merging, and cache rebuilds all inherit gentle CPU and I/O scheduling.
-# The marker prevents recursion after dashboard-lowprio.sh execs this script.
+TARGET_PAIR=""
+case "\${1:-}" in
+  "") ;;
+  --pair)
+    TARGET_PAIR="\${2:-}"
+    [ -n "\$TARGET_PAIR" ] && [ "\$#" -eq 2 ] || { log 'invalid targeted sync request'; exit 2; }
+    case "\$TARGET_PAIR" in *[!A-Za-z0-9_-]*|'') log 'invalid targeted sync pair'; exit 2;; esac
+    ;;
+  *) log 'invalid sync-vdir arguments'; exit 2;;
+esac
+
+# Every entry point enters through the shared low-priority helper. The marker
+# prevents recursion after dashboard-lowprio.sh execs this script.
 if [ "\${DASH_VDIR_LOWPRIO_ACTIVE:-}" != "1" ] && [ -x "\$LOWPRIO" ]; then
   export DASH_VDIR_LOWPRIO_ACTIVE=1
   exec "\$LOWPRIO" "\$0" "\$@"
@@ -340,39 +400,33 @@ acquire_lock(){
   if mkdir "\$LOCK_DIR" 2>/dev/null; then echo "\$\$" > "\$LOCK_DIR/pid"; return 0; fi
   if [ -r "\$LOCK_DIR/pid" ]; then
     pid="\$(cat "\$LOCK_DIR/pid" 2>/dev/null || true)"
-    case "\$pid" in
-      ''|*[!0-9]*) ;;
-      *) if kill -0 "\$pid" 2>/dev/null; then log 'sync already running; skipped overlapping run'; return 1; fi;;
-    esac
+    case "\$pid" in ''|*[!0-9]*) ;; *) if kill -0 "\$pid" 2>/dev/null; then log 'sync already running; skipped overlapping run'; return 1; fi;; esac
   fi
   rm -rf "\$LOCK_DIR" 2>/dev/null || return 1
   mkdir "\$LOCK_DIR" 2>/dev/null || return 1
   echo "\$\$" > "\$LOCK_DIR/pid"
 }
-acquire_lock || exit 0
+if ! acquire_lock; then
+  [ -n "\$TARGET_PAIR" ] && exit 75
+  exit 0
+fi
 trap 'rm -rf "\$LOCK_DIR"' EXIT
 
 [ -x "\$VDIRSYNCER_BIN" ] || { log 'Dash-Go pinned vdirsyncer is unavailable; kept existing calendar mirrors'; exit 1; }
 [ -r "\$VDIR_CFG" ] && [ -r "\$MAP" ] && [ -r "\$VDIR_PAIRS" ] || { log 'vdirsyncer configuration is incomplete'; exit 1; }
+run_bounded(){ if command -v timeout >/dev/null 2>&1; then timeout 600 "\$@"; else "\$@"; fi; }
 
-# A Google pair whose one-time authorization has not completed would start an
-# interactive OAuth consent flow and block a cron run forever. Each eligible
-# pair is synchronized independently: a revoked Google token or a failed
-# remote pair cannot prevent another enrolled calendar from syncing. Remote
-# collection discovery is explicit setup/repair work, not part of this bounded
-# routine sync. A pair's derived dashboard mirror is replaced only after that
-# exact pair completes successfully, so skipped/failed pairs retain their
-# previous data.
-run_bounded(){
-  if command -v timeout >/dev/null 2>&1; then timeout 600 "\$@"; else "\$@"; fi
-}
 declare -A PAIR_RESULT=()
+known_target=0
 sync_rc=0
 ready_pairs=0
-while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _; do
+while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _ _ credential_ref _; do
   [ -n "\$pname" ] || continue
   [ -n "\$ppair" ] || continue
-  if [ "\$pprovider" = "google" ] && [ ! -s "\$GOOGLE_TOKENS/\$pname.json" ]; then
+  [ -z "\$TARGET_PAIR" ] || [ "\$ppair" = "\$TARGET_PAIR" ] || continue
+  [ "\$ppair" = "\$TARGET_PAIR" ] && known_target=1
+  [ -n "\$credential_ref" ] || credential_ref="\$pname"
+  if [ "\$pprovider" = "google" ] && [ ! -s "\$GOOGLE_TOKENS/\$credential_ref.json" ]; then
     PAIR_RESULT["\$ppair"]="skipped"
     log "google calendar \$pname awaits its one-time authorization; skipped this run"
     continue
@@ -386,13 +440,12 @@ while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _; do
     log "vdirsyncer sync reported errors for \$pname; retained its previous calendar data"
   fi
 done < "\$VDIR_PAIRS"
+if [ -n "\$TARGET_PAIR" ] && [ "\$known_target" -ne 1 ]; then log "unknown selected pair \$TARGET_PAIR"; exit 2; fi
 [ "\$ready_pairs" -gt 0 ] || log 'no pairs are ready to sync; retained existing local calendar data'
 
 merge_collection(){
   src="\$1"; dest="\$2"; tmp="\$(mktemp)"
   if ! find "\$src" -type f -name '*.ics' -print -quit 2>/dev/null | grep -q .; then
-    # An empty collection after a successful per-pair sync is legitimate (for
-    # example after deleting its final event).
     printf 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Dash-Go//vdirsyncer//EN\nCALSCALE:GREGORIAN\nEND:VCALENDAR\n' > "\$tmp"
     mv "\$tmp" "\$dest"; return 0
   fi
@@ -408,20 +461,18 @@ merge_collection(){
     '
     printf 'END:VCALENDAR\\n'
   } > "\$tmp"
-  if grep -q 'BEGIN:VEVENT' "\$tmp"; then mv "\$tmp" "\$dest"; return 0; fi
-  mv "\$tmp" "\$dest"; return 0
+  mv "\$tmp" "\$dest"
 }
 
-while IFS='|' read -r name color tag pair collection writable _; do
+while IFS='|' read -r name color tag pair collection writable remote_id display_name provider connection local_id _; do
   [ -n "\$name" ] || continue
+  [ -z "\$TARGET_PAIR" ] || [ "\$pair" = "\$TARGET_PAIR" ] || continue
   if [ -n "\$tag" ]; then dest="\$CAL_DIR/\$name.\$color.\$tag.ics"; else dest="\$CAL_DIR/\$name.\$color.ics"; fi
+  src="\$collection"
+  [ -z "\$remote_id" ] || src="\$collection/\${local_id:-\$remote_id}"
   case "\${PAIR_RESULT[\$pair]:-missing}" in
     synced)
-      if merge_collection "\$collection" "\$dest"; then
-        log "merged \$name -> \$(basename "\$dest")"
-      else
-        log "could not merge \$name; kept previous calendar file"
-      fi
+      if merge_collection "\$src" "\$dest"; then log "merged \$name -> \$(basename "\$dest")"; else log "could not merge \$name; kept previous calendar file"; fi
       ;;
     skipped) log "calendar \$name awaits authorization; kept previous calendar file";;
     failed) log "calendar \$name failed remote sync; kept previous calendar file";;
@@ -429,9 +480,7 @@ while IFS='|' read -r name color tag pair collection writable _; do
   esac
 done < "\$MAP"
 
-if [ -f "\$LOG" ] && [ "\$(wc -l < "\$LOG")" -gt 400 ]; then
-  tail -n 200 "\$LOG" > "\$LOG.tmp" && mv "\$LOG.tmp" "\$LOG"
-fi
+if [ -f "\$LOG" ] && [ "\$(wc -l < "\$LOG")" -gt 400 ]; then tail -n 200 "\$LOG" > "\$LOG.tmp" && mv "\$LOG.tmp" "\$LOG"; fi
 [ -x "\$BIN_DIR/gen-calendars.sh" ] && "\$BIN_DIR/gen-calendars.sh" >/dev/null 2>&1 || true
 [ -x "\$BIN_DIR/dashboard-control-server" ] && "\$BIN_DIR/dashboard-control-server" --gen-events-cache >/dev/null 2>&1 || true
 exit "\$sync_rc"
@@ -452,6 +501,18 @@ install_vdir_cron(){
   rm -f "$cron_tmp"
   return "$rc"
 }
+
+if [ "$REFRESH_ONLY" -eq 1 ]; then
+  if ! grep -q '[^[:space:]]' "$VDIR_PAIRS"; then
+    warn "no saved private calendar configuration exists"
+    exit 0
+  fi
+  write_vdirsyncer_config || { warn "could not refresh $VDIR_CFG"; exit 1; }
+  write_sync_wrapper || { warn "could not refresh $BIN_DIR/sync-vdir.sh"; exit 1; }
+  write_writeback_registry || { warn "could not refresh $WRITEBACK_REGISTRY"; exit 1; }
+  ok "private calendar configuration refreshed without contacting a provider"
+  exit 0
+fi
 
 say "Private calendar sync via vdirsyncer"
 echo "Pull calendars directly onto this device from iCloud, Nextcloud, Fastmail,"
@@ -509,7 +570,7 @@ while true; do
     echo "    Your primary calendar's ID is your Gmail address; other calendars show"
     echo "    their ID under Google Calendar settings → Integrate calendar."
     read -rp "    Calendar ID [all]: " collection_id
-    if ! valid_collection_id "$collection_id"; then warn "    calendar ID may use only letters, numbers, dot, hyphen, underscore, and @."; unset password; continue; fi
+    if ! valid_collection_id "$collection_id"; then warn "    calendar ID must be one line and may not contain a pipe character."; unset password; continue; fi
   else
     echo "    CalDAV server base URL:"
     echo "      iCloud:    https://caldav.icloud.com/   (default)"
@@ -524,7 +585,7 @@ while true; do
     if [ -z "$password" ] || ! valid_single_line "$password"; then warn "    no valid password given, skipping"; unset password; continue; fi
     echo "    Optionally limit to one collection UUID (blank = sync all discovered collections)."
     read -rp "    Collection UUID [all]: " collection_id
-    if ! valid_collection_id "$collection_id"; then warn "    collection UUID may use only letters, numbers, dot, hyphen, and underscore."; unset password; continue; fi
+    if ! valid_collection_id "$collection_id"; then warn "    collection ID must be one line and may not contain a pipe character."; unset password; continue; fi
   fi
   writable=0
   if [ -n "$collection_id" ]; then
@@ -536,9 +597,16 @@ while true; do
 
   pair="dash_${name}"
   collection_path="$VDIR_COLLECTIONS/$name"
+  # A legacy exact source used the remote ID as its local directory. Keep that
+  # behavior for compatibility when it is filesystem-safe; new selections use
+  # a generated local key instead.
+  local_id="$collection_id"
+  if [ -n "$local_id" ] && ! valid_local_collection_key "$local_id"; then
+    local_id="local_${name}"
+  fi
   mkdir -p "$collection_path"
-  printf '%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$writable" "$collection_id" >> "$MAP"
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$url" "$username" "$collection_id" "$provider" "$client_id" >> "$VDIR_PAIRS"
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$writable" "$collection_id" "$name" "$provider" "$name" "$local_id" >> "$MAP"
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$url" "$username" "$collection_id" "$provider" "$client_id" "$name" "$name" "$local_id" >> "$VDIR_PAIRS"
   if [ "$provider" = "google" ]; then
     printf '%s' "$password" > "$VDIR_PASSWORDS/$name.google-client-secret"
     chmod 600 "$VDIR_PASSWORDS/$name.google-client-secret" 2>/dev/null || true
@@ -575,74 +643,67 @@ was_setup_discovered(){ case "$SETUP_DISCOVERED_PAIRS" in *"|$1|"*) return 0;; e
 
 authorize_google_pairs(){
   # The pairs file is read on its own descriptor so the authorization prompt
-  # below keeps reading the user's answers from stdin.
-  local gname gpair gprovider answered any=0
-  while IFS='|' read -r gname _ _ gpair _ _ _ _ gprovider _ <&3; do
+  # below keeps reading the user's answers from stdin. Selected calendars may
+  # share a connection credential; prompt once for that shared token.
+  local gname gpair gprovider credential_ref answered any=0
+  local seen="|"
+  while IFS='|' read -r gname _ _ gpair _ _ _ _ gprovider _ _ credential_ref _ <&3; do
     [ -n "$gname" ] || continue
     [ "$gprovider" = "google" ] || continue
-    [ -s "$GOOGLE_TOKENS/$gname.json" ] && continue
+    [ -n "$credential_ref" ] || credential_ref="$gname"
+    case "$seen" in *"|$credential_ref|"*) continue;; esac
+    seen="${seen}${credential_ref}|"
+    [ -s "$GOOGLE_TOKENS/$credential_ref.json" ] && continue
     if [ "$any" -eq 0 ]; then
-      say "Google authorization (one time per calendar)"
+      say "Google authorization (one time per connected account)"
       echo "vdirsyncer will print a Google sign-in URL that redirects to"
       echo "http://127.0.0.1:PORT on THIS device."
       echo "  - With a desktop session here, the browser opens automatically."
-      echo "  - Over SSH: read PORT from redirect_uri in the printed URL, open a"
-      echo "    second terminal on your computer with"
-      echo "      ssh -L PORT:127.0.0.1:PORT $(whoami)@$(hostname)"
-      echo "    then open the printed URL in your own browser; the final redirect"
-      echo "    reaches this device through the tunnel."
-      echo "  - Alternatively run this same setup on a desktop and copy"
-      echo "    $GOOGLE_TOKENS/<name>.json here afterwards (0600 permissions)."
+      echo "  - Over SSH, forward the local callback port shown by vdirsyncer."
       any=1
     fi
-    read -rp "  Authorize Google calendar '$gname' now? [Y/n]: " answered
+    read -rp "  Authorize Google connection '$credential_ref' now? [Y/n]: " answered
     case "${answered:-y}" in
-      n|N)
-        warn "  skipped; '$gname' stays read-only-idle until authorized (re-run setup or: $VDIRSYNCER_BIN -c $VDIR_CFG discover $gpair)"
-        continue;;
+      n|N) warn "  skipped; '$gname' stays read-only-idle until authorized (re-run setup or: $VDIRSYNCER_BIN -c $VDIR_CFG discover $gpair)"; continue;;
     esac
-    if "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$gpair" && [ -s "$GOOGLE_TOKENS/$gname.json" ]; then
-      chmod 600 "$GOOGLE_TOKENS/$gname.json" 2>/dev/null || true
+    if "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$gpair" && [ -s "$GOOGLE_TOKENS/$credential_ref.json" ]; then
+      chmod 600 "$GOOGLE_TOKENS/$credential_ref.json" 2>/dev/null || true
       mark_setup_discovered "$gpair"
-      ok "  Google calendar '$gname' authorized"
+      ok "  Google connection '$credential_ref' authorized"
     else
-      warn "  authorization for '$gname' did not complete; it is skipped by sync until it does"
+      warn "  authorization for '$credential_ref' did not complete; it is skipped by sync until it does"
     fi
   done 3< "$VDIR_PAIRS"
 }
 
 discover_private_pairs(){
-  # Discovery may create local collection folders or reconcile a deliberately
-  # changed remote collection list. It runs only when an administrator opens
-  # setup/repair, never inside the routine sync wrapper.
-  local dname dpair dprovider discovered=0 skipped=0
-  while IFS='|' read -r dname _ _ dpair _ _ _ _ dprovider _ <&3; do
+  # Discovery may create local collection folders only when an administrator
+  # deliberately opens interactive setup. Routine sync and beta.7's Dashboard
+  # Control discovery use separate paths and never call this function.
+  local dname dpair dprovider credential_ref discovered=0 skipped=0
+  while IFS='|' read -r dname _ _ dpair _ _ _ _ dprovider _ _ credential_ref _ <&3; do
     [ -n "$dname" ] || continue
     [ -n "$dpair" ] || continue
-    if [ "$dprovider" = "google" ] && [ ! -s "$GOOGLE_TOKENS/$dname.json" ]; then
+    [ -n "$credential_ref" ] || credential_ref="$dname"
+    if [ "$dprovider" = "google" ] && [ ! -s "$GOOGLE_TOKENS/$credential_ref.json" ]; then
       warn "  '$dname' has no Google authorization yet; discovery is deferred until it is authorized"
-      skipped=$((skipped + 1))
-      continue
+      skipped=$((skipped + 1)); continue
     fi
-    if was_setup_discovered "$dpair"; then
-      continue
-    fi
+    if was_setup_discovered "$dpair"; then continue; fi
     if yes | "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$dpair"; then
-      mark_setup_discovered "$dpair"
-      discovered=$((discovered + 1))
-      ok "  discovered private collection(s) for $dname"
+      mark_setup_discovered "$dpair"; discovered=$((discovered + 1)); ok "  discovered private collection(s) for $dname"
     else
       warn "  discovery for '$dname' did not complete; the prior local mirror is preserved and sync will still try its known pair"
     fi
   done 3< "$VDIR_PAIRS"
-  [ "$discovered" -gt 0 ] || [ "$skipped" -gt 0 ] || ok "  existing private collection discovery is current"
+  [ "$discovered" -gt 0 ] && ok "discovered $discovered private pair(s)"
+  [ "$skipped" -gt 0 ] && warn "$skipped Google pair(s) await authorization"
 }
-authorize_google_pairs
 
 say "Discovering private calendar collections"
+authorize_google_pairs
 discover_private_pairs
 
-say "Writing private calendar sync wrapper"
 write_sync_wrapper || { warn "could not write $BIN_DIR/sync-vdir.sh"; exit 1; }
 ok "sync-vdir.sh written"
 

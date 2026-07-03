@@ -108,6 +108,7 @@ func TestRuntimeAssetManifestsPreserveSemanticSourceOrder(t *testing.T) {
 			"ui/js/control-theme.js",
 			"ui/js/control-calendars.js",
 			"ui/js/control-calendar-writeback.js",
+			"ui/js/control-private-calendars.js",
 			"ui/js/control-household-schedules.js",
 			"ui/js/control-display-weather.js",
 			"ui/js/control-dashboard-typography.js",

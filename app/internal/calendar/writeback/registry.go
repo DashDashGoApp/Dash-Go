@@ -17,7 +17,7 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 )
 
-const RegistryVersion = 1
+const RegistryVersion = 2
 
 var ErrBusy = errors.New("calendar sync is already running")
 
@@ -27,6 +27,13 @@ type Calendar struct {
 	Writable   bool   `json:"writable"`
 	Enabled    bool   `json:"enabled"`
 	Name       string `json:"name,omitempty"`
+	// Pair is the exact generated vdirsyncer pair used by this dashboard source.
+	// Empty is accepted only for a migrated v1 entry and falls back to a full
+	// private-calendar sync until the setup refresh rewrites it.
+	Pair       string `json:"pair,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Connection string `json:"connection,omitempty"`
+	RemoteID   string `json:"remoteId,omitempty"`
 }
 type Registry struct {
 	Version    int        `json:"version"`
@@ -34,11 +41,22 @@ type Registry struct {
 	RequirePIN bool       `json:"requirePin"`
 	Calendars  []Calendar `json:"calendars"`
 }
+type CalendarState struct {
+	UpdatedAt string `json:"updatedAt"`
+	State     string `json:"state"`
+	Detail    string `json:"detail"`
+}
 type Status struct {
-	Enabled    bool           `json:"enabled"`
-	RequirePIN bool           `json:"requirePin"`
-	Calendars  []Calendar     `json:"calendars"`
-	Last       map[string]any `json:"last,omitempty"`
+	Enabled    bool                     `json:"enabled"`
+	RequirePIN bool                     `json:"requirePin"`
+	Calendars  []Calendar               `json:"calendars"`
+	States     map[string]CalendarState `json:"-"`
+	Last       map[string]any           `json:"last,omitempty"`
+}
+
+type statusEnvelope struct {
+	Version   int                      `json:"version"`
+	Calendars map[string]CalendarState `json:"calendars"`
 }
 
 type Config struct {
@@ -86,6 +104,12 @@ func (s *Service) loadLocked() (Registry, error) {
 	if err := jsonUnmarshalStrict(b, &reg); err != nil {
 		return Registry{}, fmt.Errorf("invalid calendar writeback registry: %w", err)
 	}
+	// Beta.6 used v1. Its records contain all local safety information, so
+	// migrate in memory and preserve the source until setup refresh assigns a
+	// targeted vdirsyncer pair and provider metadata.
+	if reg.Version == 1 {
+		reg.Version = RegistryVersion
+	}
 	if reg.Version != RegistryVersion {
 		return Registry{}, fmt.Errorf("unsupported calendar writeback registry")
 	}
@@ -116,6 +140,12 @@ func (s *Service) validateRegistry(reg Registry) error {
 			return fmt.Errorf("duplicate writable calendar source")
 		}
 		seen[source] = true
+		if item.Pair != "" && !validPair(item.Pair) {
+			return fmt.Errorf("invalid private calendar sync pair")
+		}
+		if item.Provider != "" && item.Provider != "caldav" && item.Provider != "google" {
+			return fmt.Errorf("invalid private calendar provider")
+		}
 		if !item.Writable {
 			continue
 		}
@@ -132,6 +162,17 @@ func validSource(source string) bool {
 	}
 	base := strings.TrimPrefix(source, "calendars/")
 	return base != "" && !strings.Contains(base, "/") && strings.HasSuffix(strings.ToLower(base), ".ics")
+}
+func validPair(value string) bool {
+	if value == "" || len(value) > 96 {
+		return false
+	}
+	for _, r := range value {
+		if !(r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 func (s *Service) validateCollection(collection string) error {
 	collection = filepath.Clean(strings.TrimSpace(collection))
@@ -152,6 +193,33 @@ func (s *Service) sourcePath(source string) (string, error) {
 	return filepath.Join(s.calendarDir, filepath.Base(source)), nil
 }
 
+func (s *Service) loadStatesLocked() (map[string]CalendarState, map[string]any) {
+	states := map[string]CalendarState{}
+	b, err := os.ReadFile(s.statusPath)
+	if err != nil {
+		return states, nil
+	}
+	var envelope statusEnvelope
+	if jsonUnmarshalStrict(b, &envelope) == nil && envelope.Version == 1 && envelope.Calendars != nil {
+		for source, state := range envelope.Calendars {
+			if validSource(source) {
+				states[source] = state
+			}
+		}
+		return states, nil
+	}
+	// Beta.6 stored one last-write record. Keep it visible for its original
+	// source while moving all new records into the per-calendar envelope.
+	var legacy map[string]any
+	if jsonUnmarshalStrict(b, &legacy) == nil {
+		source, _ := legacy["source"].(string)
+		if validSource(source) {
+			states[source] = CalendarState{UpdatedAt: fmt.Sprint(legacy["updatedAt"]), State: fmt.Sprint(legacy["state"]), Detail: fmt.Sprint(legacy["detail"])}
+		}
+		return states, legacy
+	}
+	return states, nil
+}
 func (s *Service) Status() (Status, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -161,14 +229,8 @@ func (s *Service) Status() (Status, error) {
 	}
 	rows := append([]Calendar(nil), reg.Calendars...)
 	slices.SortFunc(rows, func(a, b Calendar) int { return strings.Compare(strings.ToLower(a.Source), strings.ToLower(b.Source)) })
-	out := Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: rows}
-	if b, err := os.ReadFile(s.statusPath); err == nil {
-		var last map[string]any
-		if jsonUnmarshalStrict(b, &last) == nil {
-			out.Last = last
-		}
-	}
-	return out, nil
+	states, last := s.loadStatesLocked()
+	return Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: rows, States: states, Last: last}, nil
 }
 
 // RegisteredSource reports a trusted vdir mirror regardless of whether the
@@ -247,17 +309,18 @@ func (s *Service) Configure(enabled, requirePIN bool, requested map[string]bool)
 	if err := s.writeLocked(reg); err != nil {
 		return Status{}, err
 	}
-	return s.statusLocked(reg), nil
-}
-func (s *Service) statusLocked(reg Registry) Status {
-	rows := append([]Calendar(nil), reg.Calendars...)
-	return Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: rows}
+	states, last := s.loadStatesLocked()
+	return Status{Enabled: reg.Enabled, RequirePIN: reg.RequirePIN, Calendars: append([]Calendar(nil), reg.Calendars...), States: states, Last: last}, nil
 }
 func (s *Service) Record(source, state, detail string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	payload := map[string]any{"updatedAt": s.now().UTC().Format(time.RFC3339), "source": source, "state": state, "detail": detail}
-	_ = fileio.WriteJSON(s.statusPath, payload)
+	states, _ := s.loadStatesLocked()
+	if !validSource(source) {
+		return
+	}
+	states[source] = CalendarState{UpdatedAt: s.now().UTC().Format(time.RFC3339), State: strings.TrimSpace(state), Detail: strings.TrimSpace(detail)}
+	_ = fileio.WriteJSON(s.statusPath, statusEnvelope{Version: 1, Calendars: states})
 }
 
 // WithSyncLock shares sync-vdir.sh's directory lock. It never waits behind a

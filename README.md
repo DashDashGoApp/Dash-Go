@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.6-beta.6"
+VERSION="1.5.6-beta.7"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -241,11 +241,13 @@ Apps load only when opened and use the shared Dash-Go overlay, theme, touch cont
 
 Choose **Add private calendar** from the installer’s calendar-sync menu for iCloud, Nextcloud, Fastmail, Radicale, another standard CalDAV service, or Google Calendar. Dash-Go keeps account credentials outside the served dashboard tree and synchronizes the chosen remote collection into a local Dash-Go calendar. Private calendar sync installs a Dash-Go-owned, pipx-isolated `vdirsyncer[google]` **0.20.0** environment; `pipx` itself is installed through APT on Debian/Raspberry Pi OS when needed. Dash-Go never runs a pipx upgrade automatically.
 
-A private CalDAV or Google collection can optionally be enrolled for **Dashboard edits** when setup can identify one exact local vdir collection. In **Dashboard Control → Calendars**, enable that collection to add events from a day popup, edit simple events, or skip one occurrence of a recurring event. Dash-Go writes the local vdir first, updates its dashboard mirror, then queues the usual CalDAV synchronization.
+Connect Google, iCloud, or another CalDAV account first, then use **Dashboard Control → Calendars → Discover available calendars**. Discovery is review-only: it does not activate, display, synchronize, edit, hide, or delete anything. Add each wanted remote calendar deliberately as either **display-only** or **editable**. Every selected collection receives its own exact local vdir mapping and its own Dashboard source, so two calendars with the same display name remain distinct.
 
-Private calendars synchronize one at a time every 15 minutes through Dash-Go’s gentle CPU/I/O launcher, so vdirsyncer, mirror merging, and event-cache refreshes yield to the kiosk. Remote collection discovery happens only when private-calendar setup is opened or refreshed—not during ordinary scheduled syncs. Reopen setup after creating a new remote calendar or changing a collection list.
+For an editable selected collection, Dash-Go writes a supported normal event to the local vdir first, refreshes its local dashboard mirror, and queues synchronization only for that collection. In the selected-calendar row, you can later switch between display-only and editable without reconnecting the provider. The global **Dashboard calendar edits** switch remains the final safety gate. A provider conflict stops safely and becomes **Needs attention**; Dash-Go does not silently choose a Google, iCloud, or local version.
 
-Website and `webcal`/HTTPS ICS subscriptions remain permanently read-only. Broad discovered CalDAV mirrors, local unmanaged ICS files, generated Dash-Go feeds, attendee/organizer events, and detached recurring instances are also read-only. Calendar Manager can hide a registered CalDAV mirror but never deletes the remote calendar. One-time event deletion requires an enabled Dashboard Control PIN.
+Private calendars synchronize one at a time every 15 minutes through Dash-Go’s gentle CPU/I/O launcher, so vdirsyncer, mirror merging, and event-cache refreshes yield to the kiosk. Routine sync never discovers newly created remote calendars. Use Discover when you want to review a changed provider collection list.
+
+Website and `webcal`/HTTPS ICS subscriptions remain permanently read-only. Broad legacy discovered mirrors, local unmanaged ICS files, generated Dash-Go feeds, attendee/organizer events, and detached recurring instances are also read-only. Calendar Manager can stop future sync or hide a registered private mirror but never deletes the remote calendar. One-time event deletion requires an enabled Dashboard Control PIN.
 
 ### Microsoft To Do
 

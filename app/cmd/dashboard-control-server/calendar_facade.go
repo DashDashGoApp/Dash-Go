@@ -108,30 +108,48 @@ func (a *app) calendarManagementStatus() map[string]any {
 	status := a.calendarService().ManagementStatus()
 	writeback := a.calendarWritebackStatus()
 	status["writeback"] = writeback
-	registered := map[string]bool{}
+	status["privateCalendars"] = a.privateCalendarStatus()
+	registered := map[string]map[string]any{}
 	for _, raw := range jsonutil.List(writeback["calendars"]) {
 		row := jsonutil.Map(raw)
 		if source := strings.TrimSpace(jsonutil.StringValue(row["source"])); source != "" {
-			registered[source] = true
+			registered[source] = row
 		}
+	}
+	selected := map[string]privateCalendarSelection{}
+	for _, row := range a.privateCalendarSelections() {
+		selected[row.Source] = row
 	}
 	for _, raw := range jsonutil.List(status["calendars"]) {
 		row := jsonutil.Map(raw)
-		if !registered[strings.TrimSpace(jsonutil.StringValue(row["url"]))] {
+		source := strings.TrimSpace(jsonutil.StringValue(row["url"]))
+		selection, isSelected := selected[source]
+		if !isSelected && registered[source] == nil {
 			continue
 		}
 		// A vdir-derived file is a local dashboard mirror, never an ownership
-		// transfer. Calendar Manager may hide it but must not trash or unlink it.
+		// transfer. Calendar Manager may hide it but must not trash/unlink it.
 		row["kind"] = "writeback"
 		row["deleteMode"] = "hide-only"
-		row["sourceLabel"] = "Private CalDAV mirror · remote calendar is unchanged"
-		row["writebackRegistered"] = true
+		provider := "caldav"
+		if isSelected {
+			provider = selection.Provider
+		} else if details := registered[source]; details != nil {
+			provider = strings.TrimSpace(jsonutil.StringValue(details["provider"]))
+		}
+		if provider == "google" {
+			row["sourceLabel"] = "Private Google calendar mirror · remote calendar is unchanged"
+		} else {
+			row["sourceLabel"] = "Private iCloud / CalDAV mirror · remote calendar is unchanged"
+		}
+		row["writebackRegistered"] = registered[source] != nil
+		row["privateSelected"] = isSelected
 	}
 	return status
 }
 func (a *app) archiveLocalCalendar(url, displayName string) (calendarTrashRecord, error) {
 	if a.calendarWritebackService().RegisteredSource(url) {
-		return calendarTrashRecord{}, fmt.Errorf("private CalDAV mirrors cannot be deleted from Dashboard Control; disconnect them from CalDAV setup instead")
+		return calendarTrashRecord{}, fmt.Errorf("private calendar mirrors cannot be deleted from Dashboard Control; stop their private sync instead")
 	}
 	return a.calendarService().Archive(url, displayName)
 }

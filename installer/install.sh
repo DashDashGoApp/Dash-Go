@@ -93,6 +93,27 @@ update_cli(){
 installed_dashboard_version(){
   head -n 1 "$DASH/VERSION" 2>/dev/null | tr -d '[:space:]'
 }
+# Private calendar selections are mutable user state outside the release tree.
+# A beta.7 update may replace the helper that renders their exact mappings, so
+# regenerate only the derived config/wrapper/registry after the protected state
+# has been restored. --refresh is deliberately local-only: it does not contact
+# a provider, discover collections, change cron, or change selections. A
+# failure is non-fatal because the previous local mirrors remain usable and the
+# user can retry from Calendar Manager after the update.
+refresh_private_calendar_configuration_after_payload(){
+  local private_home="${DASH_VDIR_HOME:-$HOME/.dashboard-vdirsyncer}" setup="$BIN_DIR/setup-vdirsyncer.sh"
+  [ -s "$private_home/pairs" ] || return 0
+  if [ ! -x "$setup" ]; then
+    warn "private calendar configuration was retained but the refresh helper is unavailable; open Calendar Manager to retry"
+    return 0
+  fi
+  if "$setup" --refresh >> "$LOG_DIR/update.log" 2>&1; then
+    ok "refreshed private calendar configuration without contacting a provider"
+  else
+    warn "private calendar configuration was retained but could not be refreshed; open Calendar Manager to retry"
+  fi
+  return 0
+}
 # A pre-beta.72 server would treat an unknown CLI switch as a normal server
 # start. Never probe it with --updater-capabilities. The floor is only a safe
 # bootstrap boundary; every normal decision below uses live Go CLI output.
@@ -2703,6 +2724,7 @@ PYMANLIST
     rollback_release_transaction "$stage" "Could not restore protected personal settings after update" || true
     return 1
   fi
+  refresh_private_calendar_configuration_after_payload
   write_update_phase committing "Refreshing local updater" "Installing the matching release installer for future Dashboard Control and SSH updates."
   if ! install_canonical_installer "$canonical_installer"; then
     rollback_release_transaction "$stage" "Could not install the canonical Dash-Go updater" || true

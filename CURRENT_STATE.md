@@ -13,10 +13,17 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.6`
+- **Version:** `1.5.6-beta.7`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** keep optional private-calendar synchronization quiet on the Pi by lowering its scheduled CPU/I/O priority and moving remote discovery out of routine syncs.
+- **Focus:** make private Google, iCloud, and CalDAV calendars intentionally discoverable, individually selectable, and safely manageable as exact two-way sources without adding a second remote-sync engine.
+
+## 1.5.6-beta.7 highlights
+
+- **Discover before selecting:** Calendar Manager now offers a user-triggered, disposable vdirsyncer discovery inventory. It shows remote Google/iCloud/CalDAV collections without changing the active configuration, dashboard mirror, event cache, cron schedule, or write permissions. Nothing becomes active until the user explicitly adds it.
+- **Exact selected sources:** each selected remote collection gets a separate generated pair, local vdir key, dashboard mirror, provider label, and per-source sync state. Opaque remote IDs remain metadata rather than filesystem names, so duplicate display names and URL-like CalDAV identifiers stay safe and distinct.
+- **Manageable two-way calendars:** selected calendars can be changed later between display-only and editable from Dashboard Control. Supported normal event writes remain local-first and now queue only the affected vdirsyncer pair instead of every private calendar. The global calendar-edit safety switch and deletion PIN protections remain in force.
+- **Conflict-safe migration:** new generated pairs remove remote-wins conflict configuration. A detected conflict keeps both versions intact and marks that source as needing attention. Existing broad discovery mirrors are preserved as read-only during migration; an update refreshes only derived local private-calendar configuration and never contacts a provider.
 
 ## 1.5.6-beta.6 highlights
 

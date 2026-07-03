@@ -2,7 +2,7 @@
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.6-beta.6, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.6-beta.7, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -18,7 +18,7 @@ When an optional service is unavailable, Dash-Go does not invent missing data or
 |---|---|---|---|
 | Local iCalendar files | Calendar events from local `.ics` files | Nothing leaves the device | Fully available |
 | Remote iCalendar feeds | Read-only calendars from an HTTPS or webcal feed | Feed request; the URL may itself contain a private token | Existing local calendar content remains available until refreshed or removed |
-| CalDAV | Calendar synchronization through a compatible CalDAV server; optional Dashboard edits for one exact enrolled private collection | CalDAV endpoint, configured credentials, calendar data, and user-requested local-first changes when writeback is enabled | Existing local mirror remains available; writes wait locally for the next successful synchronization |
+| CalDAV | Calendar synchronization through a compatible CalDAV server; explicit discovery and per-collection display-only or editable selection | CalDAV endpoint, configured credentials, calendar data, and user-requested local-first changes when writeback is enabled | Existing local mirror remains available; writes wait locally for the next successful synchronization |
 | Microsoft To Do | Optional task-list synchronization | Microsoft authorization data, mapped list information, and relevant task changes | Local task workflows remain available; remote synchronization waits for recovery |
 | Apprise-Go notifications | Optional delivery through configured notification services | Notification text and the configured destination route | No notification is sent while the destination is unavailable |
 | Weather and air quality | Forecasts, conditions, air quality, and severe-weather alerts | Configured location coordinates and, where needed, a provider API key | Cached information may remain visible; fresh data cannot be retrieved |
@@ -46,11 +46,13 @@ Dash-Go supports compatible CalDAV workflows through its local synchronization s
 
 A CalDAV setup can store an endpoint, account name, app password, token, collection selection, and synchronized calendar data locally on the Dash-Go device. Those credentials are used only to communicate with the configured CalDAV server.
 
-Dashboard writeback is optional and narrow: it is allowed only for one exact local vdir collection explicitly enrolled during setup and enabled in Dashboard Control. A Dashboard-created or edited event is written locally first and synchronized remotely later. URL subscriptions, broad multi-collection mirrors, generated feeds, and unmanaged local ICS files are never writeback targets. Dash-Go never deletes a remote calendar; removing or disabling a CalDAV connection stops future synchronization without automatically erasing local household data or unrelated calendar files.
+Dashboard writeback is optional and narrow. A connected account is discovered only by a user-led **Discover available calendars** action; discovery creates a review inventory and never changes active syncs. The user then selects each wanted remote collection as display-only or editable. Every selected collection gets an exact local vdir mapping and a separate Dashboard source. A supported Dashboard-created, edited, or deleted event is written locally first and synchronized remotely later for that one selected pair. URL subscriptions, broad legacy multi-collection mirrors, generated feeds, and unmanaged local ICS files are never writeback targets. Dash-Go never deletes a remote calendar; stopping future synchronization preserves the local mirror by default.
+
+Conflicts are safe-stop behavior. When the same event changes locally and remotely before a sync, Dash-Go keeps both sides intact, marks only that selected source as needing attention, and does not automatically choose a winner.
 
 ### Google Calendar
 
-Google Calendar synchronizes through the same vdirsyncer pipeline using Google's CalDAV endpoint with OAuth. Every reliability, privacy, and writeback property of the CalDAV section above applies unchanged: the local vdir is the source of local truth, Dashboard edits (when enrolled and enabled) save locally first and push in the background, conflicts resolve in the remote's favor, and Dash-Go never deletes a remote calendar.
+Google Calendar synchronizes through the same vdirsyncer pipeline using Google's CalDAV endpoint with OAuth. One Google connection can own multiple selected calendar mappings while reusing its private OAuth token. Exact selected Google collections can be display-only or, when Dashboard edits are enabled, support local-first create, edit, and delete of supported normal events. A write queues only the affected Google collection; a failure, revoked token, or conflict leaves other selected calendars available. Dash-Go never deletes a Google calendar.
 
 ### Managed vdirsyncer installation
 
@@ -64,7 +66,7 @@ Google requires a one-time preparation in your own Google Cloud account, because
 2. Configure the OAuth consent screen. For a personal or household account, set the publishing status to **In production**; a client left in *Testing* status receives refresh tokens that Google expires after seven days, which would silently stop background sync.
 3. Create an OAuth client ID of type **Desktop app** and note its client ID and client secret.
 
-Run `setup-vdirsyncer.sh`, choose the Google Calendar provider, and supply the client ID and secret. The client secret and the OAuth token are stored outside the dashboard webroot in `~/.dashboard-vdirsyncer/` with owner-only permissions, exactly like CalDAV app passwords. To make one Google calendar eligible for Dashboard edits, supply its exact Calendar ID (the primary calendar's ID is the Gmail address; any other calendar shows its ID under Google Calendar settings → *Integrate calendar*); leaving the ID blank mirrors all discovered calendars read-only.
+Run `setup-vdirsyncer.sh`, choose the Google Calendar provider, and supply the client ID and secret. The client secret and the OAuth token are stored outside the dashboard webroot in `~/.dashboard-vdirsyncer/` with owner-only permissions, exactly like CalDAV app passwords. Then use Dashboard Control’s discovery inventory to review the account collections and select the ones Dash-Go should synchronize. You do not need to type or remember Google calendar IDs in normal use; Dash-Go keeps those opaque IDs as provider metadata and uses generated safe local collection keys.
 
 Authorization happens once per enrolled Google account, interactively, at setup time: vdirsyncer prints a Google sign-in URL whose redirect returns to `http://127.0.0.1:PORT` on the Dash-Go device. On a device with a local browser the flow completes automatically. Over SSH, read the port from `redirect_uri` in the printed URL, open `ssh -L PORT:127.0.0.1:PORT user@dash-go-host` in a second terminal, and complete the sign-in in your own browser; the final redirect reaches the device through the tunnel. Alternatively, run the same setup on a desktop machine and copy the resulting `~/.dashboard-vdirsyncer/google-tokens/<name>.json` to the device with `0600` permissions.
 

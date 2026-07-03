@@ -7,8 +7,8 @@ function ctrlCalendarWritebackSettings(status){
   card.append(el("div","calmanager-heading","Dashboard calendar edits"));
   const rows=Array.isArray(status.calendars)?status.calendars:[];
   card.appendChild(el("p","calmanager-note",rows.length
-    ?"Only explicitly registered private CalDAV collections can be edited here. Website subscriptions and generated feeds stay read-only."
-    :"Set up a private CalDAV/iCloud collection first. Website subscriptions and generated feeds are always read-only."));
+    ?"Only explicitly selected private Google, iCloud, or CalDAV collections can be edited here. Website subscriptions and generated feeds stay read-only."
+    :"Discover and select a private Google, iCloud, or CalDAV calendar first. Website subscriptions and generated feeds are always read-only."));
   if(status.last&&status.last.detail)card.appendChild(el("p","calmanager-note",String(status.last.detail)));
   if(!rows.length)return card;
   const toggles=el("div","calmanager-actions");
@@ -22,7 +22,7 @@ function ctrlCalendarWritebackSettings(status){
   const list=el("div","calmanager-list");
   for(const cal of rows){
     const row=el("article","calmanager-row calmanager-writeback");
-    row.append(el("div","calmanager-title",cal.name||cal.source),el("div","calmanager-detail","Private CalDAV collection · remote calendar is never deleted from Dashboard Control"));
+    row.append(el("div","calmanager-title",cal.name||cal.source),el("div","calmanager-detail",`Private ${cal.provider==="google"?"Google":"iCloud / CalDAV"} collection · remote calendar is never deleted from Dashboard Control`));
     const actions=el("div","calmanager-actions");
     actions.appendChild(caction(cal.enabled===false?"Enable this calendar":"Disable this calendar",cal.enabled===false?"Allow it when Dashboard edits are enabled.":"Keep it visible but make it read-only in Dash-Go.",cal.enabled===false?"primary":"",async()=>{
       const calendars=rows.map(item=>({source:item.source,enabled:item.source===cal.source?!item.enabled:item.enabled!==false}));
