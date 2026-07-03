@@ -2,6 +2,23 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.5] — 2026-07-02
+
+### Pinned private-calendar synchronization
+
+- Standardized optional CalDAV and Google private-calendar synchronization on one Dash-Go-owned `pipx` environment pinned to `vdirsyncer[google]` 0.20.0. Raspberry Pi OS/Debian/Ubuntu may install `pipx` through APT, but the vdirsyncer application never enters system Python and Dash-Go no longer offers raw `pip --user` or a distro-version-dependent vdirsyncer path.
+- Generated sync wrappers now call the known owner-only wrapper beneath `~/.dashboard-vdirsyncer/bin/`, preventing a later PATH change or unrelated system package from silently changing the sync executable. Pipx pinning is attempted where supported; exact installation and the absence of automatic upgrades remain the durable baseline.
+- Made existing private-calendar setups migratable: reopen setup and finish with no new calendar to regenerate the config/wrapper around the pinned tool without touching saved credentials, tokens, calendar mappings, or remote data. Added a functional pipx-policy smoke alongside the CalDAV and Google setup smokes.
+
+## [1.5.6-beta.4] — 2026-07-02
+
+### Two-way Google Calendar sync
+
+- Added a Google Calendar provider to the CalDAV setup flow using vdirsyncer's OAuth-based `google_calendar` storage over Google's CalDAV endpoint. Google calendars ride the existing pull/merge/writeback pipeline unchanged: exact enrolled collections may opt into local-first Dashboard add/edit/skip with background push, while broad discovered mirrors stay read-only.
+- OAuth material never enters the dashboard webroot: the client secret is stored beside CalDAV app passwords and fetched by command, and the token lives in a new owner-only `google-tokens` directory. Setup performs the one-time authorization interactively with explicit headless/SSH port-forward guidance; declining leaves the calendar idle rather than misconfigured.
+- Hardened the generated sync wrapper for OAuth providers: only pairs able to run noninteractively are passed to vdirsyncer, an unauthorized Google pair is skipped with a log line instead of blocking a cron run on an interactive consent prompt, and discover/sync are bounded with `timeout` when available. Each eligible pair is synchronized independently, so one revoked or failed Google connection cannot block another Google or CalDAV calendar and cannot overwrite that failed pair’s prior dashboard mirror. Existing CalDAV pairs files remain valid without regeneration.
+- Documented the Google Cloud preparation honestly, including enabling the CalDAV API, using a Desktop-app OAuth client, and publishing the consent screen to production so refresh tokens do not expire after seven days.
+
 ## [1.5.6-beta.3] — 2026-07-02
 
 ### Opt-in private CalDAV writeback

@@ -4642,7 +4642,7 @@ echo "  ${OPT_WEATHER_SOURCES}) Weather sources         guided toggle menu for f
 echo "  ${OPT_RADAR}) Weather radar           choose provider + optional protected key"
 echo "  ${OPT_CALENDARS}) Built-in calendars      holidays, sky calendars, celebrations, pickup"
 echo "  ${OPT_ICAL}) Add iCal URL calendar   Google/Outlook/Nextcloud/webcal .ics links"
-echo "  ${OPT_VDIR}) Add CalDAV calendar     vdirsyncer/iCloud/CalDAV setup"
+echo "  ${OPT_VDIR}) Add private calendar    vdirsyncer/iCloud/CalDAV/Google setup"
 echo "  ${OPT_MESSAGES}) Message sources         quotes, jokes, facts, prompts, API refresh"
 echo "                              optional keys saved in ~/.dashboard-message.env"
 echo "  ${OPT_TODO}) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup"
@@ -4748,7 +4748,7 @@ case "$MODE" in
 
  CALENDARS
    * Subscribe to public .ics URLs (Google, Outlook, Nextcloud, school,
-     work) or set up CalDAV/vdirsyncer, then see all events in one view.
+     work) or set up a private vdirsyncer calendar, then see all events in one view.
    * Built-in holidays, sky events, celebrations, pickup schedules, and
      birthdays can be turned on/off separately. Drag/drop .ics files works too.
 
@@ -4807,7 +4807,7 @@ TOUR
      ask "Microsoft To Do / Graph setup (local Lists, client ID, Azure CLI registration)" && DO_APP_SETUP=1
      ask "Built-in/default calendars"                              && DO_CALENDARS=1
      ask "Add iCal URL calendar"                                    && DO_ICAL=1
-     ask "Add CalDAV/vdirsyncer calendar"                           && DO_VDIR=1
+     ask "Add private calendar (CalDAV or Google)"                           && DO_VDIR=1
      ask "Control-panel PIN lock (set/reset/disable/duration)"       && DO_PIN=1
      ask "Dashboard service (web server + on-screen control panel)" && DO_SERVICE=1
      ask "Boot straight into the dashboard (graphical autologin)"    && DO_AUTOLOGIN=1
@@ -6239,11 +6239,11 @@ if [ "$DO_ICAL" = "1" ]; then
 fi
 
 if [ "$DO_VDIR" = "1" ]; then
-  say "CalDAV/vdirsyncer calendar setup"
+  say "Private calendar/vdirsyncer setup"
   if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
     "$BIN_DIR/setup-vdirsyncer.sh"
   else
-    warn "CalDAV/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+    warn "Private calendar/vdirsyncer setup is unavailable. Run Update the app first, then try again."
   fi
 fi
 
@@ -6475,7 +6475,7 @@ while true; do
   echo
   echo "Calendar sync — choose a source to add (repeats so you can add several):"
   echo "  1) iCal secret/.ics URL   — Google/Outlook/Nextcloud/webcal links"
-  echo "  2) CalDAV (vdirsyncer)    — iCloud; needs app password + UUIDs"
+  echo "  2) Private calendar (vdirsyncer) — iCloud/CalDAV or Google OAuth"
   echo "  3) Continue / don't add another calendar"
   read -rp "  Choose [1/2/3]: " calmethod
   case "$calmethod" in
@@ -6490,7 +6490,7 @@ while true; do
       if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
         "$BIN_DIR/setup-vdirsyncer.sh"
       else
-        warn "CalDAV/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+        warn "Private calendar/vdirsyncer setup is unavailable. Run Update the app first, then try again."
       fi
       ;;
     3) ok "Calendar sync setup finished."; break;;

@@ -13,10 +13,23 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.3`
+- **Version:** `1.5.6-beta.5`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** explicit private CalDAV calendar writeback, including safe local-first create/edit/skip flows, strict read-only boundaries for subscriptions and generated feeds, and the established reliability, durability, and frontend-efficiency work from beta.1–beta.2.
+- **Focus:** keep private calendar writeback optional and provider-neutral while standardizing its external sync tool as an isolated, pinned vdirsyncer environment.
+
+## 1.5.6-beta.5 highlights
+
+- **Pinned private-calendar toolchain:** setup now manages one owner-only pipx environment under `~/.dashboard-vdirsyncer/`, installing `vdirsyncer[google]` at exact version `0.20.0`. Debian-family devices use APT only to obtain pipx when needed; Dash-Go does not use raw `pip --user`, modify the system Python environment, or run automatic pipx upgrades.
+- **Known executable and migration:** generated private-calendar sync wrappers call the exact Dash-Go-managed vdirsyncer path rather than whichever executable happens to be on `PATH`. Reopening setup and finishing without a new connection safely regenerates existing private-calendar configuration and wrappers without rewriting credentials or remote data.
+- **Provider consistency:** CalDAV and Google now receive the same installed vdirsyncer environment and Google OAuth extra from the first install. Source smokes cover exact-version install, attempted pipx pinning, owner-only paths, no raw-pip/system-vdirsyncer installation, and generated-wrapper path ownership.
+
+## 1.5.6-beta.4 highlights
+
+- **Google Calendar writeback:** setup can register Google Calendar through vdirsyncer’s OAuth-backed `google_calendar` storage. An exact, materialized Google Calendar ID may opt into the same local-first create/edit/skip/delete controls as an enrolled private CalDAV collection; a blank or broad discovery remains display-only.
+- **Private OAuth handling:** client secrets and token files remain outside `~/dashboard` in owner-only vdirsyncer paths. One-time authorization is explicit, supports local-browser, SSH port-forward, or desktop-token-copy workflows, and never runs from cron.
+- **Independent scheduled sync:** each eligible private calendar pair is bounded and synchronized separately. Missing/revoked Google authorization and a failed remote pair retain that pair’s previous dashboard mirror while other enrolled CalDAV or Google calendars continue syncing. Existing eight-field CalDAV pair records remain compatible.
+- **Read-only boundaries preserved:** website and URL ICS subscriptions, generated feeds, unmanaged local files, broad mirrors, attendee/organizer events, and detached recurrences remain structurally excluded from every writeback route.
 
 ## 1.5.6-beta.3 highlights
 

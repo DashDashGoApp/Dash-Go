@@ -34,7 +34,7 @@ need "$INSTALL" '4) [ "$sel_tomorrow" = "1" ]' 'weather map follows printed numb
 need "$INSTALL" '9) [ "$sel_openweather" = "1" ]' 'weather map follows printed number 9'
 need "$INSTALL" 'TRIPLE-TAP the moon-phase icon next to the weather' 'correct dashboard Control gesture'
 need "$INSTALL" 'iCal URL setup is unavailable. Run Update the app first, then try again.' 'iCal missing-helper guidance'
-need "$INSTALL" 'CalDAV/vdirsyncer setup is unavailable. Run Update the app first, then try again.' 'CalDAV missing-helper guidance'
+need "$INSTALL" 'Private calendar/vdirsyncer setup is unavailable. Run Update the app first, then try again.' 'CalDAV missing-helper guidance'
 absent "$INSTALL" 'TRIPLE-TAP the clock' 'incorrect clock gesture'
 absent "$INSTALL" 'clock or the moon' 'ambiguous gesture'
 

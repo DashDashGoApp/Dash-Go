@@ -14,9 +14,18 @@ mkdir -p "$HOME/dashboard/bin" "$TMP/fake-bin"
 cp "$SETUP" "$HOME/dashboard/bin/setup-vdirsyncer.sh"
 chmod +x "$HOME/dashboard/bin/setup-vdirsyncer.sh"
 
+cat > "$TMP/fake-bin/vdir-python" <<'PY'
+#!/usr/bin/env bash
+set -eu
+[ "${1:-}" = "-c" ] && exit 0
+exec /usr/bin/env bash "$@"
+PY
+chmod +x "$TMP/fake-bin/vdir-python"
+
 cat > "$TMP/fake-bin/vdirsyncer" <<'VDIR'
 #!/usr/bin/env bash
 set -eu
+if [ "${1:-}" = "--version" ]; then printf 'vdirsyncer, version 0.20.0\n'; exit 0; fi
 case " $* " in
   *' sync '*)
     root="$(dirname "${VDIRSYNCER_CONFIG:?}")"
@@ -47,8 +56,8 @@ cat > "$HOME/dashboard/bin/dashboard-control-server" <<'SERVER'
 SERVER
 chmod +x "$HOME/dashboard/bin/gen-calendars.sh" "$HOME/dashboard/bin/dashboard-control-server"
 
-export PATH="$TMP/fake-bin:$PATH" FAKE_CRONTAB="$TMP/crontab"
-printf 'family\nblue\nn\nhttps://caldav.example/\nfamily@example.com\nfixture-password\ncollection-1\n\n' | "$HOME/dashboard/bin/setup-vdirsyncer.sh" >"$TMP/setup.out" 2>&1
+export PATH="$TMP/fake-bin:$PATH" FAKE_CRONTAB="$TMP/crontab" DASH_VDIRSYNCER_BIN="$TMP/fake-bin/vdirsyncer" DASH_VDIRSYNCER_PYTHON="$TMP/fake-bin/vdir-python"
+printf 'family\nblue\nn\n1\nhttps://caldav.example/\nfamily@example.com\nfixture-password\ncollection-1\n\n' | "$HOME/dashboard/bin/setup-vdirsyncer.sh" >"$TMP/setup.out" 2>&1
 
 CAL="$HOME/dashboard/calendars/family.blue.ics"
 [ -f "$CAL" ] || { cat "$TMP/setup.out" >&2; echo 'FAIL: merged calendar missing' >&2; exit 1; }
