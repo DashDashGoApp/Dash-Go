@@ -13,6 +13,8 @@ const household=fs.readFileSync(path.join(root,"ui","js","household-app-loader.j
 const control=fs.readFileSync(path.join(root,"ui","js","control-lazy-loader.js"),"utf8");
 
 assert.equal(release.version,version,"release.json must match VERSION");
+const expectedTrack=version.includes("-beta.")?"beta":"stable";
+assert.equal(release.track,expectedTrack,"release track must agree with the canonical version form");
 assert.match(index,new RegExp(`ui/dashboard\\.css\\?v=${version}`),"dashboard CSS cache buster must match VERSION");
 assert.match(index,new RegExp(`app\\.bundle\\.js\\?v=${version}`),"dashboard bundle cache buster must match VERSION");
 assert.match(defaults,new RegExp(`version: "${version}"`),"runtime defaults must match VERSION");

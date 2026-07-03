@@ -2,119 +2,27 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.6-beta.12] — 2026-07-03
+## [1.5.6] — 2026-07-03
 
-### Private-calendar visual consistency
+### Private calendar management and safe two-way synchronization
 
-- Replaced the browser-native Calendar selector in all editable event forms with a Dash-Go-owned picker. One available source is shown as a fixed ownership card; multiple sources use a local themed option list; existing events remain structurally pinned to their original calendar. The chooser keeps native button semantics, ignores swipes while the popup scrolls, and refuses to redirect an existing event to another source if its original calendar becomes unavailable. Duplicate display names gain a harmless provider/ordinal label without exposing remote collection IDs.
-- Gave private Calendar Manager rows semantic healthy, neutral, warning, and conflict treatments instead of styling every non-healthy state as the same generic off state. Durable sync state is mapped to concise household-facing copy rather than repeated raw-like state labels.
-- Reworked the conflict recovery panel into a deliberate review surface with a heading, warning-style entry action, two destructive winner choices, and a full-width neutral Keep both unchanged escape path.
-- Restyled quick event time chips into grouped responsive form sections, raised their touch targets to 46px, added focus-visible treatment across event form controls, and removed hard-coded white press washes. Conflict and connection-repair popup notes now carry a clear semantic heading while retaining WebKit-safe theme styling.
+- Added user-led discovery and explicit per-collection activation for Google, iCloud, and compatible CalDAV calendars. Discovery remains review-only; every selected collection receives an exact local vdir mapping and an independently managed Dashboard source. Broad legacy mirrors remain read-only and preserved.
+- Added local-first create, edit, delete, one-occurrence recurrence changes, and constrained simple-series management for eligible exact private calendars. Unsupported advanced recurrence, attendee/organizer, invitation, URL-feed, generated, and ambiguous provider-managed events stay explicitly read-only with clear guidance.
+- Added targeted per-calendar vdirsyncer work, serial coalescing, low-priority execution, per-source status, and durable cron outcome reporting. A routine sync never performs broad discovery and never stores a permanent automatic conflict winner.
+- Added Calendar Manager recovery for exact selected sources: targeted repair discovery, provider-specific authorization guidance, and PIN-gated one-shot conflict resolution that deliberately retains either the remote or Dashboard side for one affected calendar pair. Resolver configuration is temporary and owner-only; a bounded local snapshot precedes a remote-winner run.
+- Hardened recurrence and vdir behavior: direct EXDATE values are preserved/remapped for supported series changes, detached overrides are matched safely, skip refuses an already-overridden occurrence, new overrides inherit the master sequence, duplicate UIDs remain fail-closed, and one Dashboard-initiated final-event delete may cross vdirsyncer’s empty-local guard for that single targeted run only.
 
-## [1.5.6-beta.11] — 2026-07-03
+### Update safety, installer clarity, and kiosk resilience
 
-### Working conflict resolution and quick-access event times
+- Normal SSH and Dashboard Control updates now require a strictly newer compatible release. Equal versions are successful no-ops, lower versions do not downgrade a device, and repair remains the explicit same-version recovery path.
+- Removed the unrelated weather-provider internet probe from private-calendar setup. Network failures are now diagnosed at the actual APT, pipx, Google OAuth/CalDAV, iCloud, or selected CalDAV operation with bounded, secret-safe wording.
+- Retained Go-owned shutdown, durable file replacement, bounded background work, exact architecture staging, and Pi Zero 2 W-oriented low-memory safeguards across installer, service, kiosk, and calendar paths.
 
-- Fixed one-shot private-calendar conflict resolution, which never worked against real vdirsyncer: the temporary resolver configuration dropped every `[pair]` section header, so pair options leaked into `[general]` and vdirsyncer refused the config. The policy is now injected inside only the selected pair's own section, verified live in both directions (remote-wins pull and dashboard-wins push) with the temporary file removed on every exit path.
-- Hardened the sync-outcomes smoke's stand-in vdirsyncer to enforce the real parser's section structure — a config generator that drops headers or injects a policy into the wrong section now fails the suite, closing the test blindspot that let the broken resolver ship.
-- Added quick-access time changes to the calendar event form: one-tap Start nudges (−1 hr, −15 min, +15 min, +1 hr, Now) that preserve the event's length, and usual Length choices (30 min–4 hr) that preserve its start. Chips rewrite the visible date and time fields as the single source of truth, carry changes across midnight, keep the 44px touch minimum with the standard press state, and hide in all-day mode.
+### Calendar experience and visual consistency
 
-## [1.5.6-beta.10] — 2026-07-03
-
-### Truthful private-sync outcomes and recurring-edit correctness
-
-- Corrected private-calendar sync reporting end to end. The generated wrapper now captures each pair's own vdirsyncer output, classifies the outcome (synced, conflict, emptied-collection guard, missing discovery, rejected credentials), reports it as structured `RESULT` lines to the dashboard's queued sync, and records it in a durable per-pair results file. Previously all vdirsyncer output went only to the log file, so a real conflict was reported to the household as a generic "will retry automatically" and the conflict state was unreachable.
-- Fixed Control-selected calendars never synchronizing: activation now performs the one bounded, noninteractive vdirsyncer discovery its new exact pair requires before the initial targeted sync. Without it, vdirsyncer refused every subsequent sync of a calendar added through Calendar Manager until interactive setup was re-run over SSH.
-- Fixed deleting a calendar's final event permanently wedging its sync on vdirsyncer's emptied-storage guard. A dashboard-initiated delete now carries a one-run `--allow-empty-once` permission that maps to `--force-delete` for exactly that targeted sync; an unexpectedly emptied collection remains blocked and is reported as needing attention instead of retrying forever.
-- Fixed `setup-vdirsyncer.sh --refresh` (which runs automatically after updates) silently re-enabling per-calendar Dashboard edits the user had turned off: the previous registry flags are now read with a JSON parser instead of format-sensitive text matching against the server's indented registry.
-- Corrected recurring series edits to re-render `EXDATE` exclusions onto the same civil days in the new start time, zone, and value form. Previously a series time change orphaned every exclusion and silently resurrected skipped occurrences on the dashboard and on provider clients; the series writer also now enforces the simple-rule boundary itself.
-- Corrected detached-occurrence matching to compare parsed instants rather than exact text, so a provider-written UTC-form `RECURRENCE-ID` over a TZID master is revised in place instead of duplicated, and an existing `RANGE=THISANDFUTURE` override now refuses the edit instead of gaining a conflicting sibling.
-- Calendar event form: an all-day event now displays its inclusive last day and converts to the exclusive contract on save, an edit keeps targeting its own calendar when the cached event carries only `calUrl`, and buttons gained the dashboard's standard press feedback.
-- Integrated cron-originated private-calendar outcomes into Dashboard Control status, using a bounded and strict per-pair result parser so a newer background conflict, missing-discovery, authorization, empty-collection guard, or failure state appears on the affected calendar row without exposing raw vdirsyncer output or provider paths.
-- Added scoped recovery controls for exact selected sources. **Repair connection** runs one targeted discovery and sync for an `attention-undiscovered` pair without broad account discovery or selection changes. A conflict exposes PIN-gated, themed one-shot choices to retain the remote or Dashboard side for that one pair; normal configurations remain conflict-safe, temporary resolver configuration is removed on every exit path, and a bounded owner-only local snapshot is taken before a remote-winner run.
-- Hardened recurring exceptions: Skip refuses an occurrence that already has a detached override, new overrides inherit the master `SEQUENCE`, simple-series forms warn when retained excluded dates may need review after a date move, and vdir lookup prefilters nonmatching items before strict UID parsing while retaining duplicate-UID failure behavior.
-- Made generated shell mirrors match the Go mirror path's atomic CRLF and `0644` output contract; moved shared popup/OSK spacing to the common popup stylesheet; replaced the calendar writeback error note's `color-mix()` dependency with existing theme tokens; and added secret-safe Google versus iCloud/CalDAV authorization guidance.
-
-## [1.5.6-beta.9] — 2026-07-03
-
-### Recurring private-calendar management and truthful updates
-
-- Added a scoped **Manage recurring event** flow for exact editable Google, iCloud, and compatible CalDAV sources. An eligible recurring event can now update one occurrence through a detached `RECURRENCE-ID` exception, or update a deliberately constrained series while retaining its existing repeat rule, exclusions, alarms, and unknown provider properties. Existing exceptions, attendees/organizers, `RDATE`, advanced selectors, and ambiguous provider-managed series remain explicitly read-only with an explanation.
-- Replaced the one-time-event-only primary wording with **Manage event** and added clear **This occurrence**, **Entire series**, and **Skip this occurrence** actions. Each accepted change remains local-first, refreshes only the affected mirror/cache, and queues only the selected vdirsyncer pair.
-- Added strict normal-update planning for SSH and Dashboard Control. Equal releases now exit as a successful no-op, older selected releases never downgrade the device, and the Dashboard API rechecks eligibility before it creates a backup, job, action-history row, systemd request, download, replacement, or browser restart. Explicit repair retains its intentional same-version recovery behavior.
-- Removed the unrelated Open-Meteo internet probe from private-calendar preflight. Calendar setup now verifies connectivity at the actual APT, pipx, Google OAuth/CalDAV, iCloud, or selected CalDAV operation and describes that operation rather than declaring the whole device offline.
-- Added recurrence writer, server capability, installer no-op, update-card, and source-contract regressions; preserved beta.8’s exact-selection, live capability, and one-scroll-root Calendar Manager behavior.
-
-## [1.5.6-beta.8] — 2026-07-02
-
-### Selected private calendars and safe two-way management
-
-- Added a user-led **Discover available calendars** flow in Dashboard Control. Discovery runs in a disposable vdirsyncer workspace, returns an inventory only, and never alters active pairs, mirrors, event cache, cron, visibility, write permissions, or remote calendars.
-- Added explicit per-collection activation: each chosen Google, iCloud, or compatible CalDAV collection receives a generated exact vdirsyncer mapping, a safe generated local collection key, and its own Dashboard source. Broad legacy discovery mirrors remain read-only and are retained rather than silently replaced.
-- Added selected-calendar management controls to change a source between display-only and editable, queue a sync for that one collection, or stop future sync without deleting the provider calendar or the preserved local mirror.
-- Changed local-first writeback to queue the affected generated pair rather than every private calendar, with serial coalescing, per-calendar status, and conflict-safe behavior. New private pairs no longer use remote-wins conflict resolution; a conflict leaves both sides intact and surfaces a needs-attention state.
-- Added migration refresh after an update, isolated-discovery, exact-selection, edit-permission, targeted-sync, and private-calendar installer smokes. Updated Google documentation to describe the actual vdirsyncer CalDAV/OAuth route, collection selection, and two-way acceptance expectations.
-- Corrected Calendar Manager edit-state behavior: adding or enabling an exact private calendar now activates the master Dashboard edit guard, refreshes local event capabilities, and evaluates current local permissions when an event popup opens. Eligible normal one-time events regain Edit/Delete actions, and full-day popups regain `+ Add event`, without relying on an old cache record.
-- Reworked Calendar Manager into one continuous Calendar-page scroll surface. Removed nested bounded manager panes, preserve the affected row across focused updates, suppress a button action after a real page swipe, and show a **Needs attention** repair action when a selected editable source has lost its local writeback registration.
-
-- Corrected the beta.8 source boundary test so it verifies the event-service policy seam through Go syntax rather than fragile formatter-dependent spacing; runtime behavior is unchanged.
-
-## [1.5.6-beta.6] — 2026-07-02
-
-### Lower-impact private-calendar synchronization
-
-- Routed every generated private-calendar sync invocation through Dash-Go’s existing `dashboard-lowprio.sh` helper. Scheduled, manual, setup, and queued writeback runs now give Surf/WebKit and the dashboard server lower CPU/I/O contention while preserving the single shared sync lock and one-pair-at-a-time behavior.
-- Moved remote collection discovery out of the 15-minute sync wrapper and into explicit private-calendar setup/refresh plus the one-time Google authorization flow. Routine syncs now execute only the already-configured exact pairs; reopening setup discovers newly created or deliberately changed remote collections.
-- Added a functional scheduling smoke that proves setup discovers a pair once, normal syncs do not rediscover it, and each wrapper invocation re-execs through the low-priority helper exactly once.
-
-## [1.5.6-beta.5] — 2026-07-02
-
-### Pinned private-calendar synchronization
-
-- Standardized optional CalDAV and Google private-calendar synchronization on one Dash-Go-owned `pipx` environment pinned to `vdirsyncer[google]` 0.20.0. Raspberry Pi OS/Debian/Ubuntu may install `pipx` through APT, but the vdirsyncer application never enters system Python and Dash-Go no longer offers raw `pip --user` or a distro-version-dependent vdirsyncer path.
-- Generated sync wrappers now call the known owner-only wrapper beneath `~/.dashboard-vdirsyncer/bin/`, preventing a later PATH change or unrelated system package from silently changing the sync executable. Pipx pinning is attempted where supported; exact installation and the absence of automatic upgrades remain the durable baseline.
-- Made existing private-calendar setups migratable: reopen setup and finish with no new calendar to regenerate the config/wrapper around the pinned tool without touching saved credentials, tokens, calendar mappings, or remote data. Added a functional pipx-policy smoke alongside the CalDAV and Google setup smokes.
-
-## [1.5.6-beta.4] — 2026-07-02
-
-### Two-way Google Calendar sync
-
-- Added a Google Calendar provider to the CalDAV setup flow using vdirsyncer's OAuth-based `google_calendar` storage over Google's CalDAV endpoint. Google calendars ride the existing pull/merge/writeback pipeline unchanged: exact enrolled collections may opt into local-first Dashboard add/edit/skip with background push, while broad discovered mirrors stay read-only.
-- OAuth material never enters the dashboard webroot: the client secret is stored beside CalDAV app passwords and fetched by command, and the token lives in a new owner-only `google-tokens` directory. Setup performs the one-time authorization interactively with explicit headless/SSH port-forward guidance; declining leaves the calendar idle rather than misconfigured.
-- Hardened the generated sync wrapper for OAuth providers: only pairs able to run noninteractively are passed to vdirsyncer, an unauthorized Google pair is skipped with a log line instead of blocking a cron run on an interactive consent prompt, and discover/sync are bounded with `timeout` when available. Each eligible pair is synchronized independently, so one revoked or failed Google connection cannot block another Google or CalDAV calendar and cannot overwrite that failed pair’s prior dashboard mirror. Existing CalDAV pairs files remain valid without regeneration.
-- Documented the Google Cloud preparation honestly, including enabling the CalDAV API, using a Desktop-app OAuth client, and publishing the consent screen to production so refresh tokens do not expire after seven days.
-
-## [1.5.6-beta.3] — 2026-07-02
-
-### Opt-in private CalDAV writeback
-
-- Added local-first two-way calendar editing for exact private CalDAV/vdir collections explicitly enrolled during setup. Dashboard users can add an event from a day popup, edit a simple event without moving it between collections, and skip exactly one recurring occurrence; the local vdir is updated first and normal CalDAV sync is then queued in the background.
-- Kept website and URL ICS subscriptions, broad multi-collection mirrors, unmanaged local files, Dash-Go-generated feeds, attendee/organizer events, and detached recurrence instances structurally read-only in both UI and server routes. Registered CalDAV mirrors can be hidden but are protected from Calendar Manager delete/trash operations, so Dashboard Control never deletes a remote calendar.
-- Added safe direct-VEVENT editing that retains nested `VALARM` components and provider properties, rejects aggregate event files, preserves DTSTART timezone/date form for `EXDATE`, uses date-only all-day values with exclusive end dates, and requires an enabled Dashboard Control PIN before a one-time event may be deleted.
-- Added calendar-writeback status and configuration controls plus exact-collection setup enrollment. Broad CalDAV discovery remains display-only; a provider whose local vdir does not materialize the selected exact collection stays read-only rather than risking an aggregate write.
-
-## [1.5.6-beta.2] — 2026-07-02
-
-### Frontend first-paint and calendar efficiency
-
-- Changed runtime font assets from `no-store` delivery to revalidated delivery: the dynamic font stylesheet now carries a content ETag and font binaries use normal Last-Modified revalidation, avoiding unnecessary downloads and font parsing on unchanged kiosk relaunches.
-- Coalesced tap-binding cleanup away from mutation bursts, deferred last-known-event snapshot persistence until after a visible calendar update is scheduled, and batched day-cell event fitting into calendar-wide write → read → write phases to avoid per-cell layout thrashing on low-power devices.
-- Added an empty data favicon so kiosk launches no longer generate a `/favicon.ico` 404. Dashboard content, touch behavior, and profile defaults are unchanged.
-
-## [1.5.6-beta.1] — 2026-07-02
-
-### Reliability, repair, and long-lived requests
-
-- Added bounded SIGTERM/SIGINT graceful HTTP shutdown so service restarts and updates can drain in-flight work rather than cutting it off abruptly.
-- Corrected explicit GitHub Release resolution for repair when the installed `VERSION` is missing or damaged, and preserved the timestamp recorded when interrupted system-update state is recovered.
-- Kept the global HTTP write limit for ordinary endpoints while extending only the bounded Microsoft To Do sync response and clearing it only for the long-lived To Do SSE stream; the stream now emits a lightweight heartbeat.
-- Made atomic text and JSON writes flush file content, requested mode, and the parent-directory rename entry in durable order for removable-storage power-loss resilience.
-
-### Compatibility, observability, and source hygiene
-
-- Replaced the local PBKDF2 implementation with Go’s standard library while proving byte-identical legacy PIN derivation; retained the existing four-to-eight ASCII-digit PIN policy.
-- Rendered safely escaped, rune-bounded map-fallback reasons; replaced stale release-numbered outbound User-Agent strings; and removed dead startup regular expressions and a committed runtime JSON artifact from the control-server source directory.
-- Added focused regression coverage for graceful shutdown, To Do deadline/heartbeat behavior, repair resolution, PIN compatibility, durable replacement behavior, fallback-map output, stale update timestamps, removed regex references, and runtime-artifact exclusion.
+- Reworked Calendar Manager into one page-owned scroll surface, added clear healthy/neutral/warning/conflict semantics, and made selected-calendar editing state and live event capability updates consistent.
+- Added Manage event and Manage recurring event flows, quick start and length controls, inclusive all-day editing, and theme-consistent conflict/recovery guidance.
+- Replaced browser-native event-calendar selection with Dash-Go-owned touch-safe ownership and picker surfaces. Improved state hierarchy, focus treatment, pressed states, quick-time grouping, popup error emphasis, and theme-safe styling without WebKit-dependent color functions.
 
 ## [1.5.5] — 2026-07-02
 
