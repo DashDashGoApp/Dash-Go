@@ -36,6 +36,10 @@
 }
 #ctrl .cbtn.danger,#ctrl .cbtn.requiresconfirm{color:var(--ctrl-danger-fg);}
 #ctrl .cbtn.armed{color:var(--ctrl-danger-armed-fg);background:var(--ctrl-danger-armed-bg);}
+/* Attention actions invite review; they are distinct from both primary success
+   actions and destructive conflict-winner choices. */
+#ctrl .cbtn.warning{border-color:var(--ctrl-warn-border);background:var(--ctrl-warn-bg);color:var(--fg);}
+#ctrl .ctrlpage .cbtn.warning:active{border-color:var(--ctrl-warn-border);background:var(--ctrl-warn-bg);}
 /* Safe Doctor repairs are maintenance with a confirmation step, not destructive danger. */
 #ctrl .cbtn.doctor-safe-repair{border-color:var(--ctrl-safe-repair-border);background:var(--ctrl-safe-repair-bg);color:var(--fg);}
 #ctrl .cbtn.doctor-safe-repair .bd{color:var(--dimmer);}
@@ -276,16 +280,21 @@ body.ctrl-lite #ctrlcals .calchip{
 #ctrlcals .calmanager-title strong{overflow-wrap:anywhere;}
 #ctrlcals .calmanager-dot{width:12px;height:12px;flex:0 0 auto;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.10);}
 #ctrlcals .calmanager-state{flex:0 0 auto;border-radius:999px;padding:4px 8px;border:1px solid var(--line-soft);color:var(--dim);font:800 11px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;}
-#ctrlcals .calmanager-state.on{border-color:rgba(127,214,168,.45);background:rgba(127,214,168,.10);color:var(--fg);}
-#ctrlcals .calmanager-state.off{border-color:rgba(255,213,138,.28);background:rgba(255,213,138,.08);color:var(--dim);}
+#ctrlcals .calmanager-state.on,#ctrlcals .calmanager-state.healthy{border-color:var(--ctrl-state-ok-border);background:var(--ctrl-state-ok-bg);color:var(--fg);}
+#ctrlcals .calmanager-state.off,#ctrlcals .calmanager-state.readonly,#ctrlcals .calmanager-state.available{background:var(--ctrl-fill-quiet);color:var(--dim);}
+#ctrlcals .calmanager-state.attention{border-color:var(--ctrl-state-warn-border);background:var(--ctrl-state-warn-bg);color:var(--fg);}
+#ctrlcals .calmanager-state.conflict{border-color:var(--ctrl-state-bad-border);background:var(--ctrl-state-bad-bg);color:var(--ctrl-danger-fg);}
 #ctrlcals .calmanager-detail{color:var(--dim);font-size:13px;line-height:1.34;}
 #ctrlcals .calmanager-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:stretch;}
 #ctrlcals .calmanager-actions .cbtn{min-height:64px;text-align:left;white-space:normal;overflow-wrap:anywhere;}
 #ctrlcals .calmanager-actions .cbtn.actionbtn .bt{font-size:15px;line-height:1.12;}
 #ctrlcals .calmanager-actions .cbtn.actionbtn .bd{font-size:12px;line-height:1.22;}
 #ctrlcals .calmanager-actions .calmanager-stop{border-color:rgba(255,213,138,.34);}
-#ctrlcals .calmanager-conflict-options{display:grid;gap:10px;padding:12px;border:1px solid var(--danger);border-radius:12px;background:var(--panel);}
+#ctrlcals .calmanager-conflict-options{display:grid;gap:10px;padding:13px;border:1px solid var(--ctrl-danger-border);border-radius:12px;background:var(--ctrl-state-bad-bg);}
+#ctrlcals .calmanager-conflict-heading{font-size:15px;font-weight:850;line-height:1.2;color:var(--fg);}
 #ctrlcals .calmanager-conflict-options .calmanager-actions{margin:0;}
+#ctrlcals .calmanager-conflict-exit{display:grid;grid-template-columns:1fr;}
+#ctrlcals .calmanager-conflict-exit .cbtn{min-height:56px;text-align:left;white-space:normal;}
 #ctrlcals .caltrash{display:grid;gap:10px;}
 #ctrlcals .caltrash-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px dashed var(--line-soft);border-radius:var(--ctrl-radius-md);background:var(--ctrl-fill-quiet);}
 #ctrlcals .caltrash-copy{display:grid;gap:4px;min-width:0;}

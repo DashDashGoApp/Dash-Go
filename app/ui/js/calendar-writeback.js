@@ -45,6 +45,11 @@ function calendarWritebackShowError(root,message){
   const note=el("div","calendar-writeback-note error",message||"Calendar change failed.");
   root.appendChild(note);setTimeout(()=>note.remove(),6000);
 }
+function calendarWritebackAttentionNote(title,message){
+  const note=el("div","calendar-writeback-note error");
+  note.append(el("strong","calendar-writeback-note-title",title),el("span","calendar-writeback-note-copy",message));
+  return note;
+}
 function calendarWritebackEventCapability(ev,status){
   const cached=ev&&ev.writeback;
   if(!cached||cached.candidate!==true)return null;
@@ -111,11 +116,11 @@ function calendarWritebackEventActions(ev,token){
     if(!cap){root.remove();return;}
     root.hidden=false;root.replaceChildren();
     if(cap.state==="conflict"){
-      root.appendChild(el("div","calendar-writeback-note error","This calendar has a sync conflict. Normal event changes are paused to protect both versions; resolve it in Calendar Manager."));
+      root.appendChild(calendarWritebackAttentionNote("Sync conflict","Normal event changes are paused to protect both versions. Resolve this calendar in Calendar Manager."));
       return;
     }
     if(cap.state==="repair-needed"){
-      root.appendChild(el("div","calendar-writeback-note error","This calendar needs one deliberate connection repair before it can sync. Use Repair connection in Calendar Manager."));
+      root.appendChild(calendarWritebackAttentionNote("Connection repair","This calendar needs one deliberate repair before it can sync. Use Repair connection in Calendar Manager."));
       return;
     }
     if(cap.state==="master-off"){

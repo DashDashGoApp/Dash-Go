@@ -2,6 +2,15 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.12] — 2026-07-03
+
+### Private-calendar visual consistency
+
+- Replaced the browser-native Calendar selector in all editable event forms with a Dash-Go-owned picker. One available source is shown as a fixed ownership card; multiple sources use a local themed option list; existing events remain structurally pinned to their original calendar. The chooser keeps native button semantics, ignores swipes while the popup scrolls, and refuses to redirect an existing event to another source if its original calendar becomes unavailable. Duplicate display names gain a harmless provider/ordinal label without exposing remote collection IDs.
+- Gave private Calendar Manager rows semantic healthy, neutral, warning, and conflict treatments instead of styling every non-healthy state as the same generic off state. Durable sync state is mapped to concise household-facing copy rather than repeated raw-like state labels.
+- Reworked the conflict recovery panel into a deliberate review surface with a heading, warning-style entry action, two destructive winner choices, and a full-width neutral Keep both unchanged escape path.
+- Restyled quick event time chips into grouped responsive form sections, raised their touch targets to 46px, added focus-visible treatment across event form controls, and removed hard-coded white press washes. Conflict and connection-repair popup notes now carry a clear semantic heading while retaining WebKit-safe theme styling.
+
 ## [1.5.6-beta.11] — 2026-07-03
 
 ### Working conflict resolution and quick-access event times

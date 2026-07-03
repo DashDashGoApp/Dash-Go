@@ -13,10 +13,16 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.11`
+- **Version:** `1.5.6-beta.12`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** make private Google, iCloud, and CalDAV calendars intentionally discoverable, individually selectable, safely manageable, and truthful about per-calendar sync outcomes without adding a second remote-sync engine.
+- **Focus:** complete private Google, iCloud, and CalDAV calendar management with a native-feeling, touch-safe visual language while preserving exact-source, conflict-safe two-way synchronization.
+
+## 1.5.6-beta.12 highlights
+
+- **Themed event-calendar chooser:** replaced the browser-native Calendar `<select>` in New Event, Manage Event, recurring-occurrence, and series forms with Dash-Go-owned picker surfaces. One eligible calendar renders as a calm fixed ownership card; several render a touch-safe in-form chooser. The chooser keeps native button semantics, ignores swipe gestures while the popup scrolls, and never silently redirects an existing event to another calendar if its original source becomes unavailable. Duplicate names are disambiguated without exposing opaque provider IDs.
+- **Calendar Manager visual semantics:** private calendar rows now distinguish Healthy, Display-only, Edits off, Needs attention, Authorization required, and Conflict with separate semantic treatments and one concise human-facing status line. Conflict recovery has a clear heading, an attention-style entry action, two deliberate winner choices, and a full-width neutral Keep both unchanged exit.
+- **Event form polish:** quick Start and Length choices now live in grouped, theme-aware surfaces with stable wrapping, 46px touch targets, and visible keyboard focus. Calendar writeback errors use a stronger semantic heading and left-border treatment without browser-dependent `color-mix()` or hard-coded white press flashes.
 
 ## 1.5.6-beta.11 highlights
 

@@ -40,26 +40,24 @@ function ctrlPrivateCalendarAuthHelp(item){
     ?"Google authorization is required. Reconnect this account through private-calendar setup from SSH, then return here and use Sync now."
     :"The calendar server rejected authentication. Update the account or app password through private-calendar setup from SSH, then return here and use Sync now.";
 }
-function ctrlPrivateCalendarState(item,writeback){
-  const bits=[ctrlPrivateCalendarProvider(item)];
-  const registered=ctrlPrivateCalendarRegistry(item,writeback);
-  const sync=ctrlPrivateCalendarSync(item);
-  if(ctrlPrivateCalendarConflict(item))bits.push("conflict needs attention");
-  else if(ctrlPrivateCalendarNeedsRepair(item))bits.push("connection repair needed");
-  else if(item.writable!==true)bits.push("display-only");
-  else if(!registered)bits.push("edit setup needs attention");
-  else if(writeback&&writeback.enabled!==true)bits.push("Dashboard edits off");
-  else if(registered.enabled===false)bits.push("edits disabled");
-  else bits.push("editable");
-  if(sync&&sync!=="synced")bits.push(sync.replace(/^attention-/,""));
-  else if(item.state)bits.push(String(item.state));
-  return bits.join(" · ");
+function ctrlPrivateCalendarPresentation(item,writeback){
+  const provider=ctrlPrivateCalendarProvider(item),registered=ctrlPrivateCalendarRegistry(item,writeback),sync=ctrlPrivateCalendarSync(item);
+  if(ctrlPrivateCalendarConflict(item))return {kind:"conflict",label:"Conflict",detail:`${provider} · Sync conflict — choose a version`};
+  if(sync==="attention-undiscovered")return {kind:"attention",label:"Needs attention",detail:`${provider} · Connection repair required`};
+  if(sync==="attention-auth"||sync==="skipped")return {kind:"attention",label:"Authorization required",detail:`${provider} · Authorization required`};
+  if(sync==="attention-empty")return {kind:"attention",label:"Needs attention",detail:`${provider} · Local sync safety check required`};
+  if(sync==="failed")return {kind:"attention",label:"Needs attention",detail:`${provider} · Last sync failed`};
+  if(item.writable!==true)return {kind:"readonly",label:"Display-only",detail:provider};
+  if(!registered)return {kind:"attention",label:"Needs attention",detail:`${provider} · Writeback registration required`};
+  if(writeback&&writeback.enabled!==true)return {kind:"readonly",label:"Edits off",detail:`${provider} · Dashboard edits off`};
+  if(registered.enabled===false)return {kind:"readonly",label:"Edits off",detail:`${provider} · Dashboard edits disabled`};
+  return {kind:"healthy",label:"Editable",detail:`${provider} · Synced`};
 }
 function ctrlPrivateCalendarConflictActions(item,row){
-  const reveal=ctrlCalendarManagerAction("Resolve conflict","Choose which version wins for every unresolved conflict in this one calendar. A Dashboard Control PIN is required.","primary",async()=>{
+  const reveal=ctrlCalendarManagerAction("Resolve conflict","Review which version should win for every unresolved conflict in this one calendar. A Dashboard Control PIN is required.","warning",async()=>{
     reveal.hidden=true;
     const panel=el("section","calmanager-conflict-options");
-    panel.appendChild(el("p","calmanager-note",`Normal sync is paused to protect both versions. A choice applies to every unresolved conflict in ${item.name||"this calendar"}.`));
+    panel.append(el("div","calmanager-conflict-heading","Resolve calendar conflict"),el("p","calmanager-note",`Normal sync is paused to protect both versions. A choice applies to every unresolved conflict in ${item.name||"this calendar"}.`));
     if(item.deleteAllowed!==true){
       panel.appendChild(el("p","calmanager-note","Configure and unlock a Dashboard Control PIN before choosing a version. Both versions remain unchanged until then."));
     }else{
@@ -74,15 +72,16 @@ function ctrlPrivateCalendarConflictActions(item,row){
       }));
       panel.appendChild(choices);
     }
-    const keep=ctrlCalendarManagerAction("Keep both unchanged","Close these choices. You can decide later; normal sync remains paused.","",async()=>{panel.remove();reveal.hidden=false;});
-    panel.appendChild(keep);row.insertBefore(panel,reveal.nextSibling);
+    const exit=el("div","calmanager-conflict-exit");
+    exit.appendChild(ctrlCalendarManagerAction("Keep both unchanged","Close these choices. You can decide later; normal sync remains paused.","",async()=>{panel.remove();reveal.hidden=false;}));
+    panel.appendChild(exit);row.insertBefore(panel,reveal.nextSibling);
   });
   return reveal;
 }
 function ctrlPrivateCalendarCandidateRow(item){
   const row=el("article","calmanager-row calmanager-private");
-  const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));head.append(title,el("span","calmanager-state","Available"));
-  row.append(head,el("div","calmanager-detail",`${ctrlPrivateCalendarProvider(item)} · not syncing yet`));
+  const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));head.append(title,el("span","calmanager-state available","Available"));
+  row.append(head,el("div","calmanager-detail",`${ctrlPrivateCalendarProvider(item)} · Not syncing yet`));
   const actions=el("div","calmanager-actions");
   actions.appendChild(ctrlCalendarManagerAction("Add display-only","Show this calendar on Dash-Go without allowing event changes from the dashboard.","",async()=>ctrlPrivateCalendarActivate(item,false)));
   actions.appendChild(ctrlCalendarManagerAction("Add & enable edits","Create one exact two-way calendar source and turn on Dashboard edits. Supported normal events can sync through the provider.","primary",async()=>ctrlPrivateCalendarActivate(item,true)));
@@ -91,12 +90,8 @@ function ctrlPrivateCalendarCandidateRow(item){
 function ctrlPrivateCalendarSelectedRow(item,writeback){
   const row=el("article","calmanager-row calmanager-private");row.dataset.calendarSource=String(item.source||"");
   const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));
-  const registered=ctrlPrivateCalendarRegistry(item,writeback);
-  const conflict=ctrlPrivateCalendarConflict(item),repair=ctrlPrivateCalendarNeedsRepair(item);
-  const live=item.writable===true&&registered&&writeback&&writeback.enabled===true&&registered.enabled!==false&&!conflict&&!repair;
-  const statusText=conflict?"Conflict":repair?"Needs attention":live?"Editable":item.writable!==true?"Display-only":!registered?"Needs attention":"Edits off";
-  head.append(title,el("span","calmanager-state "+(live?"on":"off"),statusText));row.append(head,el("div","calmanager-detail",ctrlPrivateCalendarState(item,writeback)));
-  if(item.detail)row.appendChild(el("p","calmanager-note",String(item.detail)));
+  const registered=ctrlPrivateCalendarRegistry(item,writeback),conflict=ctrlPrivateCalendarConflict(item),repair=ctrlPrivateCalendarNeedsRepair(item),presentation=ctrlPrivateCalendarPresentation(item,writeback);
+  head.append(title,el("span",`calmanager-state ${presentation.kind}`,presentation.label));row.append(head,el("div","calmanager-detail",presentation.detail));
   const authHelp=ctrlPrivateCalendarAuthHelp(item);if(authHelp)row.appendChild(el("p","calmanager-note",authHelp));
   const actions=el("div","calmanager-actions");
   if(conflict){
