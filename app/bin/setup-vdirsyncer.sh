@@ -321,10 +321,20 @@ VDIRSYNCER_BIN=$(printf '%q' "$VDIRSYNCER_BIN")
 MAP=$(printf '%q' "$MAP")
 LOG="\$LOG_DIR/vdir-sync.log"
 LOCK_DIR="\$VDIR_HOME/sync.lock"
+LOWPRIO="\$BIN_DIR/dashboard-lowprio.sh"
 export VDIRSYNCER_CONFIG="\$VDIR_CFG"
 umask 077
 mkdir -p "\$CAL_DIR" "\$LOG_DIR" "\$VDIR_HOME"
 log(){ printf '%s %s\\n' "\$(date '+%Y-%m-%d %H:%M:%S')" "\$*" >> "\$LOG"; }
+
+# Every entry point (cron, manual, setup, and post-edit writeback) enters this
+# wrapper. Re-exec once through the shared low-priority helper so vdirsyncer,
+# local merging, and cache rebuilds all inherit gentle CPU and I/O scheduling.
+# The marker prevents recursion after dashboard-lowprio.sh execs this script.
+if [ "\${DASH_VDIR_LOWPRIO_ACTIVE:-}" != "1" ] && [ -x "\$LOWPRIO" ]; then
+  export DASH_VDIR_LOWPRIO_ACTIVE=1
+  exec "\$LOWPRIO" "\$0" "\$@"
+fi
 
 acquire_lock(){
   if mkdir "\$LOCK_DIR" 2>/dev/null; then echo "\$\$" > "\$LOCK_DIR/pid"; return 0; fi
@@ -347,10 +357,12 @@ trap 'rm -rf "\$LOCK_DIR"' EXIT
 
 # A Google pair whose one-time authorization has not completed would start an
 # interactive OAuth consent flow and block a cron run forever. Each eligible
-# pair is discovered and synchronized independently: a revoked Google token or
-# a failed remote pair cannot prevent another enrolled calendar from syncing.
-# A pair's derived dashboard mirror is replaced only after that exact pair
-# completes successfully, so skipped/failed pairs retain their previous data.
+# pair is synchronized independently: a revoked Google token or a failed
+# remote pair cannot prevent another enrolled calendar from syncing. Remote
+# collection discovery is explicit setup/repair work, not part of this bounded
+# routine sync. A pair's derived dashboard mirror is replaced only after that
+# exact pair completes successfully, so skipped/failed pairs retain their
+# previous data.
 run_bounded(){
   if command -v timeout >/dev/null 2>&1; then timeout 600 "\$@"; else "\$@"; fi
 }
@@ -366,9 +378,6 @@ while IFS='|' read -r pname _ _ ppair _ _ _ _ pprovider _; do
     continue
   fi
   ready_pairs=\$((ready_pairs + 1))
-  # Discovery remains noninteractive under cron. A discovery warning should
-  # not prevent a known pair from attempting its ordinary synchronization.
-  yes | run_bounded "\$VDIRSYNCER_BIN" -c "\$VDIR_CFG" discover "\$ppair" >> "\$LOG" 2>&1 || log "vdirsyncer discover reported an issue for \$pname"
   if run_bounded "\$VDIRSYNCER_BIN" -c "\$VDIR_CFG" sync "\$ppair" >> "\$LOG" 2>&1; then
     PAIR_RESULT["\$ppair"]="synced"
   else
@@ -435,6 +444,8 @@ install_vdir_cron(){
   have crontab || { warn "crontab is unavailable; run $BIN_DIR/sync-vdir.sh manually or install cron"; return 1; }
   cron_tmp="$(mktemp)" || return 1
   crontab -l 2>/dev/null | grep -Fv "$BIN_DIR/sync-vdir.sh" > "$cron_tmp" || true
+  # sync-vdir.sh re-execs through dashboard-lowprio.sh before acquiring its
+  # shared lock, so cron stays simple while every normal sync path is gentle.
   printf '*/15 * * * * %s/sync-vdir.sh >/dev/null 2>&1\n' "$BIN_DIR" >> "$cron_tmp"
   crontab "$cron_tmp"
   local rc=$?
@@ -554,6 +565,14 @@ if ! write_vdirsyncer_config; then
 fi
 ok "config written (credentials remain outside the dashboard webroot)"
 
+# Pair discovery is intentionally setup-time work. Routine syncs have exact,
+# already-configured pairs and must not repeatedly rediscover remote calendars.
+# This keeps the 15-minute job bounded and prevents provider discovery traffic
+# from competing with the kiosk during normal use.
+SETUP_DISCOVERED_PAIRS="|"
+mark_setup_discovered(){ SETUP_DISCOVERED_PAIRS="${SETUP_DISCOVERED_PAIRS}$1|"; }
+was_setup_discovered(){ case "$SETUP_DISCOVERED_PAIRS" in *"|$1|"*) return 0;; esac; return 1; }
+
 authorize_google_pairs(){
   # The pairs file is read on its own descriptor so the authorization prompt
   # below keeps reading the user's answers from stdin.
@@ -584,13 +603,44 @@ authorize_google_pairs(){
     esac
     if "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$gpair" && [ -s "$GOOGLE_TOKENS/$gname.json" ]; then
       chmod 600 "$GOOGLE_TOKENS/$gname.json" 2>/dev/null || true
+      mark_setup_discovered "$gpair"
       ok "  Google calendar '$gname' authorized"
     else
       warn "  authorization for '$gname' did not complete; it is skipped by sync until it does"
     fi
   done 3< "$VDIR_PAIRS"
 }
+
+discover_private_pairs(){
+  # Discovery may create local collection folders or reconcile a deliberately
+  # changed remote collection list. It runs only when an administrator opens
+  # setup/repair, never inside the routine sync wrapper.
+  local dname dpair dprovider discovered=0 skipped=0
+  while IFS='|' read -r dname _ _ dpair _ _ _ _ dprovider _ <&3; do
+    [ -n "$dname" ] || continue
+    [ -n "$dpair" ] || continue
+    if [ "$dprovider" = "google" ] && [ ! -s "$GOOGLE_TOKENS/$dname.json" ]; then
+      warn "  '$dname' has no Google authorization yet; discovery is deferred until it is authorized"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    if was_setup_discovered "$dpair"; then
+      continue
+    fi
+    if yes | "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$dpair"; then
+      mark_setup_discovered "$dpair"
+      discovered=$((discovered + 1))
+      ok "  discovered private collection(s) for $dname"
+    else
+      warn "  discovery for '$dname' did not complete; the prior local mirror is preserved and sync will still try its known pair"
+    fi
+  done 3< "$VDIR_PAIRS"
+  [ "$discovered" -gt 0 ] || [ "$skipped" -gt 0 ] || ok "  existing private collection discovery is current"
+}
 authorize_google_pairs
+
+say "Discovering private calendar collections"
+discover_private_pairs
 
 say "Writing private calendar sync wrapper"
 write_sync_wrapper || { warn "could not write $BIN_DIR/sync-vdir.sh"; exit 1; }
@@ -608,7 +658,7 @@ ls -1 "$CAL_DIR"/*.ics 2>/dev/null | sed 's/^/   /' || true
 write_writeback_registry || { warn "could not write calendar writeback registry"; exit 1; }
 ok "calendar writeback registry written (Dashboard edits start disabled)"
 
-say "Scheduling private calendar sync (every 15 minutes)"
+say "Scheduling private calendar sync (every 15 minutes, low priority)"
 if install_vdir_cron; then
   ok "cron installed"
 else
@@ -616,7 +666,7 @@ else
 fi
 
 say "Private calendar/vdirsyncer setup complete"
-echo "Private calendars sync every 15 minutes into $CAL_DIR/*.ics."
-echo "Re-run setup-vdirsyncer.sh to add, replace, or migrate Dash-Go private calendar connections."
+echo "Private calendars sync every 15 minutes into $CAL_DIR/*.ics at gentle CPU/I/O priority."
+echo "Re-run setup-vdirsyncer.sh to add, replace, migrate, or discover newly created remote calendar collections."
 echo "vdirsyncer $VDIRSYNCER_VERSION runs only from the isolated pipx environment under $VDIR_HOME."
 echo "Credentials, tokens, vdir state, and the pinned tool environment remain only in $VDIR_HOME (owner-only)."

@@ -2,6 +2,14 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.6] — 2026-07-02
+
+### Lower-impact private-calendar synchronization
+
+- Routed every generated private-calendar sync invocation through Dash-Go’s existing `dashboard-lowprio.sh` helper. Scheduled, manual, setup, and queued writeback runs now give Surf/WebKit and the dashboard server lower CPU/I/O contention while preserving the single shared sync lock and one-pair-at-a-time behavior.
+- Moved remote collection discovery out of the 15-minute sync wrapper and into explicit private-calendar setup/refresh plus the one-time Google authorization flow. Routine syncs now execute only the already-configured exact pairs; reopening setup discovers newly created or deliberately changed remote collections.
+- Added a functional scheduling smoke that proves setup discovers a pair once, normal syncs do not rediscover it, and each wrapper invocation re-execs through the low-priority helper exactly once.
+
 ## [1.5.6-beta.5] — 2026-07-02
 
 ### Pinned private-calendar synchronization

@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.6-beta.5"
+VERSION="1.5.6-beta.6"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -242,6 +242,8 @@ Apps load only when opened and use the shared Dash-Go overlay, theme, touch cont
 Choose **Add private calendar** from the installer’s calendar-sync menu for iCloud, Nextcloud, Fastmail, Radicale, another standard CalDAV service, or Google Calendar. Dash-Go keeps account credentials outside the served dashboard tree and synchronizes the chosen remote collection into a local Dash-Go calendar. Private calendar sync installs a Dash-Go-owned, pipx-isolated `vdirsyncer[google]` **0.20.0** environment; `pipx` itself is installed through APT on Debian/Raspberry Pi OS when needed. Dash-Go never runs a pipx upgrade automatically.
 
 A private CalDAV or Google collection can optionally be enrolled for **Dashboard edits** when setup can identify one exact local vdir collection. In **Dashboard Control → Calendars**, enable that collection to add events from a day popup, edit simple events, or skip one occurrence of a recurring event. Dash-Go writes the local vdir first, updates its dashboard mirror, then queues the usual CalDAV synchronization.
+
+Private calendars synchronize one at a time every 15 minutes through Dash-Go’s gentle CPU/I/O launcher, so vdirsyncer, mirror merging, and event-cache refreshes yield to the kiosk. Remote collection discovery happens only when private-calendar setup is opened or refreshed—not during ordinary scheduled syncs. Reopen setup after creating a new remote calendar or changing a collection list.
 
 Website and `webcal`/HTTPS ICS subscriptions remain permanently read-only. Broad discovered CalDAV mirrors, local unmanaged ICS files, generated Dash-Go feeds, attendee/organizer events, and detached recurring instances are also read-only. Calendar Manager can hide a registered CalDAV mirror but never deletes the remote calendar. One-time event deletion requires an enabled Dashboard Control PIN.
 

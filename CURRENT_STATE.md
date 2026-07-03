@@ -13,10 +13,16 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.5`
+- **Version:** `1.5.6-beta.6`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
-- **Focus:** keep private calendar writeback optional and provider-neutral while standardizing its external sync tool as an isolated, pinned vdirsyncer environment.
+- **Focus:** keep optional private-calendar synchronization quiet on the Pi by lowering its scheduled CPU/I/O priority and moving remote discovery out of routine syncs.
+
+## 1.5.6-beta.6 highlights
+
+- **Gentle private-calendar work:** every private-calendar synchronization path—cron, manual run, setup pull, and queued Dashboard writeback—re-execs through Dash-Go’s existing low-priority helper. Vdirsyncer, local merge work, and event-cache regeneration inherit lower CPU and I/O priority without introducing a daemon or retained Python process.
+- **Setup-time discovery only:** remote collection discovery now runs during explicit setup/refresh and one-time Google authorization, not every 15-minute routine sync. Existing exact collections continue to sync normally; rerun private-calendar setup to discover a newly created remote collection.
+- **Bounded schedule preserved:** calendars still synchronize one at a time with the existing shared lock and per-pair fault isolation, so a slow, failed, or unauthorized provider cannot stack work or block another private calendar.
 
 ## 1.5.6-beta.5 highlights
 

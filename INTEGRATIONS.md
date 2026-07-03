@@ -2,7 +2,7 @@
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.6-beta.5, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.6-beta.6, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -56,7 +56,7 @@ Google Calendar synchronizes through the same vdirsyncer pipeline using Google's
 
 Dash-Go manages private-calendar synchronization through one isolated **pipx** environment pinned to `vdirsyncer[google]` **0.20.0**. On Raspberry Pi OS, Debian, and Ubuntu it may use APT only to install `pipx`; the vdirsyncer application and its Google OAuth dependency are then installed together in `~/.dashboard-vdirsyncer/pipx/` with its known command wrapper under `~/.dashboard-vdirsyncer/bin/`. Dash-Go never uses `pip --user`, never installs vdirsyncer into the system Python environment, and never runs `pipx upgrade` automatically.
 
-This is an optional, short-lived external sync tool: it is not a Dash-Go server dependency or daemon. Python runs only while a private-calendar sync or one-time OAuth authorization is actively in progress. If a system has no APT, setup requires an administrator to install `pipx` with that system’s native package manager before private-calendar configuration can continue.
+This is an optional, short-lived external sync tool: it is not a Dash-Go server dependency or daemon. Python runs only while a private-calendar sync or one-time OAuth authorization is actively in progress. Scheduled, manual, setup, and queued writeback syncs all inherit Dash-Go’s low CPU/I/O priority; completed sync processes exit and leave no retained Python service. Remote collection discovery is explicit setup/refresh work rather than a recurring 15-minute task, so reopen private-calendar setup after adding a new remote calendar or changing a collection list. If a system has no APT, setup requires an administrator to install `pipx` with that system’s native package manager before private-calendar configuration can continue.
 
 Google requires a one-time preparation in your own Google Cloud account, because Google does not allow password-based CalDAV access:
 
