@@ -278,11 +278,22 @@ func ApplySeriesEdit(src string, event Event, now time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// EXDATE values identify occurrences by exact DTSTART instant. When the
-	// series start time or value form changes, the recorded exclusions must be
-	// re-rendered onto the same civil days in the new form, or every skipped
-	// occurrence silently reappears on the dashboard and on provider clients.
-	edited, err = remapExdates(edited, oldForm, newForm)
+	oldStart, newStart := time.Time{}, time.Time{}
+	if oldForm.utc && !oldForm.allDay && newForm.utc && !newForm.allDay {
+		oldStart, err = utcMasterStartInstant(masterLines)
+		if err != nil {
+			return "", err
+		}
+		newStart, err = utcMasterStartInstant(edited)
+		if err != nil {
+			return "", err
+		}
+	}
+	// EXDATE values identify recurrence instances. Local/TZID and floating
+	// masters retain their civil occurrence day as their wall time changes. UTC
+	// masters retain the matching absolute offset from DTSTART instead, so a
+	// legitimate edit across UTC midnight cannot resurrect a skipped instance.
+	edited, err = remapExdates(edited, oldForm, newForm, oldStart, newStart)
 	if err != nil {
 		return "", err
 	}

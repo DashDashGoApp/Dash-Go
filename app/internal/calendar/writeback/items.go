@@ -22,6 +22,11 @@ type Result struct {
 	Collection string `json:"-"`
 	Pair       string `json:"-"`
 	Provider   string `json:"-"`
+	// FinalDelete is true only when this completed delete left the exact trusted
+	// vdir collection without any remaining regular .ics items. It is never
+	// inferred merely from Action, because --force-delete may only be armed for
+	// that narrow final-event state.
+	FinalDelete bool `json:"-"`
 }
 
 func (s *Service) Create(source string, event icalwrite.Event) (Result, error) {
@@ -139,7 +144,13 @@ func (s *Service) Delete(source, uid string) (Result, error) {
 	if err := fileio.RemoveDurable(path); err != nil {
 		return Result{}, fmt.Errorf("delete calendar event: %w", err)
 	}
-	return Result{Source: cal.Source, UID: uid, Action: "deleted", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider}, nil
+	// Only the local collection's actual post-delete state may authorize the
+	// wrapper's destructive one-run override. If inspection fails, fail closed:
+	// the event is already deleted locally, but the later sync retains its normal
+	// empty-collection guard.
+	remaining, inspectErr := collectionFiles(cal.Collection)
+	finalDelete := inspectErr == nil && len(remaining) == 0
+	return Result{Source: cal.Source, UID: uid, Action: "deleted", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider, FinalDelete: finalDelete}, nil
 }
 func (s *Service) SkipOccurrence(source, uid string, occurrence time.Time) (Result, error) {
 	cal, err := s.Resolve(source)

@@ -53,8 +53,12 @@ func TestWritebackCreateMergeDeleteFinalEvent(t *testing.T) {
 	if !strings.Contains(string(body), "SUMMARY:Dinner") {
 		t.Fatalf("mirror missing event: %s", body)
 	}
-	if _, err := svc.Delete(result.Source, result.UID); err != nil {
+	deleted, err := svc.Delete(result.Source, result.UID)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !deleted.FinalDelete {
+		t.Fatal("deleting the only event must mark the collection as final-delete eligible")
 	}
 	if err := svc.MergeCollection(result.Source, collection); err != nil {
 		t.Fatal(err)
@@ -221,5 +225,31 @@ func TestWritebackSkipRefusesOccurrenceWithDetachedOverride(t *testing.T) {
 	_, err := svc.SkipOccurrence("calendars/family.blue.ics", "weekly", time.Date(2026, 7, 13, 20, 30, 0, 0, time.UTC))
 	if err == nil || !strings.Contains(err.Error(), "custom change") {
 		t.Fatalf("skip with existing override should explain edit path, err=%v", err)
+	}
+}
+
+func TestDeleteMarksOnlyTheFinalEventForEmptyCollectionOverride(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	first, err := svc.Create("calendars/family.blue.ics", icalwrite.Event{UID: "first", Title: "First", Start: testNow.Add(24 * time.Hour), End: testNow.Add(25 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.Create("calendars/family.blue.ics", icalwrite.Event{UID: "second", Title: "Second", Start: testNow.Add(48 * time.Hour), End: testNow.Add(49 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := svc.Delete(first.Source, first.UID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted.FinalDelete {
+		t.Fatal("deleting one of multiple local events must not arm the empty-collection override")
+	}
+	deleted, err = svc.Delete(second.Source, second.UID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !deleted.FinalDelete {
+		t.Fatal("deleting the final local event must arm the one-run empty-collection override")
 	}
 }

@@ -174,3 +174,92 @@ func TestOccurrenceOverrideUsesMasterSequenceAndSkipDetectsIt(t *testing.T) {
 		t.Fatal("matching detached override was not detected")
 	}
 }
+
+func TestApplySeriesEditUTCExdateFollowsDTSTARTAcrossUTCMidnight(t *testing.T) {
+	src := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+		"UID:utc-weekly\r\nDTSTAMP:20250101T000000Z\r\n" +
+		"DTSTART:20250107T010000Z\r\nDTEND:20250107T020000Z\r\n" +
+		"RRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE:20250114T010000Z\r\n" +
+		"SUMMARY:Evening\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	// The original master is 7:00 PM CST. Moving it to 5:00 PM CST changes
+	// DTSTART from Jan 7 01:00Z to Jan 6 23:00Z. The excluded next occurrence
+	// must become Jan 13 23:00Z, not Jan 14 23:00Z.
+	changed := Event{
+		UID:   "utc-weekly",
+		Title: "Earlier evening",
+		Start: time.Date(2025, 1, 6, 23, 0, 0, 0, time.UTC),
+		End:   time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC),
+	}
+	out, err := ApplySeriesEdit(src, changed, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"DTSTART:20250106T230000Z",
+		"EXDATE:20250113T230000Z",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("UTC series edit missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "EXDATE:20250114T230000Z") {
+		t.Fatalf("UTC series edit retained the old UTC civil day:\n%s", out)
+	}
+}
+
+func TestApplySeriesEditTZIDExdateKeepsCivilDayAcrossDST(t *testing.T) {
+	src := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+		"UID:dst-weekly\r\nDTSTAMP:20260201T000000Z\r\n" +
+		"DTSTART;TZID=America/Chicago:20260302T190000\r\nDTEND;TZID=America/Chicago:20260302T200000\r\n" +
+		"RRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE;TZID=America/Chicago:20260309T190000\r\n" +
+		"SUMMARY:Evening\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	changed := Event{
+		UID:   "dst-weekly",
+		Title: "Earlier evening",
+		// March 2 is CST (UTC-6), so 5:00 PM is 23:00Z.
+		Start: time.Date(2026, 3, 2, 23, 0, 0, 0, time.UTC),
+		End:   time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC),
+	}
+	out, err := ApplySeriesEdit(src, changed, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "DTSTART;TZID=America/Chicago:20260302T170000") {
+		t.Fatalf("TZID series edit did not use the new wall time:\n%s", out)
+	}
+	// March 9 is after the DST shift; the exclusion must retain March 9 in
+	// Chicago and take the new 5:00 PM wall time.
+	if !strings.Contains(out, "EXDATE;TZID=America/Chicago:20260309T170000") {
+		t.Fatalf("TZID exclusion did not retain its civil day across DST:\n%s", out)
+	}
+}
+
+func TestApplySeriesEditFloatingExdateKeepsCivilDay(t *testing.T) {
+	previousLocal := time.Local
+	time.Local = time.FixedZone("dashboard-test", -6*60*60)
+	t.Cleanup(func() { time.Local = previousLocal })
+
+	src := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n" +
+		"UID:floating-weekly\r\nDTSTAMP:20260101T000000Z\r\n" +
+		"DTSTART:20260105T190000\r\nDTEND:20260105T200000\r\n" +
+		"RRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE:20260112T190000\r\n" +
+		"SUMMARY:Evening\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	changed := Event{
+		UID:   "floating-weekly",
+		Title: "Earlier evening",
+		Start: time.Date(2026, 1, 5, 17, 0, 0, 0, time.Local),
+		End:   time.Date(2026, 1, 5, 18, 0, 0, 0, time.Local),
+	}
+	out, err := ApplySeriesEdit(src, changed, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"DTSTART:20260105T170000",
+		"EXDATE:20260112T170000",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("floating series edit missing %q:\n%s", want, out)
+		}
+	}
+}

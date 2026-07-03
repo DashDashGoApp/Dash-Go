@@ -33,15 +33,10 @@ func (a *app) queueCalendarWritebackSync(source, pair string, finalDelete bool) 
 	if a.writebackPending == nil {
 		a.writebackPending = map[string]writebackPendingSync{}
 	}
-	entry := writebackPendingSync{Source: source}
-	// A queued delete keeps its empty-collection permission even when a later
-	// non-delete change coalesces into the same pending slot; the deletion
-	// still has to propagate through this run.
-	if previous, ok := a.writebackPending[key]; ok && previous.FinalDelete {
-		entry.FinalDelete = true
-	}
-	entry.FinalDelete = entry.FinalDelete || finalDelete
-	a.writebackPending[key] = entry
+	// The final queued local state is authoritative. In particular, a create
+	// after a final delete must clear the destructive one-run permission rather
+	// than inherit it from the earlier mutation.
+	a.writebackPending[key] = writebackPendingSync{Source: source, FinalDelete: finalDelete}
 	if a.writebackSyncing {
 		a.writebackSyncMu.Unlock()
 		a.calendarWritebackService().Record(source, "syncing", "Saved locally; this calendar is queued behind the active private sync.")
@@ -50,6 +45,21 @@ func (a *app) queueCalendarWritebackSync(source, pair string, finalDelete bool) 
 	a.writebackSyncing = true
 	a.writebackSyncMu.Unlock()
 	go a.runCalendarWritebackQueue(script)
+}
+
+// writebackSyncArgs is the sole bridge from a verified post-mutation result to
+// the wrapper's destructive --allow-empty-once flag. Callers must pass true
+// only when the exact local vdir collection has no remaining .ics files.
+func writebackSyncArgs(pair string, finalDelete bool) []string {
+	pair = strings.TrimSpace(pair)
+	if pair == "" || pair == "__legacy__" {
+		return nil
+	}
+	args := []string{"--pair", pair}
+	if finalDelete {
+		args = append(args, "--allow-empty-once")
+	}
+	return args
 }
 
 // writebackPairResult extracts this pair's classified outcome from the
@@ -87,6 +97,48 @@ func writebackPairResult(output, pair string) string {
 	return best
 }
 
+// writebackSyncOutcome turns the wrapper's classified result into the exact
+// per-calendar state shown in Dashboard Control. Classification is considered
+// even when the process exits successfully: Google authorization can safely
+// skip a pair with exit status 0, which is not a successful synchronization.
+func writebackSyncOutcome(result string, commandFailed, timedOut, finalDelete bool) (state, detail string) {
+	switch result {
+	case "skipped":
+		return "attention", "Saved locally; provider authorization is required before this calendar can synchronize."
+	case "conflict":
+		return "conflict", "This calendar changed locally and remotely before sync. Nothing was overwritten; the dashboard keeps showing its local version. Editing the event on your phone or deleting the dashboard copy resolves it."
+	case "attention-empty":
+		return "attention", "The last local event was removed while this calendar had unsynced remote changes. Sync is paused for safety; use Sync now after reviewing the calendar."
+	case "attention-undiscovered":
+		return "attention", "This selected calendar has not completed its one-time collection discovery. Re-add it from Calendar Manager or re-run private calendar setup."
+	case "attention-auth":
+		return "attention", "The provider rejected this calendar's credentials. Renew its app password or Google authorization, then use Sync now."
+	case "failed":
+		if finalDelete {
+			return "attention", "Saved locally, but the final-event remote deletion did not complete. Dash-Go will not repeat the one-time empty-collection override automatically; review the remote calendar before deliberately retrying that deletion."
+		}
+		return "waiting", "Saved locally; remote sync failed safely. Existing dashboard events were kept."
+	case "", "synced":
+		// Continue below. An empty result preserves compatibility with an older
+		// wrapper that exits 0 without structured RESULT rows.
+	default:
+		return "attention", "Saved locally; the selected remote sync returned an unrecognized safe result. Existing dashboard events were kept."
+	}
+	if commandFailed {
+		if finalDelete {
+			return "attention", "Saved locally, but the final-event remote deletion did not complete. Dash-Go will not repeat the one-time empty-collection override automatically; review the remote calendar before deliberately retrying that deletion."
+		}
+		if timedOut {
+			return "waiting", "Saved locally; the selected remote sync timed out and will retry later."
+		}
+		return "waiting", "Saved locally; remote sync will retry automatically."
+	}
+	// An older wrapper may not emit RESULT rows. Preserve its exit-0 contract,
+	// but never let a known safe skip or unknown classification be reported as
+	// synchronized.
+	return "synced", "Saved locally and synchronized."
+}
+
 func (a *app) runCalendarWritebackQueue(script string) {
 	defer func() {
 		a.writebackSyncMu.Lock()
@@ -112,35 +164,10 @@ func (a *app) runCalendarWritebackQueue(script string) {
 
 		a.calendarWritebackService().Record(source, "syncing", "Saved locally; synchronizing the selected private calendar.")
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		args := []string{}
-		if key != "__legacy__" {
-			args = []string{"--pair", key}
-			if pending.FinalDelete {
-				args = append(args, "--allow-empty-once")
-			}
-		}
-		output, err := exec.CommandContext(ctx, script, args...).CombinedOutput()
+		output, err := exec.CommandContext(ctx, script, writebackSyncArgs(key, pending.FinalDelete)...).CombinedOutput()
 		timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
 		cancel()
-		if err != nil {
-			switch writebackPairResult(string(output), key) {
-			case "conflict":
-				a.calendarWritebackService().Record(source, "conflict", "This calendar changed locally and remotely before sync. Nothing was overwritten; the dashboard keeps showing its local version. Editing the event on your phone or deleting the dashboard copy resolves it.")
-			case "attention-empty":
-				a.calendarWritebackService().Record(source, "attention", "The last local event was removed while this calendar had unsynced remote changes. Sync is paused for safety; use Sync now after reviewing the calendar.")
-			case "attention-undiscovered":
-				a.calendarWritebackService().Record(source, "attention", "This selected calendar has not completed its one-time collection discovery. Re-add it from Calendar Manager or re-run private calendar setup.")
-			case "attention-auth":
-				a.calendarWritebackService().Record(source, "attention", "The provider rejected this calendar's credentials. Renew its app password or Google authorization, then use Sync now.")
-			default:
-				if timedOut {
-					a.calendarWritebackService().Record(source, "waiting", "Saved locally; the selected remote sync timed out and will retry later.")
-				} else {
-					a.calendarWritebackService().Record(source, "waiting", "Saved locally; remote sync will retry automatically.")
-				}
-			}
-			continue
-		}
-		a.calendarWritebackService().Record(source, "synced", "Saved locally and synchronized.")
+		state, detail := writebackSyncOutcome(writebackPairResult(string(output), key), err != nil, timedOut, pending.FinalDelete)
+		a.calendarWritebackService().Record(source, state, detail)
 	}
 }

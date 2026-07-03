@@ -137,9 +137,13 @@ REG="$HOME/dashboard/config/calendar-writeback.json"
 [ -x "$WRAPPER" ] || fail 'generated sync wrapper missing'
 
 # 1) Healthy targeted run: structured RESULT on stdout plus a durable row.
+# This is the control path for an ordinary (including non-final delete) sync:
+# it must never pass vdirsyncer's destructive empty-collection override.
+: > "$FAKE_VDIR_LOG"
 out="$("$WRAPPER" --pair dash_family)" || fail 'healthy targeted sync failed'
 printf '%s\n' "$out" | grep -q $'^RESULT\tdash_family\tsynced$' || fail 'wrapper must report a structured synced RESULT line'
 grep -q '^dash_family|synced|' "$RESULTS" || fail 'results file missing the synced row'
+! grep -q -- '--force-delete' "$FAKE_VDIR_LOG" || fail 'ordinary targeted sync must not pass --force-delete'
 
 # 2) Conflict: classified on stdout and durable, calendar mirror retained.
 touch "$FAKE_STATE/conflict.dash_family"

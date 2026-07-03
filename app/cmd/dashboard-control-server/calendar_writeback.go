@@ -316,7 +316,7 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 		message = "Saved locally; remote sync queued. Dashboard refresh will retry automatically."
 	}
 	service.Record(result.Source, "saved", message)
-	a.queueCalendarWritebackSync(result.Source, result.Pair, result.Action == "deleted")
+	a.queueCalendarWritebackSync(result.Source, result.Pair, result.FinalDelete)
 	action := map[string]string{"created": "Add calendar event", "updated": "Manage calendar event", "occurrence-updated": "Edit calendar occurrence", "series-updated": "Edit recurring series", "deleted": "Delete calendar event", "skipped": "Skip calendar occurrence"}[result.Action]
 	severity := "success"
 	if refreshErr != nil {

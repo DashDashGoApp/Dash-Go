@@ -14,8 +14,11 @@
 
 ## Next development version
 
-- **Status:** not started.
-- **Default successor after 1.5.6 passes the local-builder and publication workflow:** `1.5.7-beta.0`.
+- **Version:** `1.5.7-beta.0`
+- **Track:** beta
+- **Status:** source handoff ready for local-builder verification; not published.
+- **Scope:** recurrence-series EXDATE remapping now preserves UTC occurrence identity across a DTSTART edit that crosses UTC midnight; the one-run empty-collection override is armed only after a verified final local-event delete; a zero-exit provider authorization skip or unrecognized wrapper result is shown as attention rather than a false synchronized result.
+- **Deliberate scope boundary:** durable retry authorization for a failed final-delete sync, legacy pair-less queue coalescing, update-version recovery hardening, version-grammar alignment, and update-preflight I/O caching remain follow-up review items rather than unverified changes in this focused beta.
 
 ## 1.5.6 stable highlights
 
