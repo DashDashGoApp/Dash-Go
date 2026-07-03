@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.6-beta.10"
+VERSION="1.5.6-beta.11"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -244,6 +244,8 @@ Choose **Add private calendar** from the installer’s calendar-sync menu for iC
 Connect Google, iCloud, or another CalDAV account first, then use **Dashboard Control → Calendars → Discover available calendars**. Discovery is review-only: it does not activate, display, synchronize, edit, hide, or delete anything. Add each wanted remote calendar deliberately as either **display-only** or **editable**. Every selected collection receives its own exact local vdir mapping and its own Dashboard source, so two calendars with the same display name remain distinct.
 
 For an editable selected collection, Dash-Go writes a supported event to the local vdir first, refreshes its local dashboard mirror, and queues synchronization only for that collection. Choosing **Add & enable edits**, or later enabling a selected calendar, also turns on the master **Dashboard calendar edits** guard and refreshes local event actions. A supported one-time event shows **Manage event**; a full-day popup shows **+ Add event**; deletion remains PIN-gated. A recurring event shows **Manage recurring event**, which separates one-occurrence changes from a constrained whole-series edit and retains **Skip this occurrence**. When an occurrence already has a custom override, use **Edit this occurrence** instead of Skip. Dash-Go keeps advanced repeat patterns, attendee/organizer events, and ambiguous existing exception sets provider-managed, with an on-screen explanation rather than an unsafe edit control. In the selected-calendar row, you can later switch between display-only and editable without reconnecting the provider.
+
+In timed event forms, touch-friendly **Start** nudges and **Length** chips adjust the same visible date and time fields used for saving; they preserve event duration or start time as appropriate and are hidden for all-day events.
 
 Calendar Manager uses one continuous Calendar-page scroll surface. It does not create separate scroll panes for selected calendars, global edit settings, or Calendar Trash. Scheduled sync outcomes also appear on the affected row. If an exact pair needs discovery, choose **Repair connection**; it runs one targeted discover and sync without changing account selections. A provider conflict stops safely and becomes **Conflict**. Normal writes and sync for that source pause until it is resolved. With a configured and unlocked Dashboard Control PIN, **Resolve conflict** offers a deliberate pair-wide choice between the remote calendar version and this dashboard's local version. Dash-Go never keeps an automatic conflict winner in normal sync configuration, and it retains a bounded owner-only local snapshot before a remote-winner run.
 

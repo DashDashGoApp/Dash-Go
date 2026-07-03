@@ -2,6 +2,14 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.6-beta.11] — 2026-07-03
+
+### Working conflict resolution and quick-access event times
+
+- Fixed one-shot private-calendar conflict resolution, which never worked against real vdirsyncer: the temporary resolver configuration dropped every `[pair]` section header, so pair options leaked into `[general]` and vdirsyncer refused the config. The policy is now injected inside only the selected pair's own section, verified live in both directions (remote-wins pull and dashboard-wins push) with the temporary file removed on every exit path.
+- Hardened the sync-outcomes smoke's stand-in vdirsyncer to enforce the real parser's section structure — a config generator that drops headers or injects a policy into the wrong section now fails the suite, closing the test blindspot that let the broken resolver ship.
+- Added quick-access time changes to the calendar event form: one-tap Start nudges (−1 hr, −15 min, +15 min, +1 hr, Now) that preserve the event's length, and usual Length choices (30 min–4 hr) that preserve its start. Chips rewrite the visible date and time fields as the single source of truth, carry changes across midnight, keep the 44px touch minimum with the standard press state, and hide in all-day mode.
+
 ## [1.5.6-beta.10] — 2026-07-03
 
 ### Truthful private-sync outcomes and recurring-edit correctness

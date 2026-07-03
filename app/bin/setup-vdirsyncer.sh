@@ -488,19 +488,19 @@ make_resolve_config(){
     dashboard) policy="b wins";;
     *) rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1;;
   esac
+  # Every line of the user-owned config is preserved, including section
+  # headers. The policy line is inserted immediately after the selected pair's
+  # own header, and any conflict_resolution already inside that one section is
+  # dropped so the injected policy is authoritative for this run only. The awk
+  # exit status confirms the exact pair section exists before the temporary
+  # config is ever passed to vdirsyncer.
   if ! awk -v want="\$pair" -v policy="\$policy" '
-    function flush(){ if(active && !injected){ print "conflict_resolution = \"" policy "\""; injected=1 } }
-    /^\[pair[[:space:]]+/ {
-      flush(); active = (\$0 == "[pair " want "]"); next
-    }
-    { if(active && \$0 ~ /^conflict_resolution[[:space:]]*=/){ next } print }
-    END { flush(); if(!seen && !active){} }
+    /^\[/ { inwant = (\$0 == "[pair " want "]") }
+    inwant && !/^\[/ && /^conflict_resolution[[:space:]]*=/ { next }
+    { print }
+    \$0 == "[pair " want "]" { print "conflict_resolution = \"" policy "\""; seen = 1 }
+    END { exit seen ? 0 : 1 }
   ' "\$VDIR_CFG" > "\$RESOLVE_CONFIG"; then
-    rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1
-  fi
-  # Verify the exact pair section was seen before the temporary config is ever
-  # passed to vdirsyncer. A malformed user-owned config must fail safely.
-  if ! grep -Fqx "[pair \$pair]" "\$VDIR_CFG"; then
     rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1
   fi
   chmod 600 "\$RESOLVE_CONFIG" || { rm -f "\$RESOLVE_CONFIG"; RESOLVE_CONFIG=""; return 1; }

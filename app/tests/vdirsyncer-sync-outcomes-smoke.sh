@@ -59,17 +59,31 @@ case "$verb" in
     ;;
   sync)
     [ -e "$FAKE_STATE/discovered.$pair" ] || { echo "critical: Please run \`vdirsyncer discover $pair\`  before synchronization." >&2; exit 1; }
+    # Model the real parser's strictness: every pair keeps its section header,
+    # and pair-only options may not leak into [general] or a storage section.
+    # A one-shot resolution policy counts only when it sits inside this exact
+    # pair's own section. This is what catches a config generator that drops
+    # headers or injects into the wrong section.
+    awk -v want="$pair" '
+      /^\[/ { section=$0 }
+      section=="[general]" && /^(a|b|collections|conflict_resolution)[[:space:]]*=/ { bad=1 }
+      /^conflict_resolution[[:space:]]*=/ && section!="[pair " want "]" && section ~ /^\[pair / { misplaced=1 }
+      $0=="[pair " want "]" { seen=1 }
+      END { exit (seen && !bad) ? 0 : 1 }
+    ' "$cfg" || { echo "critical: Error during reading config $cfg: Invalid general section." >&2; exit 1; }
     if [ -e "$FAKE_STATE/conflict.$pair" ]; then
-      if grep -Fq 'conflict_resolution = "a wins"' "$cfg"; then
-        printf 'remote
-' > "$FAKE_STATE/resolved.$pair"
-      elif grep -Fq 'conflict_resolution = "b wins"' "$cfg"; then
-        printf 'dashboard
-' > "$FAKE_STATE/resolved.$pair"
-      else
-        echo "error: $pair/x: One item changed on both sides. Resolve this conflict manually, or by setting the \`conflict_resolution\` parameter in your config file." >&2
-        exit 1
-      fi
+      policy="$(awk -v want="$pair" '
+        /^\[/ { active=($0=="[pair " want "]") }
+        active && /^conflict_resolution[[:space:]]*=/ { print; exit }
+      ' "$cfg")"
+      case "$policy" in
+        *'"a wins"'*) printf 'remote\n' > "$FAKE_STATE/resolved.$pair";;
+        *'"b wins"'*) printf 'dashboard\n' > "$FAKE_STATE/resolved.$pair";;
+        *)
+          echo "error: $pair/x: One item changed on both sides. Resolve this conflict manually, or by setting the \`conflict_resolution\` parameter in your config file." >&2
+          exit 1
+          ;;
+      esac
     fi
     if [ -e "$FAKE_STATE/empty.$pair" ] && [ "$force" -ne 1 ]; then
       echo "error: $pair/x: Storage \"${pair}_local/x\" was completely emptied. If you want to delete ALL entries on BOTH sides, then use \`vdirsyncer sync --force-delete\`." >&2

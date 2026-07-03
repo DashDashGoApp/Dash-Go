@@ -2,7 +2,7 @@
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.6-beta.10, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.6-beta.11, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -51,6 +51,8 @@ Dashboard writeback is optional and narrow. A connected account is discovered on
 Conflicts are safe-stop behavior. When the same event changes locally and remotely before a sync, Dash-Go keeps both sides intact, marks only that selected source as needing attention, and does not automatically choose a winner. The dashboard continues to show its local version. Scheduled-sync outcomes are summarized into the Calendar Manager without exposing raw vdirsyncer logs. A selected exact pair that needs initial discovery can use **Repair connection**, which performs one targeted discovery and sync without changing selected calendars.
 
 A current conflict can be resolved only from Dashboard Control after the administrator has configured and unlocked a Dashboard Control PIN. The confirmation clearly states that the choice applies to every unresolved conflict in that one calendar pair: **Use phone / remote version** retains the remote side, while **Use this dashboard's version** retains the local Dash-Go side. Dash-Go creates an owner-only, bounded local snapshot before a remote-winner run, but that snapshot is not a remote backup and cannot restore a remote version that has been deliberately replaced. The selected winner is used in one temporary targeted vdirsyncer configuration, then removed; normal scheduled sync configuration never retains an automatic conflict winner. Removing the last local event of a collection is propagated only for the one deletion the dashboard itself performed; an unexpectedly emptied collection is never pushed to a provider.
+
+Timed private-calendar event forms also offer local touch time nudges and length presets. They only rewrite the ordinary visible local form fields before the existing local-first save path runs; they do not add a new remote service or background synchronization route.
 
 ### Google Calendar
 

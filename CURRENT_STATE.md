@@ -13,10 +13,16 @@
 
 ## Current development beta
 
-- **Version:** `1.5.6-beta.10`
+- **Version:** `1.5.6-beta.11`
 - **Track:** beta
 - **Baseline:** `1.5.5` stable, preserving its responsive dashboard and Showcase Studio release workflow unchanged.
 - **Focus:** make private Google, iCloud, and CalDAV calendars intentionally discoverable, individually selectable, safely manageable, and truthful about per-calendar sync outcomes without adding a second remote-sync engine.
+
+## 1.5.6-beta.11 highlights
+
+- **Working one-shot conflict recovery:** corrected the temporary vdirsyncer resolver configuration so it preserves every section header and inserts a remote- or Dashboard-winner policy inside only the chosen pair. Real vdirsyncer now accepts the generated configuration, and the temporary owner-only file is removed after the run.
+- **Resolver regression coverage:** hardened the sync-outcome smoke to model vdirsyncer section boundaries. It now rejects a configuration that leaks pair options into `[general]`, loses the target pair header, or places a conflict policy outside the selected pair.
+- **Faster touch event timing:** normal timed event forms now offer quick Start nudges (`−1 hr`, `−15 min`, `+15 min`, `+1 hr`, `Now`) and Length choices (`30 min` through `4 hr`). They rewrite the normal visible date/time fields, preserve duration or start as appropriate, carry across midnight, and hide for all-day events.
 
 ## 1.5.6-beta.10 highlights
 

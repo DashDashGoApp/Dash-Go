@@ -73,6 +73,49 @@ async function openCalendarEventForm(options){
     const times=el("div","calendar-writeback-time-grid");
     const startDate=calendarWritebackInput("YYYY-MM-DD",calendarWritebackLocalDate(start),"date"),startTime=calendarWritebackInput("HH:MM",calendarWritebackLocalTime(start),"time");
     const endDate=calendarWritebackInput("YYYY-MM-DD",calendarWritebackLocalDate(isAllDayInitial?endDisplay:end),"date"),endTime=calendarWritebackInput("HH:MM",calendarWritebackLocalTime(end),"time");
+    // Quick-access time changes: the on-screen keyboard is precise but slow
+    // for a standing kitchen touch. These chips cover the common adjustments
+    // (nudge the start, pick a usual length) while keeping the fields as the
+    // single source of truth — every tap rewrites the same four inputs, so
+    // save/validation paths are unchanged. Durations preserve the start; start
+    // nudges preserve the duration; both carry date rollovers across midnight.
+    function calendarWritebackFormTimes(){
+      const startMs=calendarWritebackDateTime(startDate.value,startTime.value);
+      const endMs=calendarWritebackDateTime(endDate.value,endTime.value);
+      if(!Number.isFinite(startMs))return null;
+      return {startMs,endMs:Number.isFinite(endMs)?endMs:startMs+60*60000};
+    }
+    function calendarWritebackWriteTimes(startMs,endMs){
+      const startAt=new Date(startMs),endAt=new Date(Math.max(endMs,startMs+5*60000));
+      startDate.value=calendarWritebackLocalDate(startAt);startTime.value=calendarWritebackLocalTime(startAt);
+      endDate.value=calendarWritebackLocalDate(endAt);endTime.value=calendarWritebackLocalTime(endAt);
+    }
+    function calendarWritebackQuickChip(label,fn){
+      const chip=el("button","calendar-writeback-quick-chip",label);chip.type="button";
+      chip.addEventListener("click",()=>{const current=calendarWritebackFormTimes();if(current)fn(current);});
+      return chip;
+    }
+    const quickStart=el("div","calendar-writeback-quick");
+    quickStart.append(el("span","calendar-writeback-quick-label","Start"));
+    for(const [label,delta] of [["−1 hr",-60],["−15 min",-15],["+15 min",15],["+1 hr",60]]){
+      quickStart.appendChild(calendarWritebackQuickChip(label,current=>{
+        const duration=current.endMs-current.startMs;
+        calendarWritebackWriteTimes(current.startMs+delta*60000,current.startMs+delta*60000+duration);
+      }));
+    }
+    quickStart.appendChild(calendarWritebackQuickChip("Now",current=>{
+      const duration=current.endMs-current.startMs;
+      const now=new Date();now.setSeconds(0,0);
+      const rounded=+now+((5-(now.getMinutes()%5))%5)*60000;
+      calendarWritebackWriteTimes(rounded,rounded+duration);
+    }));
+    const quickLength=el("div","calendar-writeback-quick");
+    quickLength.append(el("span","calendar-writeback-quick-label","Length"));
+    for(const [label,minutes] of [["30 min",30],["1 hr",60],["90 min",90],["2 hr",120],["4 hr",240]]){
+      quickLength.appendChild(calendarWritebackQuickChip(label,current=>{
+        calendarWritebackWriteTimes(current.startMs,current.startMs+minutes*60000);
+      }));
+    }
     times.append(calendarWritebackField("Start date",startDate),calendarWritebackField("Start time",startTime),calendarWritebackField("End date",endDate),calendarWritebackField("End time",endTime));
 	    const originalSeriesDate=event&&scope==="series"?calendarWritebackLocalDate(start):"";
 	    const exclusionWarning=el("div","calendar-writeback-form-note");
@@ -89,14 +132,14 @@ async function openCalendarEventForm(options){
       // Inclusive display: a one-day all-day event legitimately shows the same
       // start and end date; the exclusive +1 day is applied only on save.
       if(isAllDay&&endDate.value<startDate.value)endDate.value=startDate.value;
-      timed.classList.toggle("is-active",!isAllDay);allday.classList.toggle("is-active",isAllDay);startTime.closest(".calendar-writeback-field").hidden=isAllDay;endTime.closest(".calendar-writeback-field").hidden=isAllDay;
+      timed.classList.toggle("is-active",!isAllDay);allday.classList.toggle("is-active",isAllDay);startTime.closest(".calendar-writeback-field").hidden=isAllDay;endTime.closest(".calendar-writeback-field").hidden=isAllDay;quickStart.hidden=isAllDay;quickLength.hidden=isAllDay;
     }
     setAllDay(isAllDay);
     const more=document.createElement("details");more.className="calendar-writeback-more";
     const summary=document.createElement("summary");summary.textContent="More details";
     const moreBody=el("div","calendar-writeback-more-body");moreBody.append(calendarWritebackField("Location",location),calendarWritebackField("Notes",desc));
     more.append(summary,moreBody);
-    root.append(calendarWritebackField("Calendar",calendar,event?"This edit stays in the original private calendar.":"Only calendars explicitly enabled for Dashboard edits appear here."),calendarWritebackField("Title",title),mode,times,more);
+    root.append(calendarWritebackField("Calendar",calendar,event?"This edit stays in the original private calendar.":"Only calendars explicitly enabled for Dashboard edits appear here."),calendarWritebackField("Title",title),mode,times,quickStart,quickLength,more);
 	    const note=el("div","calendar-writeback-form-note",labels.note);root.append(note,exclusionWarning);
     const actions=el("div","calendar-writeback-form-actions"),cancel=calendarWritebackButton("Cancel","",()=>{if(event)showEventPopup(event);else closeScrim();}),save=calendarWritebackButton(labels.save,"primary",async button=>{
       const payload={calUrl:calendar.value,title:title.value.trim(),desc:desc.value,location:location.value,allDay:isAllDay};

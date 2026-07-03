@@ -36,6 +36,12 @@ assert.match(writeback,/calendarWritebackStatus\(\)/,'event popup must obtain fr
 assert.match(form,/calendarWritebackActiveCalendars/,'calendar picker must include only writable registry entries');
 assert.match(form,/if\(event\)calendar\.disabled=true/,'editing must retain the event in its original remote collection');
 assert.match(form,/exclusiveEndDate\(endDate\.value\.trim\(\)\)/,'all-day saves must convert the inclusive display date to the exclusive contract');
+assert.match(form,/calendar-writeback-quick-chip/,'quick-access time chips must exist for touch time changes');
+assert.match(form,/calendarWritebackWriteTimes/,'quick chips must rewrite the visible date and time fields as the single source of truth');
+assert.match(form,/quickStart\.hidden=isAllDay;quickLength\.hidden=isAllDay/,'quick time chips must hide in all-day mode');
+const writebackCss=read('ui/css/dashboard/calendar-writeback.css');
+assert.match(writebackCss,/calendar-writeback-quick-chip\{min-height:44px/,'quick chips must keep the 44px touch minimum');
+assert.match(writebackCss,/calendar-writeback-quick-chip:active/,'quick chips must keep the dashboard press state');
 assert.match(form,/endDisplay\.setDate\(endDisplay\.getDate\(\)-1\)/,'all-day edits must display the inclusive last day of the event');
 assert.match(form,/February 31/,'timed date entry must reject JavaScript date normalization');
 assert.match(form,/showOSKFor/,'writeback fields must use the shared OSK');

@@ -24,6 +24,13 @@
 .calendar-writeback-mode{display:flex;gap:8px;flex-wrap:wrap}
 .calendar-writeback-time-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .calendar-writeback-form-actions{justify-content:space-between;padding-top:4px}
+/* Quick-access time chips: one-tap start nudges and usual event lengths so a
+   standing touch user rarely needs the on-screen keyboard for times. Targets
+   stay at the dashboard's 44px touch minimum with the standard press state. */
+.calendar-writeback-quick{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.calendar-writeback-quick-label{min-width:52px;color:var(--dim);font-size:13px;font-weight:760}
+.calendar-writeback-quick-chip{min-height:44px;padding:8px 12px;border:1px solid var(--line-soft);border-radius:10px;background:var(--card);color:var(--fg);font:inherit;font-size:14px;font-weight:760;cursor:pointer;appearance:none;-webkit-appearance:none}
+.calendar-writeback-quick-chip:active{background:rgba(255,255,255,.14);transform:translateY(1px)}
 .calendar-writeback-confirm{display:grid;gap:14px}
 .calendar-writeback-confirm p{margin:0;line-height:1.42}
 @media(max-width:620px){
