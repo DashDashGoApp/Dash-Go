@@ -48,7 +48,8 @@ assert.match(setup,/Choose application type: Desktop app\./,"ordinary Google set
 assert.doesNotMatch(setup,/OAuth client type \[desktop\/web/,"ordinary setup must not expose desktop/web architecture jargon");
 assert.match(setup,/-loopback/,"ordinary computer setup must invoke the temporary local callback");
 assert.match(setup,/-display-dir "\$OAUTH_DISPLAY_DIR"/,"phone fallback must show a kiosk QR without enabling a callback");
-assert.match(setup,/bullseye-backports pipx python3-venv/,"Bullseye recovery must install pipx and python3-venv from backports");
+assert.doesNotMatch(setup,/bullseye-backports|DASH_VDIR_APT_CODENAME/,"unsupported Bullseye backports must not be added by private-calendar setup");
+assert.match(setup,/apt-get install -y pipx python3-venv/,"supported private-calendar setup must install pipx and Python venv support together");
 assert.match(setup,/python3 -m pip install --user/,"last-resort user-level pip fallback must remain explicit and non-root");
 assert.doesNotMatch(setup,/sudo pip|--break-system-packages/,"private-calendar fallback must never use unsafe system pip mutations");
 assert.match(integrations,/temporary SSH bridge/,"integration guidance must describe the recommended automatic computer path");

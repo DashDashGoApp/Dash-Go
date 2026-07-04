@@ -14,10 +14,10 @@
 
 ## Current beta source handoff
 
-- **Version:** `1.5.8-beta.3`
+- **Version:** `1.5.8-beta.5`
 - **Track:** beta
 - **Minimum upgrade version:** `1.4.0`
-- **Scope:** Guided account-first private-calendar setup plus an explicit access model. Installer option 9 is a **read-only calendar link** that can never modify the provider; option 10 is **Personal calendar sync**, where iCloud and compatible CalDAV calendars can be selected view-only or two-way and Google uses secure OAuth for two-way synchronization. Calendar Manager can switch an exact private calendar between view-only and two-way safely: view-only clears queued writes, removes writeback eligibility, creates an owner-only local snapshot, and generates vdirsyncer read-only configuration; two-way requires a bounded targeted verification before Dashboard edits return. Existing Google secure sources can be safety-locked view-only before a separate, verified iCal-link migration. The earlier beta.2 guided Google/iCloud, pipx fallback, Express installer, preflight, recovery, and no-installer-Python work remains included.
+- **Scope:** Managed Debian security maintenance. Supported Debian and compatible 64-bit Raspberry Pi OS installations receive a codename-specific Debian Security source when needed, an inert backports source pinned at priority 100, and a Dash-Go-owned `unattended-upgrades` policy limited to Debian Security. Automatic reboot, unattended autoremove, automatic backports installation, broad feature upgrades, and Raspberry Pi firmware/kernel updates remain disabled or deliberate. Installer system/package stages and direct terminal updates repair drift when sudo is available; Dashboard Control updates defer privileged repair without failing the verified app update. Doctor reports healthy, repair-needed, unsupported-layout, and manual-review states, routing repair through `~/install.sh --repair --system`. 32-bit Raspbian and unproven/nonstandard source layouts are never rewritten. Read-only root/overlayfs is intentionally out of scope.
 - **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
 
 ## 1.5.7 stable scope

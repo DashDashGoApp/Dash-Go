@@ -16,9 +16,9 @@ assert.match(calendars,/calendar-manager-group/,'Calendar Manager must use struc
 assert.match(calendars,/ctrlCalendarManagerScrollRoot/,'Calendar actions must use the Calendar page scroll root');
 assert.match(calendars,/ctrlCalendarManagerAnchor/,'Calendar actions must preserve the visible row');
 assert.match(calendars,/ctrlCalendarManagerRefresh/,'routine Calendar actions must avoid a full page refresh');
-assert.match(privateCalendars,/Add & enable edits/,'new selections must make the master-edit effect explicit');
+assert.match(privateCalendars,/Add with two-way sync/,'new selections must make the master-edit effect explicit');
 assert.match(privateCalendars,/Turn on Dashboard edits/,'selected writable calendars must recover from a disabled master switch');
-assert.match(privateCalendars,/Repair edit setup/,'a selected calendar missing registration must have a non-destructive repair path');
+assert.match(privateCalendars,/Repair two-way sync/,'a selected calendar missing registration must have a non-destructive repair path');
 assert.match(privateCalendars,/ctrlCalendarWritebackSave/,'selected calendar controls must update the live writeback registry');
 assert.match(privateCalendars,/Resolve conflict/,'conflicts need a dedicated safe recovery path');
 assert.match(privateCalendars,/Repair connection/,'undiscovered exact pairs need a targeted repair path');

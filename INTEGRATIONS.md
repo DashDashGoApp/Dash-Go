@@ -1,8 +1,13 @@
 # Dash-Go Integrations
 
+## Supported Debian-family bases
+
+Dash-Go fresh installs support Debian or Raspberry Pi OS **Bookworm** and recommend **Trixie**. Bullseye and older are blocked before package, service, kiosk, or display changes; use Doctor, backup, or uninstall while preparing an upgrade. Newer releases run in conservative mode, so Dash-Go avoids unreviewed display changes.
+
+
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.8-beta.3, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.8-beta.5, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -92,7 +97,7 @@ Dash-Go manages private-calendar synchronization using a pinned `vdirsyncer[goog
 
 1. Reuse a healthy Dash-Go-managed tool without prompting.
 2. Use an existing working `pipx` installation to create Dash-Go’s isolated environment.
-3. When `pipx` is missing or broken, install or repair `pipx` and Python virtual-environment support through the system package manager. On Debian/Raspberry Pi OS Bullseye this uses `bullseye-backports` for `pipx` and `python3-venv`.
+3. When `pipx` is missing or broken, install or repair `pipx` and Python virtual-environment support through the system package manager on a supported Bookworm/Trixie device.
 4. When pipx cannot be used, create an isolated Dash-Go-owned virtual environment under `~/.dashboard-vdirsyncer/pip-fallback-venv/`.
 5. Only after explicit confirmation, use a last-resort per-user `python3 -m pip install --user` compatibility fallback.
 

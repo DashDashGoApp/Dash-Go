@@ -1,0 +1,23 @@
+/* Calendar Manager is the primary calendar control surface. The quick
+   visibility popup is intentionally scoped to show/hide actions only. */
+#ctrlcals .calmanager-summary{margin:0;color:var(--fg);font-size:15px;font-weight:800;line-height:1.3;}
+#ctrlcals .calmanager-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+#ctrlcals .calmanager-badge{border:1px solid var(--line-soft);border-radius:999px;padding:4px 7px;color:var(--dim);font:800 10px/1 var(--mono);letter-spacing:.035em;text-transform:uppercase;}
+#ctrlcals .calmanager-badge.shown,#ctrlcals .calmanager-badge.healthy{border-color:var(--ctrl-state-ok-border);background:var(--ctrl-state-ok-bg);color:var(--fg);}
+#ctrlcals .calmanager-badge.hidden,#ctrlcals .calmanager-badge.readonly{background:var(--ctrl-fill-quiet);}
+#ctrlcals .calmanager-badge.twoway{border-color:color-mix(in srgb,var(--accent) 60%,var(--line-soft));background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--fg);}
+#ctrlcals .calmanager-badge.attention{border-color:var(--ctrl-state-warn-border);background:var(--ctrl-state-warn-bg);color:var(--fg);}
+.calendar-visibility-popup{display:grid;gap:14px;min-width:min(620px,calc(100vw - 32px));}
+.calendar-visibility-popup-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.calendar-visibility-popup-list{display:grid;gap:8px;max-height:min(54vh,520px);overflow:auto;padding-right:2px;}
+.calendar-visibility-popup-row{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line-soft);border-radius:12px;background:var(--ctrl-fill-quiet);}
+.calendar-visibility-popup-row .calchip{flex:1 1 auto;min-width:0;}
+.calendar-visibility-popup-state{flex:0 0 auto;color:var(--dim);font:800 11px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;}
+#pop .calendar-visibility-popup .calchip{--cal-color:var(--accent);--cal-rgb:127,214,168;display:inline-flex;align-items:center;justify-content:flex-start;gap:10px;min-height:48px;padding:8px 13px;border:1.5px solid rgba(var(--cal-rgb),.70);border-radius:12px;background:rgba(var(--cal-rgb),.16);color:var(--fg);font:800 15px/1 var(--sans);touch-action:manipulation;}
+#pop .calendar-visibility-popup .calchip-dot{width:12px;height:12px;flex:0 0 auto;border-radius:50%;background:var(--cal-color);}
+#pop .calendar-visibility-popup .calchip-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#pop .calendar-visibility-popup .calchip-check{margin-left:auto;font-size:18px;}
+#pop .calendar-visibility-popup .calchip.off{border-color:rgba(var(--cal-rgb),.26);background:transparent;color:var(--dimmer);}
+#pop .calendar-visibility-popup .calchip.off .calchip-dot{background:transparent;border:3px solid rgba(var(--cal-rgb),.44);}
+#pop .calendar-visibility-popup .calchip.off .calchip-check{color:transparent;}
+@media(max-width:760px){.calendar-visibility-popup{min-width:0;width:100%;}.calendar-visibility-popup-actions{grid-template-columns:1fr;}}

@@ -2,7 +2,19 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.8-beta.3] — 2026-07-04
+## [1.5.8-beta.5] — 2026-07-04
+
+### Managed Debian security maintenance
+
+- Added a shared, deterministic Debian security-maintenance policy for supported Debian and compatible 64-bit Raspberry Pi OS installations. It adds the codename-specific Debian Security archive only when no equivalent source exists, records matching backports as dormant at pin priority 100, and never rewrites user-managed repository entries.
+- Added a security-only `unattended-upgrades` policy that clears stock origins before permitting only the installed codename’s Debian Security archive. Automatic reboot, shutdown installation, unattended dependency/kernel removal, automatic backports installation, and general feature upgrades remain disabled.
+- Scheduled APT list refresh and security installation after the nightly browser restart and before Dash-Go housekeeping, with low CPU and I/O priority. Automatic APT cache cleanup is bounded; normal dashboard work remains outside the maintenance path.
+- Removed the old Pi-kiosk trim conflict that disabled `unattended-upgrades`.
+- Added installer reconciliation on system/package stages and normal updates. Interactive terminal updates can repair the policy immediately; noninteractive Dashboard Control updates remain successful and explicitly defer privileged system repair rather than prompting or broadening privilege.
+- Added Doctor health and repair-plan coverage for supported, unsupported, drifted, failed-timer, and administrator-overridden policies. `~/install.sh --repair --system` restores only Dash-Go-owned APT/systemd files and never runs a general operating-system upgrade.
+- Kept 32-bit Raspbian, nonstandard/unproven archive layouts, later administrator-owned unattended-origin overrides, Raspberry Pi firmware/kernel upgrades, read-only root, and overlayfs outside automatic configuration.
+
+## [1.5.8-beta.4] — 2026-07-04
 
 ### Calendar access clarity and reversible private sync
 
@@ -17,7 +29,7 @@ This changelog records stable Dash-Go milestones. Detailed development increment
 - Reworked private calendar setup around accounts and discovered calendar names instead of raw provider fields. Google and iCloud credentials are staged privately, calendars are discovered before color/writeback questions, and a successful first sync is required before a new account becomes active.
 - Simplified Google setup to one ordinary instruction: create a Google **Desktop app** OAuth client. The recommended computer-browser route prints a temporary SSH bridge and receives the local callback automatically. The phone/tablet path shows a kiosk QR and truthfully explains the required paste-back address; no ordinary user sees a desktop/web architecture choice.
 - Made Apple iCloud a first-class guided provider with the fixed iCloud CalDAV endpoint, Apple Account email and app-specific-password prompts, per-calendar read-only defaults, clear recovery wording, and no normal server-URL or collection-UUID fields.
-- Added a safer private-calendar tool ladder: reuse healthy managed vdirsyncer, use working pipx, repair/install pipx with Bullseye backports support when needed, use an isolated Dash-Go virtual-environment fallback, then offer an explicitly approved user-level pip fallback only as a last resort. Unsafe system-pip operations remain forbidden.
+- Added a safer private-calendar tool ladder: reuse healthy managed vdirsyncer, use working pipx, repair/install pipx through supported system repositories when needed, use an isolated Dash-Go virtual-environment fallback, then offer an explicitly approved user-level pip fallback only as a last resort. Unsafe system-pip operations remain forbidden.
 - Hardened every private-calendar retry path: invalid credentials, calendar selections, colors, and duplicate-account choices re-prompt only the affected answer instead of discarding completed authorization. Headless SSH sessions now default to the phone/QR paste-back route, all blocking discovery and first-sync phases are bounded, and cancellation removes staged drafts without touching active calendars.
 - Added provider-aware credential guidance: Google trims and checks pasted credentials without logging them; iCloud trims pasted app-specific passwords, warns when the shape looks wrong, and turns iCloud authorization failures into a clear fresh-app-password or account/2FA next action.
 - Clarified the phone QR route as a short-lived display-only paste-back aid and removed the unused HTTPS/LAN callback path, so setup never suggests an automatic completion mode it cannot offer.
@@ -31,6 +43,19 @@ This changelog records stable Dash-Go milestones. Detailed development increment
 - Refined first and later launches: non-US Express installs choose metric defaults, location and menu typos stay on the current question, installed devices describe the recommended lane as an update, Custom mode summarizes selected tasks before running them, and final access notes distinguish localhost-only service from an intentionally enabled LAN listener.
 - Added an explicit, reversible Pi display-configuration helper with backup and black-screen recovery instructions; Express never applies it silently.
 - Hardened menu and Custom-session recovery: harmless typos re-prompt, every interactive restart preserves original launcher arguments, and the defensive dispatcher returns safely to the menu instead of ending the installer.
+
+### Installer order and supported-platform policy
+
+- Put the installer’s Help & Admin and Remove actions in one consecutive 18–25 sequence, with **Remove Dash-Go** directly above **Exit installer**. Menu dispatch, recovery wording, and tests now use the same canonical numbers.
+- Defined Bookworm as supported and Trixie as recommended for new Dash-Go kiosks. Fresh installation blocks Bullseye and older before system changes, while Doctor can still provide safe maintenance guidance.
+- Added required kiosk-package candidate checks before session/autologin provisioning. Missing required packages now stop safely with one concrete next action; optional helpers remain optional.
+- Retired Dash-Go’s FKMS display rewrite. The Pi display helper now reports the detected configuration and can make an owner-only backup for manual troubleshooting without changing KMS settings.
+
+### Calendar management hierarchy
+
+- Promoted **Manage calendars** to the first open action on the Calendars tab and retired the standalone Calendar Visibility card.
+- Calendar rows now combine shown/hidden state, provider source, view-only/two-way access, and health in one place. Selected private calendars receive the same direct visibility control.
+- Added a compact **Calendar visibility** Quick Action for rapid show/hide changes. It shares the Manager’s underlying state and explicitly does not change synchronization or provider access.
 
 ## [1.5.7] — 2026-07-03
 

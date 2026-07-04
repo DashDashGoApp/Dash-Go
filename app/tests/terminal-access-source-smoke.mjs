@@ -44,7 +44,7 @@ assert.match(restore,/restore terminal access setting failed/,"restore errors mu
 assert.match(readme,/dashboard-terminal-access (?:status|`status`)/,"README must provide the direct SSH management command");
 assert.match(readme,/choose \*\*Terminal access\*\*/,"README must document the installer toggle by name");
 assert.match(installer,/configure_terminal_access\(\)\{[\s\S]*?release_server_for_host "\$DASH"[\s\S]*?--terminal-access status[\s\S]*?--terminal-access "\$next"/,"installer toggle must query and then atomically flip terminal access through the host-matched server");
-assert.match(installer,/OPT_TERMINAL=24/,"installer must retain a stable terminal-access menu identity");
-assert.match(installer,/\$\{OPT_TERMINAL\}\) Terminal access\s+toggle Dashboard Control Terminal card/,"installer must expose the terminal-access toggle");
+assert.match(installer,/OPT_TERMINAL=23/,"installer must retain a stable terminal-access menu identity");
+assert.match(installer,/printf \'  %2s\) %-28s %s\\n\' "\$OPT_TERMINAL" "Terminal access" "toggle Dashboard Control Terminal card"/,"installer must expose the terminal-access toggle");
 assert.match(installer,/"\$OPT_TERMINAL"\) configure_terminal_access; exit \$\?;;/,"installer terminal-access choice must dispatch directly and exit");
 console.log("PASS: terminal access remains private, owner-only, browser-denied when disabled, and platform-service owned");

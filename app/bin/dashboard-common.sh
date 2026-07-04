@@ -32,21 +32,38 @@ load_os_release(){
   fi
 }
 
+classify_os_support(){
+  local major="${OS_VERSION_ID%%.*}"
+  IS_DEBIAN_BOOKWORM=0; IS_DEBIAN_TRIXIE=0
+  OS_SUPPORT_LEVEL="unsupported"
+  OS_SUPPORT_LABEL="${OS_ID:-unknown} ${OS_CODENAME:-unknown}"
+  case "$OS_ID:$OS_CODENAME" in
+    debian:trixie|raspbian:trixie) IS_DEBIAN_TRIXIE=1; OS_SUPPORT_LEVEL="recommended"; OS_SUPPORT_LABEL="$OS_ID Trixie — recommended" ;;
+    debian:bookworm|raspbian:bookworm) IS_DEBIAN_BOOKWORM=1; OS_SUPPORT_LEVEL="supported"; OS_SUPPORT_LABEL="$OS_ID Bookworm — supported compatibility mode" ;;
+    debian:bullseye|raspbian:bullseye|debian:buster|raspbian:buster|debian:stretch|raspbian:stretch) OS_SUPPORT_LEVEL="unsupported"; OS_SUPPORT_LABEL="$OS_ID ${OS_CODENAME:-$OS_VERSION_ID} — unsupported for a fresh Dash-Go install" ;;
+    debian:*|raspbian:*)
+      case "$major" in
+        ''|*[!0-9]*) OS_SUPPORT_LEVEL="conservative"; OS_SUPPORT_LABEL="$OS_ID ${OS_CODENAME:-newer release} — conservative mode" ;;
+        0|1|2|3|4|5|6|7|8|9|10|11) OS_SUPPORT_LEVEL="unsupported"; OS_SUPPORT_LABEL="$OS_ID ${OS_CODENAME:-$OS_VERSION_ID} — unsupported for a fresh Dash-Go install" ;;
+        *) OS_SUPPORT_LEVEL="conservative"; OS_SUPPORT_LABEL="$OS_ID ${OS_CODENAME:-$OS_VERSION_ID} — conservative mode" ;;
+      esac
+      ;;
+  esac
+}
+
 detect_platform(){
   DASH_ARCH="$(uname -m 2>/dev/null || echo unknown)"
   DEVICE_MODEL="$(read_device_model)"
   load_os_release
-  IS_PI=0; IS_DEBIAN=0; IS_DEBIAN_TRIXIE=0; IS_X86=0
+  IS_PI=0; IS_DEBIAN=0; IS_X86=0
   case "$DEVICE_MODEL" in *"Raspberry Pi"*) IS_PI=1;; esac
   case "$OS_ID" in debian|raspbian) IS_DEBIAN=1;; esac
-  [ "$OS_ID" = "debian" ] && [ "$OS_CODENAME" = "trixie" ] && IS_DEBIAN_TRIXIE=1
+  classify_os_support
   case "$DASH_ARCH" in x86_64|amd64|i386|i686) IS_X86=1;; esac
   if [ "$IS_PI" = "1" ]; then
-    PLATFORM_LABEL="Raspberry Pi (${DEVICE_MODEL:-unknown model})"
-  elif [ "$IS_DEBIAN_TRIXIE" = "1" ] && [ "$IS_X86" = "1" ]; then
-    PLATFORM_LABEL="Debian Trixie x86 ($DASH_ARCH)"
+    PLATFORM_LABEL="Raspberry Pi OS ${OS_CODENAME:-unknown} (${DEVICE_MODEL:-unknown model}, $DASH_ARCH)"
   elif [ "$IS_DEBIAN" = "1" ] && [ "$IS_X86" = "1" ]; then
-    PLATFORM_LABEL="Debian x86 ($OS_CODENAME $DASH_ARCH)"
+    PLATFORM_LABEL="Debian ${OS_CODENAME:-unknown} x86 ($DASH_ARCH)"
   elif [ "$IS_X86" = "1" ]; then
     PLATFORM_LABEL="x86 Linux ($OS_ID $OS_CODENAME)"
   else

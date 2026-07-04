@@ -98,6 +98,16 @@ if [ -r "$BIN_DIR/dashboard-common.sh" ]; then
   # shellcheck disable=SC1090
   . "$BIN_DIR/dashboard-common.sh"
 fi
+# The installer writes this policy; Doctor only reads it and directs system
+# repair through the scoped installer path.
+SECURITY_MAINTENANCE_LOADED=0
+if [ -r "$BIN_DIR/dashboard-security-maintenance.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$BIN_DIR/dashboard-security-maintenance.sh"
+  if declare -F dashboard_security_maintenance_supported >/dev/null 2>&1; then
+    SECURITY_MAINTENANCE_LOADED=1
+  fi
+fi
 trap doctor_plan_cleanup EXIT INT TERM
 
 # A terminal repair always begins with a read-only full plan. Dashboard Control
@@ -170,6 +180,70 @@ can_apply_fix(){
 go_runtime_trusted(){ [ "${GO_RUNTIME_TRUSTED:-0}" = 1 ]; }
 
 have(){ command -v "$1" >/dev/null 2>&1; }
+
+# Keep Doctor's platform language aligned with the installer without importing
+# installer code. Older Debian generations are maintenance-only; Bookworm is
+# supported, Trixie is recommended, and future releases are conservative.
+doctor_os_support(){
+  local release="${DOCTOR_OS_RELEASE:-/etc/os-release}" id="unknown" code="" version="" major=""
+  if [ -r "$release" ]; then
+    id="$(sed -nE 's/^ID=//p' "$release" | head -1 | tr -d '\"')"
+    code="$(sed -nE 's/^VERSION_CODENAME=//p; s/^DEBIAN_CODENAME=//p' "$release" | head -1 | tr -d '\"')"
+    version="$(sed -nE 's/^VERSION_ID=//p' "$release" | head -1 | tr -d '\"')"
+  fi
+  major="${version%%.*}"
+  case "$id:$code" in
+    debian:trixie|raspbian:trixie) printf 'recommended\t%s Trixie — recommended\n' "$id" ;;
+    debian:bookworm|raspbian:bookworm) printf 'supported\t%s Bookworm — supported compatibility mode\n' "$id" ;;
+    debian:bullseye|raspbian:bullseye|debian:buster|raspbian:buster|debian:stretch|raspbian:stretch) printf 'unsupported\t%s %s — unsupported for a fresh Dash-Go install\n' "$id" "$code" ;;
+    debian:*|raspbian:*)
+      case "$major" in
+        ''|*[!0-9]*) printf 'conservative\t%s %s — conservative mode\n' "$id" "${code:-newer release}" ;;
+        0|1|2|3|4|5|6|7|8|9|10|11) printf 'unsupported\t%s %s — unsupported for a fresh Dash-Go install\n' "$id" "${code:-$version}" ;;
+        *) printf 'conservative\t%s %s — conservative mode\n' "$id" "${code:-$version}" ;;
+      esac
+      ;;
+    *) printf 'unknown\t%s %s\n' "$id" "$code" ;;
+  esac
+}
+
+check_platform_compatibility(){
+  local raw level label cfg candidate missing=""
+  section "Platform compatibility"
+  raw="$(doctor_os_support)"
+  level="${raw%%$'\t'*}"; label="${raw#*$'\t'}"
+  case "$level" in
+    recommended) ok "$label" ;;
+    supported) ok "$label" ;;
+    conservative) warn "$label; Dash-Go avoids unreviewed distribution-specific display changes" ;;
+    unsupported) fail_fix "$label" "upgrade to Bookworm or Trixie before attempting a fresh install; Doctor, backup, and uninstall remain available" ;;
+    *) warn "Unrecognized operating system: $label; use Bookworm or Trixie for a supported kiosk install" ;;
+  esac
+  if have apt-cache; then
+    for candidate in surf openbox wmctrl x11-xserver-utils curl; do
+      if [ "$(apt-cache policy "$candidate" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')" = "(none)" ]; then
+        missing="$missing $candidate"
+      fi
+    done
+    if [ -n "$missing" ]; then
+      fail_fix "required kiosk packages are unavailable from configured APT sources:${missing}" "repair APT sources or upgrade to Bookworm/Trixie, then rerun ~/install.sh"
+    else
+      ok "configured APT sources provide required kiosk packages"
+    fi
+  else
+    warn "apt-cache is unavailable; Doctor could not verify required kiosk package candidates"
+  fi
+  cfg="/boot/firmware/config.txt"; [ -f "$cfg" ] || cfg="/boot/config.txt"
+  case "$level" in supported|recommended)
+    if [ -f "$cfg" ] && grep -Fq 'Managed by Dash-Go display setup' "$cfg" 2>/dev/null && grep -Eq '^[[:space:]]*dtoverlay=vc4-fkms-v3d' "$cfg" 2>/dev/null; then
+      warn_fix "legacy Dash-Go FKMS display override found on $label" "keep modern KMS; restore ${cfg}.dash-go.bak if it is the known-good pre-Dash-Go file, then rerun Doctor"
+    elif [ -f "$cfg" ]; then
+      ok "modern Pi display configuration is not using a Dash-Go FKMS override"
+    fi
+    ;;
+  esac
+}
+
 trim_line(){ tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'; }
 file_old_minutes(){ [ -e "$1" ] && find "$1" -mmin "+$2" -print -quit 2>/dev/null | grep -q .; }
 
@@ -483,7 +557,7 @@ check_installation(){
   for rel in index.html VERSION manifest.json kiosk.sh \
     ui/dashboard.css ui/control-layout.css ui/js/app.bundle.js ui/js/app.control.bundle.js \
     bin/dashboard-control-server bin/dashboard-common.sh bin/dashboard-kiosk-lib.sh \
-    bin/dashboard-lite-session.sh bin/dashboard-session-guard.sh bin/doctor.sh \
+    bin/dashboard-security-maintenance.sh bin/dashboard-lite-session.sh bin/dashboard-session-guard.sh bin/doctor.sh \
     bin/dashboard-doctor-plan.sh bin/dashboard-health-guard.sh; do
     [ -f "$DASH/$rel" ] || missing="$missing $rel"
   done
@@ -1151,10 +1225,45 @@ PY2
   fi
 }
 
+check_security_maintenance(){
+  local issue=""
+  [ "$SECURITY_MAINTENANCE_LOADED" = 1 ] || {
+    info "managed Debian security maintenance check is unavailable until Dash-Go app files are refreshed"
+    return 0
+  }
+  if ! dashboard_security_maintenance_supported; then
+    info "managed Debian security maintenance is not applied: $(dashboard_security_maintenance_support_reason)"
+    return 0
+  fi
+  if dashboard_security_later_origin_policy_present; then
+    doctor_plan_add manual security-maintenance-policy "Review an unattended-upgrades origin override" "A later APT configuration file can broaden the package origins allowed for unattended upgrades." "No automatic write; prevents Dash-Go from silently changing administrator-owned APT policy." "Your existing APT sources and policy files."
+    warn "managed Debian security maintenance needs manual review: a later unattended-upgrades origin policy exists"
+    return 0
+  fi
+  if ! dashboard_security_managed_files_current; then
+    issue="Dash-Go-owned security source, backports pin, unattended policy, or scheduled maintenance configuration is missing or changed"
+  elif ! dashboard_security_package_installed; then
+    issue="the unattended-upgrades package is not installed"
+  elif ! dashboard_security_timers_ready; then
+    issue="APT security-maintenance timers are not enabled and active"
+  elif have systemctl && systemctl is-failed --quiet apt-daily-upgrade.service 2>/dev/null; then
+    issue="the most recent unattended security-upgrade service is failed"
+  fi
+  if [ -n "$issue" ]; then
+    doctor_plan_add repair security-maintenance "Restore managed Debian security maintenance" "$issue." "Restores only Dash-Go-owned APT/systemd policy files, installs unattended-upgrades when needed, and enables its timers. It never runs a general OS upgrade." "User-managed repositories, Raspberry Pi firmware policy, ordinary package choices, and personal dashboard data."
+    warn "managed Debian security maintenance needs repair: $issue — run ~/install.sh --repair --system"
+  else
+    ok "managed Debian security maintenance is healthy (security-only; no automatic reboot or backports installs)"
+  fi
+}
+
 check_system(){
   local free_kb mem_kb year missing="" tool sync mount_opts="" storage_errors="" guard_status=""
   section "System readiness"
   [ "$SKIP_SYSTEM" = 1 ] && { info "system readiness checks skipped by DOCTOR_SKIP_SYSTEM"; return; }
+  check_platform_compatibility
+  section "System readiness"
+  check_security_maintenance
 
   for tool in python3 curl systemctl; do have "$tool" || missing="$missing $tool"; done
   if [ -z "$missing" ]; then ok "required maintenance tools are installed"; else fail_fix "missing required tools:$missing" "sudo apt-get install -y python3 curl systemd"; fi

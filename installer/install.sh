@@ -1019,21 +1019,76 @@ bootstrap_load_os_release(){
   fi
 }
 
+# Dash-Go supports current Debian-family installations deliberately rather than
+# treating every /etc/os-release value as interchangeable. Bookworm is kept as
+# a compatibility target, Trixie is the recommended base, and newer releases
+# stay conservative: ordinary kiosk setup works but Dash-Go avoids unreviewed
+# firmware/display changes. Bullseye and older are maintenance-only so a fresh
+# installer cannot begin changing an end-of-life operating system.
+bootstrap_classify_os_support(){
+  local major="${OS_VERSION_ID%%.*}"
+  IS_DEBIAN_BOOKWORM=0
+  IS_DEBIAN_TRIXIE=0
+  OS_SUPPORT_LEVEL="unsupported"
+  OS_SUPPORT_LABEL="${OS_ID:-unknown} ${OS_CODENAME:-unknown}"
+  OS_SUPPORT_HINT="Install Raspberry Pi OS Bookworm or Trixie, then run ~/install.sh again."
+  case "$OS_ID" in
+    debian|raspbian) ;;
+    *) return 0 ;;
+  esac
+  case "$OS_CODENAME" in
+    bookworm)
+      IS_DEBIAN_BOOKWORM=1
+      OS_SUPPORT_LEVEL="supported"
+      OS_SUPPORT_LABEL="${OS_ID} Bookworm — supported compatibility mode"
+      OS_SUPPORT_HINT="Bookworm is supported. Trixie is recommended for new devices."
+      ;;
+    trixie)
+      IS_DEBIAN_TRIXIE=1
+      OS_SUPPORT_LEVEL="recommended"
+      OS_SUPPORT_LABEL="${OS_ID} Trixie — recommended"
+      OS_SUPPORT_HINT="Trixie is the recommended Dash-Go base."
+      ;;
+    bullseye|buster|stretch|jessie|wheezy)
+      OS_SUPPORT_LEVEL="unsupported"
+      OS_SUPPORT_LABEL="${OS_ID} ${OS_CODENAME} — unsupported for a fresh Dash-Go install"
+      OS_SUPPORT_HINT="Upgrade this device to Bookworm or Trixie, then run ~/install.sh again."
+      ;;
+    *)
+      case "$major" in
+        ''|*[!0-9]*)
+          OS_SUPPORT_LEVEL="conservative"
+          OS_SUPPORT_LABEL="${OS_ID} ${OS_CODENAME:-newer release} — conservative mode"
+          OS_SUPPORT_HINT="Dash-Go will avoid unreviewed distribution-specific system changes."
+          ;;
+        0|1|2|3|4|5|6|7|8|9|10|11)
+          OS_SUPPORT_LEVEL="unsupported"
+          OS_SUPPORT_LABEL="${OS_ID} ${OS_CODENAME:-$OS_VERSION_ID} — unsupported for a fresh Dash-Go install"
+          OS_SUPPORT_HINT="Upgrade this device to Bookworm or Trixie, then run ~/install.sh again."
+          ;;
+        *)
+          OS_SUPPORT_LEVEL="conservative"
+          OS_SUPPORT_LABEL="${OS_ID} ${OS_CODENAME:-$OS_VERSION_ID} — conservative mode"
+          OS_SUPPORT_HINT="Dash-Go will avoid unreviewed distribution-specific system changes."
+          ;;
+      esac
+      ;;
+  esac
+}
+
 bootstrap_detect_platform(){
   DASH_ARCH="$(uname -m 2>/dev/null || echo unknown)"
   DEVICE_MODEL="$(bootstrap_read_device_model)"
   bootstrap_load_os_release
-  IS_PI=0; IS_DEBIAN=0; IS_DEBIAN_TRIXIE=0; IS_X86=0
+  IS_PI=0; IS_DEBIAN=0; IS_X86=0
   case "$DEVICE_MODEL" in *"Raspberry Pi"*) IS_PI=1;; esac
   case "$OS_ID" in debian|raspbian) IS_DEBIAN=1;; esac
-  [ "$OS_ID" = "debian" ] && [ "$OS_CODENAME" = "trixie" ] && IS_DEBIAN_TRIXIE=1
+  bootstrap_classify_os_support
   case "$DASH_ARCH" in x86_64|amd64|i386|i686) IS_X86=1;; esac
   if [ "$IS_PI" = "1" ]; then
-    PLATFORM_LABEL="Raspberry Pi (${DEVICE_MODEL:-unknown model})"
-  elif [ "$IS_DEBIAN_TRIXIE" = "1" ] && [ "$IS_X86" = "1" ]; then
-    PLATFORM_LABEL="Debian Trixie x86 ($DASH_ARCH)"
+    PLATFORM_LABEL="Raspberry Pi OS ${OS_CODENAME:-unknown} (${DEVICE_MODEL:-unknown model}, $DASH_ARCH)"
   elif [ "$IS_DEBIAN" = "1" ] && [ "$IS_X86" = "1" ]; then
-    PLATFORM_LABEL="Debian x86 ($OS_CODENAME $DASH_ARCH)"
+    PLATFORM_LABEL="Debian ${OS_CODENAME:-unknown} x86 ($DASH_ARCH)"
   elif [ "$IS_X86" = "1" ]; then
     PLATFORM_LABEL="x86 Linux ($OS_ID $OS_CODENAME)"
   else
@@ -1339,10 +1394,27 @@ preflight_item(){
 
 installer_supported_platform(){
   case "${OS_ID:-unknown}" in
-    raspbian) [ "${IS_PI:-0}" = "1" ] ;;
-    debian) [ "${IS_PI:-0}" = "1" ] || [ "${IS_X86:-0}" = "1" ] ;;
+    raspbian) [ "${IS_PI:-0}" = "1" ] || return 1 ;;
+    debian) [ "${IS_PI:-0}" = "1" ] || [ "${IS_X86:-0}" = "1" ] || return 1 ;;
     *) return 1 ;;
   esac
+  [ "${OS_SUPPORT_LEVEL:-unsupported}" != "unsupported" ]
+}
+
+installer_required_kiosk_packages(){
+  # Keep this short and durable for the preflight. install_runtime_packages
+  # adds a profile-specific session stack later, after APT candidates are known.
+  printf '%s\n' surf openbox wmctrl x11-xserver-utils curl
+}
+
+installer_required_package_candidates(){
+  local pkg candidate missing=""
+  command -v apt-cache >/dev/null 2>&1 || return 0
+  for pkg in $(installer_required_kiosk_packages); do
+    candidate="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    case "$candidate" in ''|none|"(none)") missing="$missing $pkg";; esac
+  done
+  [ -z "$missing" ] || { printf '%s\n' "${missing# }"; return 1; }
 }
 
 installer_clock_is_sane(){
@@ -1359,8 +1431,17 @@ run_startup_preflight(){
 
   if installer_supported_platform; then
     preflight_item '✓' "$PLATFORM_LABEL"
+    case "${OS_SUPPORT_LEVEL:-}" in
+      supported) preflight_item '✓' "$OS_SUPPORT_LABEL" ;;
+      recommended) preflight_item '✓' "$OS_SUPPORT_LABEL" ;;
+      conservative) preflight_item '!' "$OS_SUPPORT_LABEL" "$OS_SUPPORT_HINT" ;;
+    esac
   else
-    preflight_item '✗' "Unsupported platform: $PLATFORM_LABEL" "Dash-Go supports Raspberry Pi OS and Debian x86/Pi installations"
+    if [ "${IS_DEBIAN:-0}" = "1" ] && [ "${OS_SUPPORT_LEVEL:-}" = "unsupported" ]; then
+      preflight_item '✗' "$OS_SUPPORT_LABEL" "$OS_SUPPORT_HINT"
+    else
+      preflight_item '✗' "Unsupported platform: $PLATFORM_LABEL" "Dash-Go supports Raspberry Pi OS and Debian x86/Pi installations"
+    fi
     failed=1
   fi
 
@@ -1410,6 +1491,13 @@ run_startup_preflight(){
     preflight_item '✓' 'Dash-Go release host is reachable'
   else
     preflight_item '✗' 'Dash-Go release host is not reachable' 'check Wi-Fi/internet and the clock, then run ~/install.sh again'
+    failed=1
+  fi
+
+  if missing_packages="$(installer_required_package_candidates 2>/dev/null)"; then
+    preflight_item '✓' 'Required kiosk packages are available from configured APT sources'
+  else
+    preflight_item '✗' "Required kiosk package unavailable: ${missing_packages:-unknown}" 'check your Debian software sources or upgrade the device, then run ~/install.sh again'
     failed=1
   fi
 
@@ -3707,6 +3795,15 @@ repair_snapshot_system_state(){
     repair_snapshot_system_file /etc/lightdm/lightdm.conf.d/90-dash-go-autologin.conf "$system_dir/90-dash-go-autologin.conf" || return 1
     repair_snapshot_system_file /usr/share/xsessions/dashboard-openbox.desktop "$system_dir/dashboard-openbox.desktop" || return 1
     repair_snapshot_system_file /usr/share/xsessions/dashboard-lite.desktop "$system_dir/dashboard-lite.desktop" || return 1
+    repair_snapshot_system_file /etc/apt/sources.list.d/dash-go-security-maintenance.sources "$system_dir/dash-go-security-maintenance.sources" || return 1
+    repair_snapshot_system_file /etc/apt/sources.list.d/dash-go-backports.sources "$system_dir/dash-go-backports.sources" || return 1
+    repair_snapshot_system_file /etc/apt/preferences.d/90-dash-go-backports "$system_dir/90-dash-go-backports" || return 1
+    repair_snapshot_system_file /etc/apt/apt.conf.d/20dash-go-auto-upgrades "$system_dir/20dash-go-auto-upgrades" || return 1
+    repair_snapshot_system_file /etc/apt/apt.conf.d/52dash-go-unattended-upgrades "$system_dir/52dash-go-unattended-upgrades" || return 1
+    repair_snapshot_system_file /etc/systemd/system/apt-daily.timer.d/90-dash-go-security-maintenance.conf "$system_dir/apt-daily.timer.conf" || return 1
+    repair_snapshot_system_file /etc/systemd/system/apt-daily-upgrade.timer.d/90-dash-go-security-maintenance.conf "$system_dir/apt-daily-upgrade.timer.conf" || return 1
+    repair_snapshot_system_file /etc/systemd/system/apt-daily.service.d/90-dash-go-security-maintenance.conf "$system_dir/apt-daily.service.conf" || return 1
+    repair_snapshot_system_file /etc/systemd/system/apt-daily-upgrade.service.d/90-dash-go-security-maintenance.conf "$system_dir/apt-daily-upgrade.service.conf" || return 1
   fi
   cat > "$system_dir/README.txt" <<EOFREPAIRSYSTEM
 Dash-Go repair system snapshot.
@@ -3724,12 +3821,169 @@ repair_source_common(){
   return 1
 }
 
+# --- Managed Debian security maintenance ------------------------------------
+# The policy renderer lives with the app so Doctor, installer update, and
+# explicit system repair all inspect exactly the same files.  The installer is
+# the only writer and never changes user-owned repository definitions.
+SECURITY_MAINTENANCE_ATTEMPTED=0
+SECURITY_MAINTENANCE_RESULT=""
+
+source_security_maintenance_helper(){
+  local candidate
+  for candidate in "$BIN_DIR/dashboard-security-maintenance.sh" "$INSTALLER_SOURCE_DIR/app/bin/dashboard-security-maintenance.sh"; do
+    [ -r "$candidate" ] || continue
+    # shellcheck disable=SC1090
+    . "$candidate"
+    return 0
+  done
+  return 1
+}
+
+security_maintenance_sudo(){
+  if $SUDO -n true >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ -t 0 ] && [ -t 1 ]; then
+    say "Administrator permission for managed Debian security maintenance"
+    echo "Dash-Go will install unattended-upgrades and write only Dash-Go-owned APT/systemd policy files."
+    $SUDO -v
+    return $?
+  fi
+  return 2
+}
+
+security_maintenance_stage_file(){
+  local stage="$1" kind="$2"
+  dashboard_security_expected_file "$kind" > "$stage/$kind" || return 1
+  chmod 600 "$stage/$kind" 2>/dev/null || true
+}
+
+security_maintenance_apply_file(){
+  local stage="$1" kind="$2" target
+  target="$(dashboard_security_managed_path "$kind")" || return 1
+  $SUDO mkdir -p "$(dirname "$target")" || return 1
+  $SUDO install -m 0644 "$stage/$kind" "$target"
+}
+
+configure_security_maintenance(){
+  local reason="${1:-install}" stage backup kind target rc=0
+  local -a kinds=(backports-pin auto-upgrades unattended-policy daily-timer upgrade-timer daily-service upgrade-service)
+
+  source_security_maintenance_helper || {
+    warn "managed Debian security maintenance helper is unavailable; refresh Dash-Go app files before retrying system repair"
+    SECURITY_MAINTENANCE_RESULT=unavailable
+    return 1
+  }
+  if ! dashboard_security_maintenance_supported; then
+    ok "managed Debian security maintenance not applied: $(dashboard_security_maintenance_support_reason)"
+    SECURITY_MAINTENANCE_RESULT=unsupported
+    return 0
+  fi
+  if dashboard_security_later_origin_policy_present; then
+    warn "a later unattended-upgrades origin policy exists; Dash-Go will not overwrite it. Review /etc/apt/apt.conf.d before enabling security-only maintenance."
+    SECURITY_MAINTENANCE_RESULT=manual-review
+    return 1
+  fi
+  if dashboard_security_managed_files_current && dashboard_security_package_installed && dashboard_security_timers_ready; then
+    ok "managed Debian security maintenance is healthy (security-only; no automatic reboot)"
+    SECURITY_MAINTENANCE_RESULT=healthy
+    return 0
+  fi
+
+  if security_maintenance_sudo; then
+    :
+  else
+    rc=$?
+    if [ "$rc" = 2 ]; then
+      warn "Dash-Go update continued without changing system APT policy; run ~/install.sh --repair --system from a terminal to finish managed security maintenance."
+      SECURITY_MAINTENANCE_RESULT=deferred
+      return 2
+    fi
+    warn "administrator permission was not granted; managed Debian security maintenance was not changed"
+    SECURITY_MAINTENANCE_RESULT=permission-denied
+    return 1
+  fi
+
+  stage="$(mktemp -d "${TMPDIR:-/tmp}/dash-go-security-maintenance.XXXXXX")" || return 1
+  backup="$stage/backup"
+  mkdir -p "$backup" || { rm -rf "$stage"; return 1; }
+
+  # Never duplicate a user/distribution source.  Create Dash-Go-owned source
+  # files only when the official archive is missing, or repair our own file.
+  target="$(dashboard_security_managed_path security-source)"
+  if [ -e "$target" ] || ! dashboard_security_security_source_present; then
+    kinds+=(security-source)
+  fi
+  target="$(dashboard_security_managed_path backports-source)"
+  if [ -e "$target" ] || ! dashboard_security_backports_source_present; then
+    kinds+=(backports-source)
+  fi
+
+  for kind in "${kinds[@]}"; do
+    security_maintenance_stage_file "$stage" "$kind" || { rm -rf "$stage"; return 1; }
+    target="$(dashboard_security_managed_path "$kind")" || { rm -rf "$stage"; return 1; }
+    if $SUDO test -e "$target"; then
+      printf 'present\n' > "$backup/$kind.state"
+      $SUDO cat "$target" > "$backup/$kind" || { rm -rf "$stage"; return 1; }
+    else
+      : > "$backup/$kind.state"
+    fi
+  done
+
+  for kind in "${kinds[@]}"; do
+    if ! security_maintenance_apply_file "$stage" "$kind"; then
+      rc=1
+      break
+    fi
+  done
+  if [ "$rc" = 0 ]; then
+    if ! $SUDO apt-get update || ! $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades; then
+      rc=1
+    elif ! $SUDO systemctl daemon-reload || ! $SUDO systemctl enable --now apt-daily.timer apt-daily-upgrade.timer; then
+      rc=1
+    fi
+  fi
+  if [ "$rc" = 0 ] && dashboard_security_managed_files_current && dashboard_security_package_installed && dashboard_security_timers_ready; then
+    rm -rf "$stage"
+    ok "managed Debian security maintenance enabled (security-only; no automatic reboot or backports installs)"
+    SECURITY_MAINTENANCE_RESULT=enabled
+    return 0
+  fi
+
+  warn "managed Debian security maintenance could not be verified; restoring Dash-Go-owned policy files"
+  for kind in "${kinds[@]}"; do
+    target="$(dashboard_security_managed_path "$kind")" || continue
+    if [ -s "$backup/$kind.state" ]; then
+      $SUDO install -m 0644 "$backup/$kind" "$target" 2>/dev/null || true
+    else
+      $SUDO rm -f "$target" 2>/dev/null || true
+    fi
+  done
+  $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
+  rm -rf "$stage"
+  SECURITY_MAINTENANCE_RESULT=failed
+  return 1
+}
+
+ensure_security_maintenance_once(){
+  local reason="${1:-install}" rc
+  if [ "$SECURITY_MAINTENANCE_ATTEMPTED" = 1 ]; then
+    [ "$SECURITY_MAINTENANCE_RESULT" = healthy ] || [ "$SECURITY_MAINTENANCE_RESULT" = enabled ] || [ "$SECURITY_MAINTENANCE_RESULT" = unsupported ]
+    return
+  fi
+  SECURITY_MAINTENANCE_ATTEMPTED=1
+  configure_security_maintenance "$reason"
+  rc=$?
+  return "$rc"
+}
+
 repair_scope_defaults(){
   REPAIR_SCOPE_SERVICE=1
   REPAIR_SCOPE_AUTOLOGIN=1
   REPAIR_SCOPE_AUTOSTART=1
   REPAIR_SCOPE_GUARD=1
   REPAIR_SCOPE_FONTS=1
+  REPAIR_SCOPE_SECURITY=1
   REPAIR_SCOPE_PACKAGES="${REPAIR_PACKAGES:-0}"
 }
 
@@ -3737,7 +3991,7 @@ repair_scope_from_doctor(){
   local report
   [ "${REPAIR_FROM_DOCTOR:-0}" = 1 ] || { repair_scope_defaults; return 0; }
   REPAIR_SCOPE_SERVICE=0; REPAIR_SCOPE_AUTOLOGIN=0; REPAIR_SCOPE_AUTOSTART=0
-  REPAIR_SCOPE_GUARD=0; REPAIR_SCOPE_FONTS=0; REPAIR_SCOPE_PACKAGES="${REPAIR_PACKAGES:-0}"
+  REPAIR_SCOPE_GUARD=0; REPAIR_SCOPE_FONTS=0; REPAIR_SCOPE_SECURITY=0; REPAIR_SCOPE_PACKAGES="${REPAIR_PACKAGES:-0}"
   if [ ! -x "$BIN_DIR/doctor.sh" ]; then
     repair_add_warning "Doctor scope was requested but doctor.sh is unavailable; using the full requested system-recovery scope"
     repair_scope_defaults
@@ -3752,15 +4006,16 @@ repair_scope_from_doctor(){
   if printf '%s\n' "$findings" | grep -Eiq 'dashboard-server\.service|Go API|web server'; then REPAIR_SCOPE_SERVICE=1; fi
   if printf '%s\n' "$findings" | grep -Eiq 'LightDM|autologin|X session|graphical session'; then REPAIR_SCOPE_AUTOLOGIN=1; REPAIR_SCOPE_GUARD=1; fi
   if printf '%s\n' "$findings" | grep -Eiq 'scheduled Dash-Go jobs|cron service|scheduler|kiosk launcher|autostart'; then REPAIR_SCOPE_AUTOSTART=1; fi
+  if printf '%s\n' "$findings" | grep -Eiq 'Debian security maintenance|unattended-upgrades|APT policy'; then REPAIR_SCOPE_SECURITY=1; fi
   if printf '%s\n' "$findings" | grep -Eiq 'required graphical kiosk commands|required maintenance tools|surf .*missing|openbox .*missing'; then
     if [ "${REPAIR_PACKAGES:-0}" = 1 ]; then REPAIR_SCOPE_PACKAGES=1
     else repair_add_warning "Doctor found missing runtime dependencies; rerun with --repair --system --packages to install OS packages"
     fi
   fi
-  if [ "$REPAIR_SCOPE_SERVICE$REPAIR_SCOPE_AUTOLOGIN$REPAIR_SCOPE_AUTOSTART$REPAIR_SCOPE_GUARD$REPAIR_SCOPE_FONTS$REPAIR_SCOPE_PACKAGES" = 000000 ]; then
+  if [ "$REPAIR_SCOPE_SERVICE$REPAIR_SCOPE_AUTOLOGIN$REPAIR_SCOPE_AUTOSTART$REPAIR_SCOPE_GUARD$REPAIR_SCOPE_FONTS$REPAIR_SCOPE_SECURITY$REPAIR_SCOPE_PACKAGES" = 0000000 ]; then
     repair_log "Doctor scope found no recoverable system-wiring issue; retained app-file repair only"
   else
-    repair_log "Doctor-scoped recovery: service=$REPAIR_SCOPE_SERVICE autologin=$REPAIR_SCOPE_AUTOLOGIN autostart=$REPAIR_SCOPE_AUTOSTART guard=$REPAIR_SCOPE_GUARD packages=$REPAIR_SCOPE_PACKAGES"
+    repair_log "Doctor-scoped recovery: service=$REPAIR_SCOPE_SERVICE autologin=$REPAIR_SCOPE_AUTOLOGIN autostart=$REPAIR_SCOPE_AUTOSTART guard=$REPAIR_SCOPE_GUARD security=$REPAIR_SCOPE_SECURITY packages=$REPAIR_SCOPE_PACKAGES"
   fi
 }
 
@@ -3804,76 +4059,103 @@ UNIT
 }
 
 install_runtime_packages(){
-say "Installing required runtime packages"
-echo "Detected platform: $PLATFORM_LABEL"
-# Base packages the dashboard/kiosk needs everywhere. x11-xserver-utils provides
-# xset, used for screen blanking/wake; cron provides crontab on Debian.
-BASE_PKGS="curl cron surf wmctrl unclutter-xfixes scrot x11-xserver-utils xterm xbindkeys"
-if [ "$IS_PI" = "1" ]; then
-  PKGS="$BASE_PKGS"
-  echo "Raspberry Pi mode: installing the lightweight browser/X11 helper set."
-  if [ ! -f /etc/lightdm/lightdm.conf ] || ! ls /usr/share/xsessions/*.desktop >/dev/null 2>&1; then
-    if bootstrap_profile_prefers_openbox_session; then
-      PKGS="$PKGS xorg lightdm lightdm-gtk-greeter openbox dbus-x11"
-      echo "No complete graphical login/session stack detected; adding minimal Xorg + LightDM + Openbox for lite/balanced profile."
-    else
-      PKGS="$PKGS xorg lightdm lightdm-gtk-greeter lxde-core openbox dbus-x11"
-      echo "No complete graphical login/session stack detected; adding Xorg + LightDM + LXDE for enhanced profile."
+  local pkg candidate missing="" path
+  say "Installing required runtime packages"
+  echo "Detected platform: $PLATFORM_LABEL"
+  case "${OS_SUPPORT_LEVEL:-unsupported}" in
+    recommended) echo "OS policy: Trixie is the recommended Dash-Go base." ;;
+    supported) echo "OS policy: Bookworm is supported compatibility mode." ;;
+    conservative) echo "OS policy: newer Debian-family release detected; Dash-Go will keep display and firmware configuration unchanged." ;;
+    *) warn "This operating system is not supported for fresh kiosk provisioning. Upgrade to Bookworm or Trixie, then run ~/install.sh again."; return 1 ;;
+  esac
+
+  # Base packages the dashboard/kiosk needs everywhere. x11-xserver-utils
+  # provides xset, used for screen blanking/wake; cron provides crontab.
+  BASE_PKGS="curl cron surf wmctrl unclutter-xfixes scrot x11-xserver-utils xterm xbindkeys"
+  if [ "$IS_PI" = "1" ]; then
+    PKGS="$BASE_PKGS"
+    echo "Raspberry Pi mode: installing the lightweight browser/X11 helper set."
+    if [ ! -f /etc/lightdm/lightdm.conf ] || ! ls /usr/share/xsessions/*.desktop >/dev/null 2>&1; then
+      if bootstrap_profile_prefers_openbox_session; then
+        PKGS="$PKGS xorg lightdm lightdm-gtk-greeter openbox dbus-x11"
+        echo "No complete graphical login/session stack detected; adding minimal Xorg + LightDM + Openbox for lite/balanced profile."
+      else
+        PKGS="$PKGS xorg lightdm lightdm-gtk-greeter lxde-core openbox dbus-x11"
+        echo "No complete graphical login/session stack detected; adding Xorg + LightDM + LXDE for enhanced profile."
+      fi
     fi
-  fi
-elif [ "$IS_DEBIAN" = "1" ] && [ "$IS_X86" = "1" ]; then
-  if bootstrap_profile_prefers_openbox_session; then
-    PKGS="$BASE_PKGS xorg lightdm lightdm-gtk-greeter openbox dbus-x11"
-    echo "Debian x86 mode: installing minimal X11 + LightDM + Openbox for lite/balanced profile."
+  elif [ "$IS_DEBIAN" = "1" ] && [ "$IS_X86" = "1" ]; then
+    if bootstrap_profile_prefers_openbox_session; then
+      PKGS="$BASE_PKGS xorg lightdm lightdm-gtk-greeter openbox dbus-x11"
+      echo "Debian x86 mode: installing minimal X11 + LightDM + Openbox for lite/balanced profile."
+    else
+      PKGS="$BASE_PKGS xorg lightdm lightdm-gtk-greeter lxde-core openbox dbus-x11"
+      echo "Debian x86 mode: installing the full X11 + LightDM + LXDE kiosk stack for enhanced profile."
+    fi
+    echo "This lets a minimal Debian Bookworm/Trixie install boot directly into the dashboard."
   else
-    PKGS="$BASE_PKGS xorg lightdm lightdm-gtk-greeter lxde-core openbox dbus-x11"
-    echo "Debian x86 mode: installing the full X11 + LightDM + LXDE kiosk stack for enhanced profile."
+    warn "Unsupported platform for kiosk provisioning. Upgrade to a supported Debian-family image, then run ~/install.sh again."
+    return 1
   fi
-  echo "This lets a minimal Debian/Trixie install boot directly into the dashboard."
-else
-  if bootstrap_profile_prefers_openbox_session; then
-    PKGS="$BASE_PKGS xorg lightdm openbox dbus-x11"
-    warn "Unknown/non-Pi Linux mode: installing a minimal X11 + Openbox stack."
-  else
-    PKGS="$BASE_PKGS xorg lightdm lxde-core openbox dbus-x11"
-    warn "Unknown/non-Pi Linux mode: installing a conservative X11 + LXDE stack."
-  fi
-fi
-if echo " $PKGS " | grep -q " lightdm "; then
-  preseed_lightdm_default
-fi
-$SUDO apt-get install -y $PKGS \
-  && ok "runtime packages installed" \
-  || warn "package install had issues -- verify: command -v surf wmctrl xset"
-if echo " $PKGS " | grep -q " lightdm "; then
-  ensure_lightdm_default
-fi
 
-# Raspberry Pi OS sometimes ships an AppArmor profile for /usr/bin/surf that is
-# too restrictive -- it blocks the EGL/glvnd graphics vendor files surf needs to
-# render, causing surf to crash on launch. Only adjust it if the profile exists.
-if [ -e /etc/apparmor.d/usr.bin.surf ]; then
-  $SUDO apt-get install -y apparmor-utils >/dev/null 2>&1
-  if $SUDO aa-complain /usr/bin/surf >/dev/null 2>&1; then
-    ok "surf AppArmor profile set to complain mode (was blocking rendering)"
-  else
-    $SUDO mkdir -p /etc/apparmor.d/disable
-    $SUDO ln -sf /etc/apparmor.d/usr.bin.surf /etc/apparmor.d/disable/ 2>/dev/null
-    $SUDO apparmor_parser -R /etc/apparmor.d/usr.bin.surf 2>/dev/null \
-      && ok "surf AppArmor profile disabled" \
-      || warn "could not adjust surf AppArmor profile -- if surf crashes, run: sudo aa-complain /usr/bin/surf"
+  # Refresh package metadata once, then prove each required package has a real
+  # candidate before changing display-manager, autologin, or kiosk settings.
+  if ! $SUDO apt-get update; then
+    warn "Could not refresh APT package metadata. No kiosk settings were changed. Check Wi-Fi and APT sources, then run ~/install.sh again."
+    return 1
   fi
-else
-  ok "no restrictive surf AppArmor profile present (nothing to adjust)"
-fi
+  for pkg in $PKGS; do
+    candidate="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    case "$candidate" in ''|none|"(none)") missing="$missing $pkg";; esac
+  done
+  if [ -n "$missing" ]; then
+    warn "Required kiosk package unavailable:${missing}. No kiosk settings were changed. Check your Debian software sources or upgrade the device, then run ~/install.sh again."
+    return 1
+  fi
+  if echo " $PKGS " | grep -q " lightdm "; then
+    preseed_lightdm_default
+  fi
+  if ! $SUDO apt-get install -y $PKGS; then
+    warn "Required kiosk packages could not be installed. No autologin or kiosk settings were changed. Fix the package error, then run ~/install.sh again."
+    return 1
+  fi
+  for path in surf wmctrl xset curl; do
+    if ! command -v "$path" >/dev/null 2>&1; then
+      warn "Required kiosk command is still missing: $path. No autologin or kiosk settings were changed. Repair packages, then run ~/install.sh again."
+      return 1
+    fi
+  done
+  ok "required runtime packages installed and verified"
+  if echo " $PKGS " | grep -q " lightdm "; then
+    ensure_lightdm_default || { warn "LightDM could not be selected after packages installed. Run ~/install.sh and choose Dashboard service after checking the warning."; return 1; }
+  fi
 
-KIOSK_SESSION="$(detect_xsession)"
-if profile_prefers_openbox_session && [ "$KIOSK_SESSION" != "dashboard-openbox" ] && [ "$KIOSK_SESSION" != "dashboard-lite" ]; then
-  ok "current graphical session: $KIOSK_SESSION (dashboard-openbox will be installed if graphical autologin is configured)"
-else
-  ok "preferred graphical session: $KIOSK_SESSION"
-fi
+  # Raspberry Pi OS sometimes ships an AppArmor profile for /usr/bin/surf that
+  # blocks EGL/glvnd graphics vendor files. It is an optional recovery detail;
+  # failure never invalidates the package verification above.
+  if [ -e /etc/apparmor.d/usr.bin.surf ]; then
+    $SUDO apt-get install -y apparmor-utils >/dev/null 2>&1 || true
+    if $SUDO aa-complain /usr/bin/surf >/dev/null 2>&1; then
+      ok "surf AppArmor profile set to complain mode (was blocking rendering)"
+    else
+      $SUDO mkdir -p /etc/apparmor.d/disable
+      $SUDO ln -sf /etc/apparmor.d/usr.bin.surf /etc/apparmor.d/disable/ 2>/dev/null || true
+      $SUDO apparmor_parser -R /etc/apparmor.d/usr.bin.surf 2>/dev/null \
+        && ok "surf AppArmor profile disabled" \
+        || warn "could not adjust surf AppArmor profile — if Surf crashes, run: sudo aa-complain /usr/bin/surf"
+    fi
+  else
+    ok "no restrictive surf AppArmor profile present (nothing to adjust)"
+  fi
+
+  KIOSK_SESSION="$(detect_xsession)"
+  if profile_prefers_openbox_session && [ "$KIOSK_SESSION" != "dashboard-openbox" ] && [ "$KIOSK_SESSION" != "dashboard-lite" ]; then
+    ok "current graphical session: $KIOSK_SESSION (dashboard-openbox will be installed if graphical autologin is configured)"
+  else
+    ok "preferred graphical session: $KIOSK_SESSION"
+  fi
 }
+
 provision_dashboard_autologin(){
   local mode="${1:-interactive}" kiosk_session ans_openbox_session
   say "Graphical autologin (LightDM) for user: $USER_NAME"
@@ -3938,6 +4220,9 @@ repair_system_recovery(){
   repair_scope_from_doctor
   if [ "${REPAIR_SCOPE_PACKAGES:-0}" = 1 ]; then
     [ "${REPAIR_SYSTEM_ROOT:-0}" = 1 ] && repair_stage "runtime package recovery" install_runtime_packages || repair_add_warning "runtime package recovery requires sudo; rerun with sudo access"
+  fi
+  if [ "${REPAIR_SCOPE_SECURITY:-0}" = 1 ]; then
+    [ "${REPAIR_SYSTEM_ROOT:-0}" = 1 ] && repair_stage "managed Debian security maintenance" configure_security_maintenance repair || repair_add_warning "managed Debian security maintenance requires sudo; rerun with sudo access"
   fi
   [ "${REPAIR_SCOPE_FONTS:-0}" = 1 ] && repair_stage "dashboard font check" ensure_dashboard_fonts || true
   if [ "${REPAIR_SCOPE_SERVICE:-0}" = 1 ]; then
@@ -4725,6 +5010,12 @@ if [ "$UPDATE_MODE" = "1" ]; then
     exit 1
   fi
   if [ -f "$DASH/VERSION" ]; then DASH_INSTALLED_VERSION="$(cat "$DASH/VERSION" 2>/dev/null | head -1)"; export DASH_INSTALLED_VERSION; fi
+  if [ "${DASHGO_INSTALLER_SMOKE:-0}" != "1" ]; then
+    # A Dashboard Control runner has no safe interactive sudo path.  Its app
+    # update stays successful while the system policy reports a clear deferred
+    # repair; direct terminal updates can authenticate and repair immediately.
+    ensure_security_maintenance_once update || true
+  fi
   if [ "${DASHGO_INSTALLER_SMOKE:-0}" = "1" ]; then
     write_update_status success "Success" "Installer smoke validated ${DASH_INSTALLED_VERSION:-latest} from the $RELEASE_TRACK track." 0 || true
     write_update_job success "Success" "Installer smoke validated ${DASH_INSTALLED_VERSION:-latest} from the $RELEASE_TRACK track." 0 || true
@@ -4944,9 +5235,9 @@ OPT_DOCTOR=18
 OPT_TOUR=19
 OPT_DEMO=20
 OPT_CUSTOM=21
-OPT_REMOVE=22
-OPT_NOTIFICATIONS=23
-OPT_TERMINAL=24
+OPT_NOTIFICATIONS=22
+OPT_TERMINAL=23
+OPT_REMOVE=24
 OPT_EXIT=25
 
 DO_SYSTEM=0 DO_PKGS=0 DO_FILES=0 DO_FONTS=0 DO_CUSTOM=0 DO_WEATHER=0 DO_RADAR=0 DO_WEATHER_DISPLAY=0 DO_MESSAGE_SOURCES=0 DO_APP_SETUP=0 DO_ICAL=0 DO_VDIR=0 DO_SERVICE=0 DO_AUTOLOGIN=0 DO_AUTOSTART=0 DO_CALENDARS=0 DO_PIN=0 DO_SSH=0 DOC_AT_END=0 DO_DEMO=0
@@ -5004,7 +5295,7 @@ while :; do
 done
 
 installer_selected_tasks(){
-  [ "$DO_SYSTEM" = 1 ] && printf '%s\n' "System update / optional platform trim"
+  [ "$DO_SYSTEM" = 1 ] && printf '%s\n' "System update / optional platform trim + security maintenance"
   [ "$DO_PKGS" = 1 ] && printf '%s\n' "Install runtime packages"
   [ "$DO_FILES" = 1 ] && printf '%s\n' "Download/refresh the dashboard app files"
   [ "$DO_FONTS" = 1 ] && printf '%s\n' "Download fonts"
@@ -5348,7 +5639,7 @@ else
   echo "The following $selected_count safe, re-runnable task(s) will run:"
   installer_selected_tasks | sed 's/^/  • /'
   if [ "$DO_SYSTEM" = "1" ]; then
-    read -rp "Run these $selected_count tasks now? This includes a system update. [y/N] " proceed
+    read -rp "Run these $selected_count tasks now? This includes optional system maintenance plus managed security updates. [y/N] " proceed
   else
     read -rp "Run these $selected_count tasks now? [Y/n] " proceed
   fi
@@ -5461,7 +5752,7 @@ SYSCTL
 # ---------------------------------------------------------------------
 if [ "$DO_SYSTEM" = "1" ]; then
 installer_stage "Preparing the operating system"
-say "System update / platform trim"
+say "System update / platform trim and security maintenance"
 echo "Detected platform: $PLATFORM_LABEL"
 echo
 if [ "$IS_PI" = "1" ]; then
@@ -5476,7 +5767,7 @@ if [ "$IS_PI" = "1" ]; then
 
     say "  Disabling services not needed for a Pi kiosk"
     for svc in hciuart exim4 ModemManager nfs-blkmap e2scrub_reap \
-               udisks2 unattended-upgrades \
+               udisks2 \
                NetworkManager-wait-online xinetd accounts-daemon; do
       if systemctl list-unit-files 2>/dev/null | grep -q "^$svc"; then
         $SUDO systemctl disable --now "$svc" 2>/dev/null && ok "disabled $svc" || warn "could not disable $svc"
@@ -5526,12 +5817,26 @@ fi
 if [ "$IS_PI" = "1" ]; then
   configure_optional_zram_tuning || warn "optional zram tuning did not complete; existing dashboard behavior is unchanged"
 fi
+say "Managed Debian security maintenance"
+if ! ensure_security_maintenance_once system; then
+  mark_install_step_failed "Managed Debian security maintenance" "Run ~/install.sh --repair --system from a terminal after resolving the named APT policy or permission warning."
+fi
 fi
 
 # ---------------------------------------------------------------------
 if [ "$DO_PKGS" = "1" ]; then
   installer_stage "Installing dashboard components"
-  install_runtime_packages
+  if ! install_runtime_packages; then
+    mark_install_step_failed "Required kiosk packages" "No autologin, service, or kiosk settings were changed. Fix the named package/source issue, then run ~/install.sh again."
+    warn "Required kiosk provisioning stopped safely. Fix the warning above, then run ~/install.sh again."
+    exit 1
+  fi
+  if [ "$DO_SYSTEM" != "1" ]; then
+    say "Managed Debian security maintenance"
+    if ! ensure_security_maintenance_once install; then
+      mark_install_step_failed "Managed Debian security maintenance" "Run ~/install.sh --repair --system from a terminal after resolving the named APT policy or permission warning."
+    fi
+  fi
 fi  # end DO_PKGS
 
 # ---------------------------------------------------------------------
@@ -7295,47 +7600,49 @@ if [ "$APP_FILES_OK" = "1" ] || [ "$DO_CUSTOM" = "1" ] || [ "$DO_WEATHER" = "1" 
   restart_kiosk
 fi
 
-# Offer the risky Pi display configuration as an explicit, reversible choice.
-# It is never applied silently, including Express setup.
+# Offer a safe Pi display review as an explicit, reversible choice.
+# KMS settings stay unchanged; even Express never changes firmware settings silently.
 offer_display_config(){
-  local cfg backup tmp existing
+  local cfg backup answer managed
   [ "$IS_PI" = "1" ] || return 0
   cfg="/boot/firmware/config.txt"; [ -f "$cfg" ] || cfg="/boot/config.txt"
   [ -f "$cfg" ] || { warn "Raspberry Pi display configuration file was not found. Leave display settings unchanged and run ~/install.sh again after checking the boot partition."; return 0; }
   echo
-  echo "Optional Raspberry Pi display setup"
-  echo "Dash-Go can set the tested FKMS driver and 32 MB GPU memory split. This can help the kiosk display, but a wrong display setting can cause a black screen after reboot."
+  echo "Optional Raspberry Pi display review"
+  echo "Dash-Go preserves the current KMS display driver on Bookworm and Trixie. It will not switch this device to the older FKMS driver or change GPU memory automatically."
   echo "Current relevant lines in $cfg:"
   grep -E '^[[:space:]]*(dtoverlay=vc4-|gpu_mem=)' "$cfg" 2>/dev/null || echo "  (none found)"
-  read -rp "Apply this reversible display configuration now? [y/N] " existing
-  case "$(normalize_menu_choice "$existing")" in
+  case "${OS_SUPPORT_LEVEL:-}" in
+    recommended|supported|conservative)
+      echo "Detected OS policy: ${OS_SUPPORT_LABEL:-current Debian-family release}."
+      echo "For a black screen, keep the current driver and use Dashboard Doctor before changing firmware settings manually."
+      ;;
+    *)
+      echo "This release is not a supported fresh-install target; Dash-Go will not edit display firmware settings."
+      return 0
+      ;;
+  esac
+  read -rp "Create a reversible backup before any manual display troubleshooting? [y/N] " answer
+  case "$(normalize_menu_choice "$answer")" in
     y|Y) : ;;
     *) echo "Left display firmware settings unchanged."; return 0;;
   esac
   backup="${cfg}.dash-go.bak"
-  if [ ! -f "$backup" ]; then
-    $SUDO cp -p "$cfg" "$backup" || { warn "Could not save $backup. Leave display settings unchanged and run ~/install.sh again after checking sudo access."; return 1; }
-  fi
-  tmp="$(mktemp "${TMPDIR:-/tmp}/dash-go-display.XXXXXX")" || return 1
-  awk '
-    /^[[:space:]]*dtoverlay=vc4-(fkms|kms)-v3d([,[:space:]]|$)/ { next }
-    /^[[:space:]]*gpu_mem=[0-9]+([[:space:]]|$)/ { next }
-    { print }
-  ' "$cfg" > "$tmp" || { rm -f "$tmp"; return 1; }
-  {
-    printf '\n# Managed by Dash-Go display setup. Original: %s\n' "$backup"
-    printf 'dtoverlay=vc4-fkms-v3d\n'
-    printf 'gpu_mem=32\n'
-  } >> "$tmp"
-  if $SUDO install -m 0644 "$tmp" "$cfg"; then
-    ok "Saved a backup at $backup and prepared the Pi display configuration."
-    echo "If the screen is black after reboot, use another computer or the SD card to restore $backup over $cfg, then reboot."
+  if [ -f "$backup" ]; then
+    ok "Existing display backup kept at $backup. Current KMS settings were not changed."
+  elif $SUDO cp -p "$cfg" "$backup"; then
+    ok "Saved a display backup at $backup. Current KMS settings were not changed."
   else
-    warn "Could not write $cfg. Leave display settings unchanged and run ~/install.sh again after checking sudo access."
-    rm -f "$tmp"; return 1
+    warn "Could not save $backup. Leave display settings unchanged and run ~/install.sh again after checking sudo access."
+    return 1
   fi
-  rm -f "$tmp"
+  managed="$(grep -F 'Managed by Dash-Go display setup' "$cfg" 2>/dev/null || true)"
+  if [ -n "$managed" ]; then
+    warn "A legacy Dash-Go display marker was found. Bookworm/Trixie keep KMS; do not apply a new driver conversion. Use Dashboard Doctor or restore $backup only if you deliberately need to undo a prior manual change."
+  fi
+  echo "If the screen is black after a future manual change, use another computer or the SD card to restore $backup over $cfg, then reboot."
 }
+
 
 dashboard_access_note(){
   local ip

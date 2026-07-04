@@ -23,8 +23,8 @@
   try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
 }());
 </script>
-<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.8-beta.3">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.8-beta.3">
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.8-beta.5">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.8-beta.5">
 <link rel="icon" href="data:,">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
@@ -122,12 +122,12 @@
       <details class="ctrlsec" data-lazy="screen"><summary>Screen controls &amp; sleep schedule</summary><div class="ctrlsecbody"><div id="ctrlscreensettings"></div></div></details>
     </div>
     <div class="ctrlpage" id="ctrlpage-calendars" data-scroll-policy="control-page" data-accordion>
+      <details class="ctrlsec" data-lazy="cals" data-default-open="true"><summary>Manage calendars</summary><div class="ctrlsecbody"><div class="ctrlrow" id="ctrlcals"></div></div></details>
       <details class="ctrlsec" data-lazy="calendarlayout"><summary>Calendar layout, density &amp; text</summary><div class="ctrlsecbody"><div id="ctrluisettings"></div></div></details>
       <details class="ctrlsec" data-lazy="moon"><summary>Moon</summary><div class="ctrlsecbody"><div id="ctrlmoon"></div></div></details>
       <details class="ctrlsec" data-lazy="calhealth"><summary>Calendar source health</summary><div class="ctrlsecbody"><div id="ctrlcalhealth"></div></div></details>
       <details class="ctrlsec" data-lazy="cache"><summary>Event cache</summary><div class="ctrlsecbody"><div id="ctrlcache"></div></div></details>
       <details class="ctrlsec" data-lazy="schedules"><summary>Household Schedules</summary><div class="ctrlsecbody"><div id="ctrlschedules"></div></div></details>
-      <details class="ctrlsec" data-lazy="cals"><summary>Calendar visibility</summary><div class="ctrlsecbody"><div class="ctrlrow" id="ctrlcals"></div></div></details>
     </div>
     <div class="ctrlpage" id="ctrlpage-content" data-scroll-policy="control-page" data-accordion>
       <details class="ctrlsec" data-lazy="content"><summary>Personal messages</summary><div class="ctrlsecbody"><div id="ctrlcomp"></div></div></details>
@@ -263,6 +263,6 @@
   </section>
 </div>
 
-<script src="/ui/js/app.bundle.js?v=1.5.8-beta.3" defer></script>
+<script src="/ui/js/app.bundle.js?v=1.5.8-beta.5" defer></script>
 </body>
 </html>

@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
+const root=resolve(process.argv[2]||".");
+const read=rel=>readFileSync(resolve(root,rel),"utf8");
+const index=read("index.html");
+const calendars=read("ui/js/control-calendars.js");
+const privateUi=read("ui/js/control-private-calendars.js");
+const quick=read("ui/js/control-system-actions.js");
+const facade=read("cmd/dashboard-control-server/calendar_facade.go");
+assert.match(index,/Manage calendars/,'Calendars tab must start with Manage Calendars');
+assert.doesNotMatch(index,/<summary>Calendar visibility<\/summary>/i,'standalone Calendar Visibility card must be retired');
+assert.match(calendars,/ctrlCalendarManagerSummary\(/,'manager must summarize total, shown, and two-way counts');
+assert.match(calendars,/ctrlCalendarManagerBadges\(/,'manager rows must show combined status badges');
+assert.match(calendars,/Quick visibility/,'manager retains the bounded visibility shortcut');
+assert.match(privateUi,/Hide this private calendar mirror without stopping sync or changing provider access/,'private rows must distinguish visibility from provider access');
+assert.match(quick,/Calendar visibility/,'Quick Actions must expose the visibility shortcut');
+assert.match(facade,/visibleBySource := map\[string\]bool\{\}/,'server manager status must expose the source visibility consumed by private rows');
+assert.match(facade,/row\["enabled"\] = visibleBySource\[source\]/,'selected private status must receive its mirror visibility state');
+console.log('Calendar Manager primary hierarchy smoke: ok');

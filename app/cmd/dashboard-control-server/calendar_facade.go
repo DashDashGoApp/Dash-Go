@@ -108,7 +108,8 @@ func (a *app) calendarManagementStatus() map[string]any {
 	status := a.calendarService().ManagementStatus()
 	writeback := a.calendarWritebackStatus()
 	status["writeback"] = writeback
-	status["privateCalendars"] = a.privateCalendarStatus()
+	privateCalendars := a.privateCalendarStatus()
+	status["privateCalendars"] = privateCalendars
 	registered := map[string]map[string]any{}
 	for _, raw := range jsonutil.List(writeback["calendars"]) {
 		row := jsonutil.Map(raw)
@@ -120,9 +121,11 @@ func (a *app) calendarManagementStatus() map[string]any {
 	for _, row := range a.privateCalendarSelections() {
 		selected[row.Source] = row
 	}
+	visibleBySource := map[string]bool{}
 	for _, raw := range jsonutil.List(status["calendars"]) {
 		row := jsonutil.Map(raw)
 		source := strings.TrimSpace(jsonutil.StringValue(row["url"]))
+		visibleBySource[source] = calendarEntryEnabled(row)
 		selection, isSelected := selected[source]
 		if !isSelected && registered[source] == nil {
 			continue
@@ -144,6 +147,11 @@ func (a *app) calendarManagementStatus() map[string]any {
 		}
 		row["writebackRegistered"] = registered[source] != nil
 		row["privateSelected"] = isSelected
+	}
+	for _, raw := range jsonutil.List(privateCalendars["selected"]) {
+		row := jsonutil.Map(raw)
+		source := strings.TrimSpace(jsonutil.StringValue(row["source"]))
+		row["enabled"] = visibleBySource[source]
 	}
 	return status
 }

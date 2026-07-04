@@ -22,9 +22,8 @@ mapfile -t shown_names < <(printf '%s\n' "$menu" | sed -nE 's/.*"\$(OPT_[A-Z_]+)
   exit 1
 }
 
-# Display order intentionally puts Remove at the end, while its stable menu
-# number remains 22. Verify every symbolic identity is declared, then verify
-# the persistent numeric assignments explicitly below.
+# Display order and numeric order are intentionally identical. Remove remains
+# isolated directly above Exit, so every displayed number is the dispatched one.
 for name in "${expected_names[@]}"; do
   grep -Eq "^${name}=[0-9]+$" "$INSTALL" || {
     echo "FAIL: missing canonical menu identity $name" >&2
@@ -36,8 +35,9 @@ for required in \
   'OPT_PIN=15' \
   'OPT_SERVICE=16' \
   'OPT_SSH=17' \
-  'OPT_NOTIFICATIONS=23' \
-  'OPT_TERMINAL=24' \
+  'OPT_NOTIFICATIONS=22' \
+  'OPT_TERMINAL=23' \
+  'OPT_REMOVE=24' \
   'OPT_EXIT=25' \
   '  "$OPT_PIN") DO_PIN=1;;' \
   '  "$OPT_SERVICE") DO_SERVICE=1;;' \

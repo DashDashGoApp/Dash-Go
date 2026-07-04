@@ -38,6 +38,13 @@ doctor_plan_add(){
 
 doctor_plan_has(){ [ -n "${DOCTOR_PLAN_FILE:-}" ] && [ -s "$DOCTOR_PLAN_FILE" ]; }
 
+doctor_plan_repair_command(){
+  case "${1:-}" in
+    security-maintenance) printf '%s\n' '~/install.sh --repair --system' ;;
+    *) printf '%s\n' '~/install.sh --repair' ;;
+  esac
+}
+
 doctor_plan_action_ids(){
   local classes="${1:-safe}"
   [ -f "${DOCTOR_PLAN_FILE:-}" ] || return 0
@@ -58,7 +65,7 @@ doctor_plan_selectable_numbers(){
 }
 
 doctor_plan_render(){
-  local detailed="${1:-0}" class heading idx=0 marker line title why effect preserves details id
+  local detailed="${1:-0}" class heading idx=0 marker line title why effect preserves details id command
   printf '\n== Repair plan\n'
   doctor_plan_has || { printf 'INFO No automatic repairs are currently planned.\n'; return 0; }
   printf 'INFO Review this plan before changing the device. Safe repairs are reversible where possible and never replace packaged application code.\n'
@@ -84,7 +91,8 @@ doctor_plan_render(){
       printf '      Result: %s\n' "$effect"
       [ -n "$preserves" ] && printf '      Preserves: %s\n' "$preserves"
       if [ "$class" = repair ]; then
-        printf '      Next: run ~/install.sh --repair\n'
+        command="$(doctor_plan_repair_command "$id")"
+        printf '      Next: run %s\n' "$command"
       elif [ "$class" = manual ]; then
         printf '      Next: manual review is required; Doctor will not auto-apply this item.\n'
       fi
@@ -124,13 +132,14 @@ doctor_plan_selection_hint(){
 }
 
 doctor_plan_post_repair_summary(){
-  local class id title any=0
+  local class id title any=0 command
   [ -f "${DOCTOR_PLAN_FILE:-}" ] || return 0
   while IFS=$'\t' read -r class id title _; do
     case "$class" in
       repair)
         [ "$any" = 1 ] || { printf '\nINFO Post-repair status: additional action is still required.\n'; any=1; }
-        printf 'INFO Remaining installer repair: %s — run ~/install.sh --repair\n' "$title"
+        command="$(doctor_plan_repair_command "$id")"
+        printf 'INFO Remaining installer repair: %s — run %s\n' "$title" "$command"
         ;;
       manual)
         [ "$any" = 1 ] || { printf '\nINFO Post-repair status: additional action is still required.\n'; any=1; }

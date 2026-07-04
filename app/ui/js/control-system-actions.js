@@ -101,6 +101,10 @@ function renderCtrlQuickActions(){
       ctrlMsg(r.ran&&r.ran.length?"Synced via "+r.ran.join(", ")+" — calendar updated.":"No sync script installed. Use installer option 9 for a read-only calendar link or option 10 for signed-in personal calendar sync.");
     }catch(e){ctrlMsg("Sync failed: "+e.message);}
   }));
+  common.grid.appendChild(caction("Calendar visibility","Show or hide calendars quickly. Sync access and provider settings stay unchanged.","",async()=>{
+    if(typeof ctrlOpenCalendarVisibilityShortcut!=="function")throw new Error("Calendar visibility is still loading. Open Manage calendars and try again.");
+    ctrlOpenCalendarVisibilityShortcut();
+  }));
   common.grid.appendChild(caction("Refresh data","Refresh calendar, weather, and alert data.","",async()=>{
     ctrlMsg("Refreshing calendars, weather, and alerts…");
     try{await Promise.all([discoverCalendars().then(loadCalendars),loadWeather(),loadAlerts()]);checkTheme();updateStale();ctrlMsg("Everything refreshed.");}

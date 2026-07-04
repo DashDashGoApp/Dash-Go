@@ -193,24 +193,11 @@ pipx_run(){ PIPX_HOME="$VDIR_PIPX_HOME" PIPX_BIN_DIR="$VDIR_PIPX_BIN" pipx "$@";
 pipx_works(){ have pipx && pipx_run --version >/dev/null 2>&1; }
 python_venv_works(){ have python3 && python3 -c 'import venv' >/dev/null 2>&1; }
 python_pip_works(){ have python3 && python3 -m pip --version >/dev/null 2>&1; }
-apt_codename(){
-  local os_release
-  if [ -n "${DASH_VDIR_APT_CODENAME:-}" ]; then printf '%s\n' "$DASH_VDIR_APT_CODENAME"; return 0; fi
-  os_release="${DASH_VDIR_OS_RELEASE:-/etc/os-release}"
-  [ -r "$os_release" ] || return 0
-  sed -nE 's/^VERSION_CODENAME=//p; s/^DEBIAN_CODENAME=//p' "$os_release" | head -n1 | tr -d '"'
-}
 install_pipx_apt(){
-  local codename
   have apt-get || return 1
   have sudo || { warn "sudo is required to install the missing private-calendar tools"; return 1; }
-  codename="$(apt_codename)"
-  if [ "$codename" = "bullseye" ]; then
-    echo "  This Bullseye device uses pipx and Python virtual-environment support from bullseye-backports."
-    sudo apt-get update && sudo apt-get install -y -t bullseye-backports pipx python3-venv || return 1
-  else
-    sudo apt-get update && sudo apt-get install -y pipx python3-venv || return 1
-  fi
+  echo "  Installing pipx and Python virtual-environment support from this device's normal supported repositories."
+  sudo apt-get update && sudo apt-get install -y pipx python3-venv || return 1
   pipx_works
 }
 offer_optional_qrencode(){

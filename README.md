@@ -46,7 +46,7 @@ Use a reliable microSD card, a proper Raspberry Pi power supply, and another com
 
 ### What you need
 
-- Raspberry Pi Zero 2 W or another supported Raspberry Pi / Debian kiosk device.
+- Raspberry Pi Zero 2 W or another supported Raspberry Pi / Debian kiosk device running Raspberry Pi OS or Debian **Bookworm** (supported) or **Trixie** (recommended). Bullseye and older are not fresh-install targets.
 - A microSD card and card reader.
 - A computer running Windows, macOS, or Linux.
 - A local network. Ethernet is fine where available; Pi Zero 2 W users normally configure Wi-Fi.
@@ -175,7 +175,7 @@ If installation is interrupted or a check fails, Dash-Go leaves the existing das
 Afterwards, open **Apps** from the dashboard footer, then choose **Dashboard Control**.
 
 - **Status / Control** — performance profile, quick actions, system and power actions.
-- **Calendars** — calendar visibility, health, management, start day, week numbers, and event text.
+- **Calendars** — Manage Calendars first, then layout, health, cache, schedules, and event text. Manage Calendars combines visibility, source, health, and read-only/two-way access.
 - **Weather / Display / Themes** — weather behavior, typography, sleep/dim behavior, and visual settings.
 - **Lists** — local To Do and Grocery destinations, optional Microsoft To Do, and the optional Bottom Lists dock.
 - **Update / Backup / Restore** — updates, local configuration backups, restore, and concise update history.
@@ -205,20 +205,26 @@ Dash-Go updates use the official Dash-Go GitHub Releases page for the installed 
 | `~/install.sh --repair` | Restore the exact installed Dash-Go release while preserving personal settings and calendars. |
 | `~/install.sh --repair --update` | Explicitly repair using the newest eligible GitHub Release. |
 | `~/install.sh --repair --reset-profile` | Repair the exact installed release and intentionally restore detected performance-profile defaults. |
-| `~/install.sh --repair --system` | Also repair Dash-Go’s service, autologin, kiosk wiring, and scheduler. |
+| `~/install.sh --repair --system` | Also repair Dash-Go’s service, autologin, kiosk wiring, scheduler, and managed Debian security-maintenance policy. |
 | `~/install.sh --repair --system --packages` | Also install missing runtime packages; requires network and sudo. |
 | `~/install.sh --remove` | Run the offline Dash-Go-only uninstall workflow. |
 | `~/install.sh --remove --dry-run` | Show project-owned artifacts without changing anything. |
 
-Use plain `--repair` first for damaged application files when you need to restore the currently installed version exactly. Use `--repair --update` only when you deliberately want the newest eligible release. Add `--system` only when the service, autologin, kiosk launch, or scheduled maintenance is damaged. Add `--packages` only when Doctor identifies missing operating-system dependencies.
+Use plain `--repair` first for damaged application files when you need to restore the currently installed version exactly. Use `--repair --update` only when you deliberately want the newest eligible release. Add `--system` when service, autologin, kiosk launch, scheduled maintenance, or Dash-Go-managed Debian security maintenance needs repair. Add `--packages` only when Doctor identifies missing operating-system dependencies.
 
 A normal update first checks the selected GitHub Release track. It applies only a strictly newer compatible release; an equal version exits successfully without a download, backup, replacement, service restart, cache refresh, or kiosk recycle, and an older selected release is never allowed to downgrade the device. A normal update that does proceed stages and verifies the downloaded release before replacement, restarts the local service, confirms readiness, and relaunches the tracked Dash-Go kiosk process. An ordinary update should not return the kiosk to the login screen. Use explicit `--repair` when you deliberately need to reconstruct the installed release.
+
+### Managed Debian security maintenance
+
+On supported Debian and compatible 64-bit Raspberry Pi OS layouts, Dash-Go configures a small, self-checking security-maintenance posture during installer system/package work and on direct terminal updates. It keeps the installed release codename’s official Debian Security archive available, records matching Debian backports as **opt-in only** at priority 100, installs `unattended-upgrades`, and allows unattended installation only from Debian Security. It does **not** run a general OS upgrade during a normal Dash-Go update.
+
+Automatic reboot, shutdown-time installation, unattended autoremove, automatic backports installation, and automatic Raspberry Pi firmware/kernel upgrades are disabled. APT work runs once daily after the nightly browser restart, uses low CPU/I/O priority, and bounds the APT cache. Doctor is read-only by default: it reports healthy, repair-needed, unsupported-layout, or manual-review state. Use `~/install.sh --repair --system` to restore only Dash-Go-owned APT/systemd policy files. Dash-Go does not add Debian repositories to 32-bit Raspbian or overwrite a later administrator-owned unattended-origin policy.
 
 ## Everyday use
 
 ### Calendar and Calendar Manager
 
-Colored calendar chips remain the fast show/hide control. Use **Dashboard Control → Calendars → Manage calendars** when a calendar needs deeper work.
+Use **Dashboard Control → Calendars → Manage calendars** for every calendar source. It shows whether each calendar is shown or hidden, where it comes from, whether it is view-only or two-way, and whether it needs attention. **Quick Actions → Calendar visibility** remains the fast show/hide shortcut and never changes sync access.
 
 - **Delete local calendar** moves a managed `.ics` file to Calendar Trash, where it can be restored for 30 days.
 - **Remove calendar link** archives only Dash-Go’s symlink; the external target is not changed.

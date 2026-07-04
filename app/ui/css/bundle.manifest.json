@@ -33,6 +33,7 @@
       "control/display-location.css",
       "control/dashboard-typography.css",
       "control/consistency.css",
+      "control/calendar-manager-visibility.css",
       "control/messages-osk.css",
       "control/message-forms.css",
       "control/message-scroll-feed.css",

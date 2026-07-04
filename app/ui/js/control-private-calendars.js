@@ -1,8 +1,9 @@
 // Private-calendar discovery is a separate, lazy Calendar Manager action.
 // Discovery is inventory-only until a user explicitly adds a selected source.
-function ctrlPrivateCalendarSettings(state,writeback){
+function ctrlPrivateCalendarSettings(state,writeback,visibilityBySource){
   state=state||{available:false,discovering:false,candidates:[],selected:[],notices:[]};
   writeback=writeback||{enabled:false,requirePin:false,calendars:[]};
+  visibilityBySource=visibilityBySource instanceof Map?visibilityBySource:new Map();
   const card=el("section","calendar-manager-group calprivate-settings");
   card.append(el("div","calmanager-heading","Private calendar connections"));
   card.append(el("p","calmanager-note","Discover checks connected Google, iCloud, and CalDAV accounts for calendars. Nothing discovered here syncs or changes until you add it."));
@@ -19,7 +20,10 @@ function ctrlPrivateCalendarSettings(state,writeback){
   const selected=Array.isArray(state.selected)?state.selected:[];
   if(selected.length){
     card.appendChild(el("div","calmanager-heading","Selected calendars"));
-    const list=el("div","calmanager-list");selected.forEach(item=>list.appendChild(ctrlPrivateCalendarSelectedRow(item,writeback)));card.appendChild(list);
+    const list=el("div","calmanager-list");selected.forEach(item=>{
+      const copy=Object.assign({},item,{enabled:visibilityBySource.has(String(item&&item.source||""))?visibilityBySource.get(String(item&&item.source||"")):true});
+      list.appendChild(ctrlPrivateCalendarSelectedRow(copy,writeback));
+    });card.appendChild(list);
   }
   const candidates=(Array.isArray(state.candidates)?state.candidates:[]).filter(item=>item&&item.selected!==true);
   if(candidates.length){
@@ -91,7 +95,8 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
   const row=el("article","calmanager-row calmanager-private");row.dataset.calendarSource=String(item.source||"");
   const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));
   const registered=ctrlPrivateCalendarRegistry(item,writeback),conflict=ctrlPrivateCalendarConflict(item),repair=ctrlPrivateCalendarNeedsRepair(item),presentation=ctrlPrivateCalendarPresentation(item,writeback);
-  head.append(title,el("span",`calmanager-state ${presentation.kind}`,presentation.label));row.append(head,el("div","calmanager-detail",presentation.detail));
+  head.append(title,el("span",`calmanager-state ${presentation.kind}`,presentation.label));
+  row.append(head,ctrlCalendarManagerBadges(Object.assign({},item,{privateSelected:true,privateWritable:item.writable===true,privateSync:item.sync,privateState:item.state})),el("div","calmanager-detail",presentation.detail));
   const authHelp=ctrlPrivateCalendarAuthHelp(item);if(authHelp)row.appendChild(el("p","calmanager-note",authHelp));
   const actions=el("div","calmanager-actions");
   if(conflict){
@@ -125,6 +130,10 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
     }));
   }
   if(!conflict&&!repair){
+    actions.appendChild(ctrlCalendarManagerAction(item.enabled===false?"Show calendar":"Hide calendar",item.enabled===false?"Show this private calendar mirror on the dashboard. Sync and access mode stay unchanged.":"Hide this private calendar mirror without stopping sync or changing provider access.","",async()=>{
+      const result=await api("/api/calendars/toggle","POST",{name:item.name,url:item.source});
+      await ctrlCalendarRefresh(`${result.name}${result.enabled?" shown":" hidden"}.`);
+    }));
     actions.appendChild(ctrlCalendarManagerAction("Sync now","Synchronize only this selected private calendar.","",async()=>{
       await api("/api/calendars/private/sync","POST",{source:item.source});
       await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} sync queued.`,item.source);

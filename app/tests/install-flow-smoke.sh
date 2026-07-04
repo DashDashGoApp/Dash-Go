@@ -13,7 +13,7 @@ require(){ grep -Fq -- "$1" "$INSTALLER" || { echo "missing installer contract: 
 require '--message-sources --list'
 require '--message-sources --set'
 require '--update-message-feeds'
-require 'OPT_REMOVE=22'
+require 'OPT_REMOVE=24'
 require 'OPT_TODO=12'
 require 'OPT_PIN=15'
 require 'OPT_SERVICE=16'

@@ -33,6 +33,7 @@ for name in doctor.sh dashboard-kiosk-lib.sh dashboard-lite-session.sh dashboard
   printf '#!/usr/bin/env bash\n' > "$FIXTURE/bin/$name"
 done
 cp "$ROOT/bin/dashboard-common.sh" "$FIXTURE/bin/dashboard-common.sh"
+cp "$ROOT/bin/dashboard-security-maintenance.sh" "$FIXTURE/bin/dashboard-security-maintenance.sh"
 cp "$ROOT/bin/dashboard-doctor-plan.sh" "$FIXTURE/bin/dashboard-doctor-plan.sh"
 cp "$ROOT/bin/dashboard-health-guard.sh" "$FIXTURE/bin/dashboard-health-guard.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE/kiosk.sh"

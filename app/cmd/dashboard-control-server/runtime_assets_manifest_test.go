@@ -168,6 +168,7 @@ func TestRuntimeAssetManifestsPreserveSemanticSourceOrder(t *testing.T) {
 			"ui/css/control/display-location.css",
 			"ui/css/control/dashboard-typography.css",
 			"ui/css/control/consistency.css",
+			"ui/css/control/calendar-manager-visibility.css",
 			"ui/css/control/messages-osk.css",
 			"ui/css/control/message-forms.css",
 			"ui/css/control/message-scroll-feed.css",
