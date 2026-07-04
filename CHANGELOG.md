@@ -2,6 +2,16 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.8-beta.6] — 2026-07-04
+
+### Doctor truthfulness and self-healing restraint
+
+- Corrected the Doctor weather-cache location check for the current Go cache schema. Doctor now reads `weather-cache.json` root-level `location` coordinates first, accepts the older nested payload form only as a compatibility fallback, and requires both numeric coordinate fields before reporting a true `0,0` cache. A healthy cache for the configured location is no longer quarantined or repeatedly warned about.
+- Renamed the internal cache finding to the provider-neutral `WEATHER_CACHE_ZERO_LOCATION`; cache protection now describes the actual malformed condition rather than naming one weather provider.
+- Reworked kiosk duplicate detection from raw `pgrep` counting to live, exact Dash-Go candidate validation plus bounded parent-tree classification. The kiosk lock owner is authoritative when valid; a matching wrapper and its lock-owning kiosk child count as one launcher tree.
+- Preserved conservative duplicate handling: only independently rooted live kiosk trees remain a warning, no live kiosk process is terminated automatically, and diagnostic detail is retained for a real conflict.
+- Added regressions for root-versus-legacy weather-cache schema handling, partial/missing cache location fields, and the lock-owner plus wrapper-tree topology observed on the Pi.
+
 ## [1.5.8-beta.5] — 2026-07-04
 
 ### Managed Debian security maintenance

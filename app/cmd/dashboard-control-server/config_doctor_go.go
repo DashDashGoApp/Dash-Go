@@ -82,6 +82,54 @@ func readConfigLocation(path string) map[string]any {
 	return map[string]any{"ok": true, "lat": num("lat"), "lon": num("lon"), "city": city}
 }
 
+// weatherCacheLocation returns weather-cache coordinates only when the cache
+// actually contains both numeric fields. Missing keys must not collapse to 0,0:
+// a valid current cache uses root.location, while an early Go cache used
+// payload.location. Doctor treats the latter only as a compatibility fallback.
+func weatherCacheLocation(cache map[string]any) (float64, float64, bool) {
+	readLocation := func(value any) (float64, float64, bool) {
+		loc, ok := value.(map[string]any)
+		if !ok {
+			return 0, 0, false
+		}
+		lat, latOK := weatherCacheCoordinate(loc["lat"])
+		lon, lonOK := weatherCacheCoordinate(loc["lon"])
+		if !latOK || !lonOK {
+			return 0, 0, false
+		}
+		return lat, lon, true
+	}
+	if lat, lon, ok := readLocation(cache["location"]); ok {
+		return lat, lon, true
+	}
+	payload, ok := cache["payload"].(map[string]any)
+	if !ok {
+		return 0, 0, false
+	}
+	return readLocation(payload["location"])
+}
+
+func weatherCacheCoordinate(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
 func writeConfigLocation(path string, lat, lon float64, city string) (map[string]any, error) {
 	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
 		return nil, fmt.Errorf("lat/lon out of range")
@@ -232,10 +280,8 @@ func (a *app) runDoctorConfigCLI(args []string) int {
 			}
 		}
 		cache := jsonutil.Map(a.readJSONDefault(filepath.Join(a.cacheDir, "weather-cache.json"), map[string]any{}))
-		payload := jsonutil.Map(cache["payload"])
-		cloc := jsonutil.Map(payload["location"])
-		if cloc != nil && anyFloat(cloc["lat"]) > -0.000001 && anyFloat(cloc["lat"]) < 0.000001 && anyFloat(cloc["lon"]) > -0.000001 && anyFloat(cloc["lon"]) < 0.000001 {
-			fmt.Println("WEATHERAPI_ZERO_CACHE")
+		if cacheLat, cacheLon, cacheOK := weatherCacheLocation(cache); cacheOK && cacheLat > -0.000001 && cacheLat < 0.000001 && cacheLon > -0.000001 && cacheLon < 0.000001 {
+			fmt.Println("WEATHER_CACHE_ZERO_LOCATION")
 		}
 		return 0
 	case "set-location":

@@ -26,7 +26,7 @@ printf 'window.fixture=true;\n' > "$FIXTURE/ui/js/app.bundle.js"
 printf 'window.controlFixture=true;\n' > "$FIXTURE/ui/js/app.control.bundle.js"
 printf 'window.DASHBOARD_LOCAL={pauseWhileOpen:true profile:"lite",lat:41.8781,lon:-87.6298};\n' > "$FIXTURE/config/config.local.js"
 printf '{invalid settings\n' > "$FIXTURE/config/settings.json"
-printf '{}\n' > "$FIXTURE/cache/weather-cache.json"
+printf '{\"location\":{\"lat\":0,\"lon\":0}}\n' > "$FIXTURE/cache/weather-cache.json"
 printf '999999\n' > "$FIXTURE/cache/kiosk.lock/pid"
 
 for name in doctor.sh dashboard-kiosk-lib.sh dashboard-lite-session.sh dashboard-session-guard.sh dashboard-lowprio.sh dashboard-housekeeping.sh update-holidays.sh update-iss-passes.sh gen-default-calendars.sh; do
@@ -60,7 +60,7 @@ case "${1:-}" in
       --location-check)
         [ -f "$DASH/cache/config-repaired" ] || echo 'SYNTAX_KNOWN:fixture'
         echo 'LOCATION_OK:41.878100,-87.629800:Fixture'
-        [ -f "$DASH/cache/weather-cache.json" ] && echo 'WEATHERAPI_ZERO_CACHE'
+        [ -f "$DASH/cache/weather-cache.json" ] && echo 'WEATHER_CACHE_ZERO_LOCATION'
         ;;
     esac
     ;;
@@ -96,10 +96,15 @@ last="${!#}"
 case " $* " in
   *' -x openbox '*) exit 0 ;;
   *' -afu '*)
-    # The beta.6 expression passed kiosk\\.sh and matched nothing. Beta.7
-    # must pass the simple token and rely on the fixed full-path filter.
     [ "$last" = kiosk.sh ] || exit 1
-    printf '4242 %s/kiosk.sh\n' "$DASH"
+    if [ -n "${DOCTOR_TEST_KIOSK_PARENT:-}" ] && [ -n "${DOCTOR_TEST_KIOSK_CHILD:-}" ]; then
+      printf '%s %s/kiosk.sh --wrapper\n' "$DOCTOR_TEST_KIOSK_PARENT" "$DASH"
+      printf '%s %s/kiosk.sh\n' "$DOCTOR_TEST_KIOSK_CHILD" "$DASH"
+    else
+      # The candidate must remain live through Doctor's /proc and ps checks.
+      # Its displayed command carries the exact Dash-Go path as pgrep does.
+      printf '%s %s/kiosk.sh\n' "$PPID" "$DASH"
+    fi
     ;;
   *' -u '*' -x surf '*) exit 1 ;;
   *) exit 1 ;;
@@ -238,4 +243,28 @@ run_doctor --plan --no-prompt > "$SECOND_PLAN_OUTPUT" 2>&1 || true
 grep -q '^INFO No automatic repairs are currently planned\.$' "$SECOND_PLAN_OUTPUT"
 ! grep -q 'scheduled Dash-Go jobs need attention' "$SECOND_PLAN_OUTPUT"
 
-echo 'PASS: Doctor plan is singular and readable, recognizes a live kiosk launcher, ignores benign duplicate exits, repairs the named scheduler job, and is idempotent on the next scan'
+# A wrapper that parents the lock-owning kiosk process is one launcher tree,
+# not a duplicate. Both command lines contain kiosk.sh, mirroring the false
+# positive observed on the Pi, while the lock identifies the actual child.
+TOPOLOGY_OUTPUT="$TMP/doctor-topology.out"
+bash -c 'bash -c "exec -a \"$0\" sleep 30" & wait' "$FIXTURE/kiosk.sh" &
+topology_parent=$!
+for _ in $(seq 1 20); do
+  topology_child="$(/usr/bin/pgrep -P "$topology_parent" 2>/dev/null | head -1 || true)"
+  [ -n "$topology_child" ] && break
+  sleep 0.05
+done
+[ -n "${topology_child:-}" ] || { echo 'FAIL: topology fixture did not create a kiosk child' >&2; exit 1; }
+mkdir -p "$FIXTURE/cache/kiosk.lock"
+printf '%s\n' "$topology_child" > "$FIXTURE/cache/kiosk.lock/pid"
+export DOCTOR_TEST_KIOSK_PARENT="$topology_parent" DOCTOR_TEST_KIOSK_CHILD="$topology_child"
+run_doctor --full --plan --no-prompt > "$TOPOLOGY_OUTPUT" 2>&1 || true
+unset DOCTOR_TEST_KIOSK_PARENT DOCTOR_TEST_KIOSK_CHILD
+kill "$topology_parent" 2>/dev/null || true
+wait "$topology_parent" 2>/dev/null || true
+grep -q "kiosk lock belongs to live kiosk PID $topology_child" "$TOPOLOGY_OUTPUT"
+grep -q '^OK  one kiosk launcher is running$' "$TOPOLOGY_OUTPUT"
+! grep -q 'independent kiosk launcher trees are running' "$TOPOLOGY_OUTPUT"
+! grep -q '^WARN .*kiosk launcher' "$TOPOLOGY_OUTPUT"
+
+echo 'PASS: Doctor plan is singular and readable, recognizes a live kiosk launcher, ignores wrapper-tree false duplicates, repairs the named scheduler job, and is idempotent on the next scan'

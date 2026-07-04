@@ -691,7 +691,7 @@ EOF
     elif printf '%s\n' "$loc" | grep -q '^LOCATION_ZERO\|^LOCATION_MISSING'; then
       warn_fix "dashboard location is missing or 0,0; weather and maps may be wrong" "set Location in Dashboard Control"
     fi
-    if printf '%s\n' "$loc" | grep -q '^WEATHERAPI_ZERO_CACHE'; then
+    if printf '%s\n' "$loc" | grep -q '^WEATHER_CACHE_ZERO_LOCATION$'; then
       WEATHER_ZERO_CACHE=1
       doctor_plan_add safe weather-zero-cache "Clear the invalid 0,0 weather cache" "Location is configured, but an old derived weather response was made for 0,0 coordinates." "Moves only the stale weather cache aside so the next normal refresh can replace it." "Location settings, weather keys, and source configuration."
       if can_apply_fix weather-zero-cache && quarantine_cache "$CACHE_DIR/weather-cache.json"; then fixed "removed cached 0,0 weather response so it can refresh"; else warn_fix "weather cache contains 0,0 coordinates" "run '$BIN_DIR/doctor.sh' --fix"; fi
@@ -1004,13 +1004,98 @@ disable_legacy_kiosk_autostarts(){
   [ "$changed" -gt 0 ]
 }
 
-kiosk_process_details(){
-  local lines="$1" pid
+# Return a command line for a live candidate without trusting only pgrep's
+# display text. /proc is preferred; ps remains the portable fallback.
+kiosk_pid_args(){
+  local candidate="$1" args=""
+  [ -r "/proc/$candidate/cmdline" ] && args="$(tr '\0' ' ' < "/proc/$candidate/cmdline" 2>/dev/null || true)"
+  [ -n "$args" ] || args="$(ps -p "$candidate" -o args= 2>/dev/null | trim_line || true)"
+  printf '%s' "$args"
+}
+
+kiosk_pid_state(){
+  local candidate="$1"
+  ps -p "$candidate" -o stat= 2>/dev/null | tr -d '[:space:]' || true
+}
+
+kiosk_pid_parent(){
+  local candidate="$1" parent=""
+  parent="$(ps -p "$candidate" -o ppid= 2>/dev/null | tr -cd '0-9' || true)"
+  printf '%s' "$parent"
+}
+
+kiosk_pid_live(){
+  local candidate="$1" state=""
+  [[ "$candidate" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$candidate" 2>/dev/null || return 1
+  state="$(kiosk_pid_state "$candidate")"
+  [[ "$state" != Z* && "$state" != X* ]]
+}
+
+# pgrep narrows the search cheaply. Each result is then revalidated as a live
+# Dash-Go kiosk process; a transient zombie, an exited command, or a process
+# whose match came only from a wrapper argument cannot become a launcher alert.
+kiosk_candidate_pids(){
+  local line candidate args fallback state
+  have pgrep || return 0
   while IFS= read -r line; do
-    pid="${line%% *}"
-    [[ "$pid" =~ ^[0-9]+$ ]] || continue
-    ps -p "$pid" -o pid=,ppid=,etimes=,args= 2>/dev/null | trim_line
-  done <<< "$lines"
+    candidate="${line%% *}"
+    [[ "$candidate" =~ ^[0-9]+$ ]] || continue
+    kiosk_pid_live "$candidate" || continue
+    args="$(kiosk_pid_args "$candidate")"
+    fallback="${line#* }"
+    case "$args $fallback" in
+      *"$DASH/kiosk.sh"*) printf '%s\n' "$candidate" ;;
+    esac
+  done < <(pgrep -afu "$USER_NAME" kiosk.sh 2>/dev/null || true)
+}
+
+# True when ancestor is the same process as, or appears in the bounded parent
+# chain of, descendant. The limit protects Doctor from a malformed proc tree.
+kiosk_pid_is_ancestor(){
+  local ancestor="$1" descendant="$2" cursor="$2" parent="" depth=0
+  [[ "$ancestor" =~ ^[0-9]+$ && "$descendant" =~ ^[0-9]+$ ]] || return 1
+  while [ "$depth" -lt 64 ] && [[ "$cursor" =~ ^[0-9]+$ ]]; do
+    [ "$cursor" = "$ancestor" ] && return 0
+    parent="$(kiosk_pid_parent "$cursor")"
+    [ -n "$parent" ] && [ "$parent" != "$cursor" ] || break
+    cursor="$parent"
+    depth=$((depth+1))
+  done
+  return 1
+}
+
+# A wrapper and its real kiosk child are one launcher tree, not duplicates.
+kiosk_pids_share_tree(){
+  local left="$1" right="$2"
+  kiosk_pid_is_ancestor "$left" "$right" || kiosk_pid_is_ancestor "$right" "$left"
+}
+
+# Reduce matching PIDs to process-tree roots. An ancestor wrapper is retained
+# for diagnosis; descendants in the same launch tree are not counted twice.
+kiosk_tree_roots(){
+  local candidates="$1" candidate other nested
+  while IFS= read -r candidate; do
+    [[ "$candidate" =~ ^[0-9]+$ ]] || continue
+    nested=0
+    while IFS= read -r other; do
+      [[ "$other" =~ ^[0-9]+$ ]] || continue
+      [ "$candidate" = "$other" ] && continue
+      if kiosk_pid_is_ancestor "$other" "$candidate"; then
+        nested=1
+        break
+      fi
+    done <<< "$candidates"
+    [ "$nested" -eq 1 ] || printf '%s\n' "$candidate"
+  done <<< "$candidates"
+}
+
+kiosk_process_details(){
+  local pids="$1" candidate
+  while IFS= read -r candidate; do
+    [[ "$candidate" =~ ^[0-9]+$ ]] || continue
+    ps -p "$candidate" -o pid=,ppid=,sid=,stat=,etimes=,args= 2>/dev/null | trim_line
+  done <<< "$pids"
 }
 
 current_kiosk_log_errors(){
@@ -1020,7 +1105,7 @@ current_kiosk_log_errors(){
 }
 
 check_kiosk(){
-  local gui=0 gui_active=0 gui_expected=0 kiosk_lines="" kiosk_count=0 surf_count=0 lock="$CACHE_DIR/kiosk.lock" pid="" cmd="" session="" autouser="" path="" errors="" relaunches=0 missing_gui="" legacy="" detail="" surf_pid="" surf_window="" kiosk_log="" openbox_log=""
+  local gui=0 gui_active=0 gui_expected=0 kiosk_lines="" kiosk_roots="" independent_kiosks="" independent_count=0 kiosk_count=0 surf_count=0 lock="$CACHE_DIR/kiosk.lock" pid="" lock_kiosk_pid="" cmd="" session="" autouser="" path="" errors="" relaunches=0 missing_gui="" legacy="" detail="" surf_pid="" surf_window="" kiosk_log="" openbox_log=""
   section "Kiosk, Surf, and graphical session"
 
   if have pgrep && { pgrep -x openbox >/dev/null 2>&1 || pgrep -x lightdm >/dev/null 2>&1; }; then gui_active=1; fi
@@ -1062,7 +1147,7 @@ check_kiosk(){
     pid="$(cat "$lock/pid" 2>/dev/null || true)"
     if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
       cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
-      if [[ "$cmd" == *kiosk.sh* ]]; then ok "kiosk lock belongs to live kiosk PID $pid"; else doctor_plan_add manual kiosk-lock-owner "Review a kiosk lock owned by another process" "The kiosk lock PID is alive but does not identify as kiosk.sh." "No automatic change; avoids disrupting an unrelated live process." "The running process and all dashboard data."; fail_fix "kiosk lock PID $pid belongs to another process" "inspect PID $pid, then remove '$lock' only if it is unrelated"; fi
+      if [[ "$cmd" == *"$DASH/kiosk.sh"* ]]; then lock_kiosk_pid="$pid"; ok "kiosk lock belongs to live kiosk PID $pid"; else doctor_plan_add manual kiosk-lock-owner "Review a kiosk lock owned by another process" "The kiosk lock PID is alive but does not identify as kiosk.sh." "No automatic change; avoids disrupting an unrelated live process." "The running process and all dashboard data."; fail_fix "kiosk lock PID $pid belongs to another process" "inspect PID $pid, then remove '$lock' only if it is unrelated"; fi
     else
       doctor_plan_add safe stale-kiosk-lock "Remove a stale kiosk lock" "The kiosk lock belongs to no live process and blocks a normal launcher restart." "Removes only the stale dashboard-owned lock." "Live kiosk/browser processes and settings."
       if can_apply_fix stale-kiosk-lock && rm -rf "$lock"; then fixed "removed stale kiosk lock"; else fail_fix "stale kiosk lock blocks the launcher" "select Remove a stale kiosk lock or run rm -rf '$lock'"; fi
@@ -1077,27 +1162,45 @@ check_kiosk(){
   fi
 
   if have pgrep; then
-    # pgrep receives a simple kiosk.sh search; the following fixed-string full
-    # path filter is the authoritative ownership check. This avoids an ERE
-    # escape mismatch that could report zero launchers on a healthy kiosk.
-    kiosk_lines="$(pgrep -afu "$USER_NAME" kiosk.sh 2>/dev/null | grep -F "$DASH/kiosk.sh" | grep -v '[d]octor.sh' || true)"
-    kiosk_count="$(printf '%s\n' "$kiosk_lines" | awk 'NF{n++} END{print n+0}')"
+    # A raw command-line match is not a launcher count. Doctor first keeps only
+    # live exact Dash-Go candidates, then collapses wrappers and children into
+    # one process tree. The lock owner is authoritative when it is valid.
+    kiosk_lines="$(kiosk_candidate_pids | awk 'NF && !seen[$0]++')"
+    kiosk_roots="$(kiosk_tree_roots "$kiosk_lines" | awk 'NF && !seen[$0]++')"
+    if [ -n "$lock_kiosk_pid" ]; then
+      independent_kiosks="$(
+        while IFS= read -r pid; do
+          [[ "$pid" =~ ^[0-9]+$ ]] || continue
+          kiosk_pids_share_tree "$pid" "$lock_kiosk_pid" && continue
+          printf '%s\n' "$pid"
+        done <<< "$kiosk_roots"
+      )"
+      independent_count="$(printf '%s\n' "$independent_kiosks" | awk 'NF{n++} END{print n+0}')"
+      kiosk_count=$((1 + independent_count))
+      if [ -n "$independent_kiosks" ]; then
+        kiosk_roots="$(printf '%s\n%s\n' "$lock_kiosk_pid" "$independent_kiosks")"
+      else
+        kiosk_roots="$lock_kiosk_pid"
+      fi
+    else
+      kiosk_count="$(printf '%s\n' "$kiosk_roots" | awk 'NF{n++} END{print n+0}')"
+    fi
     surf_count="$(pgrep -u "$USER_NAME" -x surf 2>/dev/null | awk 'NF{n++} END{print n+0}')"
     if [ "$kiosk_count" -eq 1 ]; then
       ok "one kiosk launcher is running"
     elif [ "$kiosk_count" -gt 1 ]; then
-      detail="$(kiosk_process_details "$kiosk_lines" | tr '\n' ';' | trim_line)"
+      detail="$(kiosk_process_details "$kiosk_roots" | tr '\n' ';' | trim_line)"
       legacy="$(legacy_kiosk_autostart_files | tr '\n' ',' | sed 's/,$//' || true)"
       if [ -n "$legacy" ]; then
         doctor_plan_add guided legacy-kiosk-autostart "Disable obsolete Dash-Go kiosk autostart" "A managed dashboard session already launches kiosk.sh, while legacy autostart file(s) also reference it: $legacy." "Creates timestamped backups and disables only exact Dash-Go kiosk launch lines; restart LightDM or reboot afterward." "Other autostart entries, live kiosk processes, and settings."
         if can_apply_fix legacy-kiosk-autostart && disable_legacy_kiosk_autostarts; then
           fixed "disabled legacy Dash-Go kiosk autostart entry; restart LightDM or reboot to remove the existing duplicate"
         else
-          warn_fix "$kiosk_count kiosk launchers are running${detail:+ ($detail)}" "select Disable obsolete Dash-Go kiosk autostart, then restart LightDM or reboot"
+          warn_fix "$kiosk_count independent kiosk launcher trees are running${detail:+ ($detail)}" "select Disable obsolete Dash-Go kiosk autostart, then restart LightDM or reboot"
         fi
       else
-        doctor_plan_add manual duplicate-kiosk "Review duplicate kiosk launchers" "More than one kiosk.sh process is active, but no exact legacy Dash-Go autostart source was found." "No automatic process termination; protects the live dashboard session." "All live kiosk/browser processes."
-        warn_fix "$kiosk_count kiosk launchers are running${detail:+ ($detail)}; Doctor will not kill a live session automatically" "keep one session-owned kiosk.sh, then restart the graphical session"
+        doctor_plan_add manual duplicate-kiosk "Review duplicate kiosk launcher trees" "More than one independent live Dash-Go kiosk process tree is active, but no exact legacy Dash-Go autostart source was found." "No automatic process termination; protects the active dashboard session." "All live kiosk/browser processes."
+        warn_fix "$kiosk_count independent kiosk launcher trees are running${detail:+ ($detail)}; Doctor will not kill a live session automatically" "keep one session-owned kiosk.sh, then restart the graphical session"
       fi
     elif [ "$gui" -eq 1 ]; then
       warn_fix "no kiosk launcher is running in the managed graphical installation" "remove a stale lock if present, then restart LightDM or reboot"
