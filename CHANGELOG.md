@@ -2,6 +2,19 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.8-beta.1] — 2026-07-04
+
+### Private calendar OAuth and setup clarity
+
+- Moved Google private-calendar authorization out of vdirsyncer’s interactive browser prompt and into a Go-native `dashboard-control-server --google-oauth` helper. The helper uses PKCE, verifies a one-time state, atomically writes the owner-only token mapping vdirsyncer refreshes, and adds a focused `setup-vdirsyncer.sh --authorize` recovery path.
+- Added two explicit Google client paths: the universal Desktop-app paste-back flow with an optional terminal QR code, and a one-shot Web-app HTTPS callback flow that can show the authorization QR on the kiosk display and complete automatically. The callback is state-bound, time-limited, one-shot, and absent when not armed; its owner-only relay/display files are removed after success, timeout, cancellation, or error.
+- Added the Raspberry Pi OS / Debian Bullseye APT recovery path for `pipx` and `python3-venv` from `bullseye-backports`, while retaining Dash-Go’s isolated pinned `vdirsyncer[google]` pipx environment.
+- Clearly separated installer option 9’s read-only public iCalendar feed from option 10’s private vdirsyncer connection for Google OAuth, iCloud, and compatible CalDAV. Dashboard Control’s calendar messages now point to the same current options.
+
+### Health wording
+
+- Named failed, rolled-back, and post-update health warnings as **Dash-Go application updates**, with a direct pointer to the Dashboard update log rather than the ambiguous “update is failing” wording.
+
 ## [1.5.7] — 2026-07-03
 
 ### Calendar writeback safety and recurrence correctness

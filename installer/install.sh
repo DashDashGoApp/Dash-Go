@@ -4846,8 +4846,8 @@ echo "  ${OPT_WEATHER_DISPLAY}) Weather display         units, days shown, refre
 echo "  ${OPT_WEATHER_SOURCES}) Weather sources         guided toggle menu for free/keyed providers"
 echo "  ${OPT_RADAR}) Weather radar           choose provider + optional protected key"
 echo "  ${OPT_CALENDARS}) Built-in calendars      holidays, sky calendars, celebrations, pickup"
-echo "  ${OPT_ICAL}) Add iCal URL calendar   Google/Outlook/Nextcloud/webcal .ics links"
-echo "  ${OPT_VDIR}) Add private calendar    vdirsyncer/iCloud/CalDAV/Google setup"
+echo "  ${OPT_ICAL}) Add public iCal feed    HTTPS/webcal .ics link (read-only)"
+echo "  ${OPT_VDIR}) Connect private calendar Google OAuth/iCloud/CalDAV (vdirsyncer)"
 echo "  ${OPT_MESSAGES}) Message sources         quotes, jokes, facts, prompts, API refresh"
 echo "                              optional keys saved in ~/.dashboard-message.env"
 echo "  ${OPT_TODO}) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup"
@@ -5011,8 +5011,8 @@ TOUR
      ask "Message sources (quotes, jokes, facts, prompts)"         && DO_MESSAGE_SOURCES=1
      ask "Microsoft To Do / Graph setup (local Lists, client ID, Azure CLI registration)" && DO_APP_SETUP=1
      ask "Built-in/default calendars"                              && DO_CALENDARS=1
-     ask "Add iCal URL calendar"                                    && DO_ICAL=1
-     ask "Add private calendar (CalDAV or Google)"                           && DO_VDIR=1
+     ask "Add public iCal feed (read-only)"                         && DO_ICAL=1
+     ask "Connect private calendar (Google OAuth, iCloud, or CalDAV)" && DO_VDIR=1
      ask "Control-panel PIN lock (set/reset/disable/duration)"       && DO_PIN=1
      ask "Dashboard service (web server + on-screen control panel)" && DO_SERVICE=1
      ask "Boot straight into the dashboard (graphical autologin)"    && DO_AUTOLOGIN=1
@@ -6679,8 +6679,8 @@ else
 while true; do
   echo
   echo "Calendar sync — choose a source to add (repeats so you can add several):"
-  echo "  1) iCal secret/.ics URL   — Google/Outlook/Nextcloud/webcal links"
-  echo "  2) Private calendar (vdirsyncer) — iCloud/CalDAV or Google OAuth"
+  echo "  1) Public iCal/.ics URL (read-only) — HTTPS or webcal feed"
+  echo "  2) Private calendar (vdirsyncer) — Google OAuth, iCloud, or CalDAV"
   echo "  3) Continue / don't add another calendar"
   read -rp "  Choose [1/2/3]: " calmethod
   case "$calmethod" in

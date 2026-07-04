@@ -63,6 +63,17 @@ func (a *app) handleAPIPost(w http.ResponseWriter, r *http.Request) {
 	a.handlePost(w, r, r.URL.Path)
 }
 
+func (a *app) handleAPIRoute(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.handleAPIGet(w, r)
+	case http.MethodPost:
+		a.handleAPIPost(w, r)
+	default:
+		a.handleAPIMethodNotAllowed(w, r)
+	}
+}
+
 func (a *app) handleAPIMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
 	a.err(w, "method not allowed", http.StatusMethodNotAllowed)
 }
@@ -80,12 +91,17 @@ func (a *app) handleStaticRoute(w http.ResponseWriter, r *http.Request) {
 // for unsupported methods, rather than falling back to ServeMux's text 405.
 func (a *app) httpRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/", a.requireLoopback(a.handleAPIGet))
-	mux.HandleFunc("POST /api/", a.requireLoopback(a.handleAPIPost))
-	// GET patterns match HEAD automatically. Preserve the former API behavior,
-	// which rejected HEAD rather than returning a GET payload.
-	mux.HandleFunc("HEAD /api/", a.requireLoopback(a.handleAPIMethodNotAllowed))
-	mux.HandleFunc("/api/", a.requireLoopback(a.handleAPIMethodNotAllowed))
+	// This route is deliberately separate from /api/: an OAuth provider reaches
+	// it without a dashboard session. It remains inert unless the owner-local
+	// CLI has armed an expiring, one-shot relay file.
+	mux.HandleFunc("GET /oauth/google/callback", a.handleGoogleOAuthCallback)
+	// The kiosk display is still loopback-only. These endpoints are 404 until
+	// an active relay has produced a QR image and display metadata.
+	mux.HandleFunc("GET /api/oauth-display", a.requireLoopback(a.handleOAuthDisplayMetadata))
+	mux.HandleFunc("GET /api/oauth-display/qr.png", a.requireLoopback(a.handleOAuthDisplayQR))
+	// The generic API path keeps Dash-Go's JSON 405 behavior without a method
+	// pattern that conflicts with the two narrower GET-only display endpoints.
+	mux.HandleFunc("/api/", a.requireLoopback(a.handleAPIRoute))
 	// The old prefix check treated bare /api as a static path. Keep that exact
 	// boundary instead of allowing ServeMux's subtree redirect to change it.
 	mux.HandleFunc("/api", a.handleStaticRoute)

@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {resolve} from "node:path";
+import {fileURLToPath} from "node:url";
+const root=resolve(process.argv[2]||fileURLToPath(new URL("..",import.meta.url)));
+const read=rel=>readFileSync(resolve(root,rel),"utf8");
+const quick=read("ui/js/control-system-actions.js");
+const calendar=read("ui/js/control-calendars-logs.js");
+const install=read("../installer/install.sh");
+assert.doesNotMatch(quick,/installer option 5/,"Quick Actions must not point at the retired installer option");
+assert.match(quick,/option 10 for private calendar sync/,"Quick Actions must direct private sync setup to option 10");
+assert.match(quick,/option 9 for a public iCal feed/,"Quick Actions must distinguish public feeds from private sync");
+assert.doesNotMatch(calendar,/installer option 5/,"Calendar empty state must not point at the retired installer option");
+assert.match(calendar,/option 9 for a public iCal feed/,"Calendar empty state must identify public feeds");
+assert.match(calendar,/option 10 for a private calendar connection/,"Calendar empty state must identify private sync");
+assert.match(install,/Add public iCal feed/,"Installer must label option 9 as public iCal");
+assert.match(install,/Connect private calendar Google OAuth\/iCloud\/CalDAV/,"Installer must label option 10 as private Google OAuth/iCloud/CalDAV");
+console.log("PASS: calendar messaging distinguishes public iCal feeds from private vdirsyncer connections and names the correct installer actions.");

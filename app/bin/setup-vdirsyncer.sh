@@ -20,12 +20,15 @@ VDIR_COLLECTIONS="$VDIR_HOME/collections"
 VDIR_PAIRS="$VDIR_HOME/pairs"
 VDIR_PASSWORDS="$VDIR_HOME/passwords"
 GOOGLE_TOKENS="$VDIR_HOME/google-tokens"
+VDIR_OAUTH_MODE="$VDIR_HOME/oauth-mode"
+OAUTH_RELAY="$VDIR_HOME/oauth-relay"
 # Dash-Go owns one isolated, pinned vdirsyncer environment. Keep the tool and
 # its Python dependencies outside ~/dashboard with the private vdir state.
 VDIR_PIPX_HOME="${DASH_VDIR_PIPX_HOME:-$VDIR_HOME/pipx}"
 VDIR_PIPX_BIN="${DASH_VDIR_PIPX_BIN:-$VDIR_HOME/bin}"
 VDIRSYNCER_VERSION="0.20.0"
 VDIRSYNCER_BIN="${DASH_VDIRSYNCER_BIN:-$VDIR_PIPX_BIN/vdirsyncer}"
+CONTROL_SERVER_BIN="${DASH_CONTROL_SERVER_BIN:-$BIN_DIR/dashboard-control-server}"
 MAP="${DASH_VDIR_MAP:-$VDIR_HOME/calendars.map}"
 WRITEBACK_REGISTRY="$CONFIG_DIR/calendar-writeback.json"
 SYNC_LOG="$LOG_DIR/vdir-sync.log"
@@ -40,16 +43,20 @@ umask 077
 # from existing private state. It never discovers remote collections, starts
 # OAuth, runs a sync, changes cron, or changes selected calendars.
 REFRESH_ONLY=0
+AUTHORIZE_ONLY=0
 case "${1:-}" in
   "") ;;
   --refresh) REFRESH_ONLY=1 ;;
+  --authorize) AUTHORIZE_ONLY=1 ;;
   --help|-h)
     cat <<'USAGE'
-Usage: setup-vdirsyncer.sh [--refresh]
+Usage: setup-vdirsyncer.sh [--refresh|--authorize]
 
 Without arguments, add a private CalDAV or Google calendar interactively.
 --refresh regenerates Dash-Go-managed configuration from saved private state
 without contacting a provider or changing selected calendars.
+--authorize re-runs one-time Google authorization for saved connections, then
+performs their normal one-time discovery without adding calendars or syncing.
 USAGE
     exit 0
     ;;
@@ -60,9 +67,11 @@ say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
 have(){ command -v "$1" >/dev/null 2>&1; }
+cleanup_oauth_relay(){ rm -f "$OAUTH_RELAY/pending" "$OAUTH_RELAY/result" "$OAUTH_RELAY/display.json" "$OAUTH_RELAY/qr.png" 2>/dev/null || true; }
+trap cleanup_oauth_relay EXIT HUP INT TERM
 
-mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$CONFIG_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
-chmod 700 "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
+mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$CONFIG_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_RELAY" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
+chmod 700 "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_RELAY" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
 touch "$MAP" "$VDIR_PAIRS"
 chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
 
@@ -93,6 +102,23 @@ valid_local_collection_key(){
 }
 valid_client_id(){
   [ -n "$1" ] && valid_single_line "$1" && printf '%s' "$1" | grep -qE '^[A-Za-z0-9._-]+$'
+}
+valid_oauth_redirect_uri(){
+  valid_single_line "$1" && printf '%s' "$1" | grep -qE '^https://[^[:space:]/?#]+(?::[0-9]{1,5})?/oauth/google/callback$'
+}
+oauth_mode_for_ref(){
+  local ref="$1" mode
+  mode="$(cat "$VDIR_OAUTH_MODE/$ref" 2>/dev/null || true)"
+  case "$mode" in web|desktop) printf '%s\n' "$mode";; *) printf 'desktop\n';; esac
+}
+oauth_redirect_for_ref(){
+  local ref="$1" uri
+  uri="$(cat "$VDIR_OAUTH_MODE/$ref.redirect-uri" 2>/dev/null || true)"
+  valid_oauth_redirect_uri "$uri" && printf '%s\n' "$uri"
+}
+oauth_web_callback_ready(){
+  have curl || return 1
+  curl --connect-timeout 2 --max-time 4 -fsS "${DASH_OAUTH_CONTROL_URL:-http://127.0.0.1:8090}/api/ready" >/dev/null 2>&1
 }
 toml_quote(){
   # We reject line breaks in values before persisting. Quote remaining TOML
@@ -129,7 +155,7 @@ remove_own_calendar(){
   while IFS='|' read -r name color tag pair collection _; do
     [ -n "$name" ] || continue
     rm -rf "$collection" 2>/dev/null || true
-    rm -f "$VDIR_PASSWORDS/$name" "$VDIR_PASSWORDS/$name.google-client-secret" "$GOOGLE_TOKENS/$name.json" 2>/dev/null || true
+    rm -f "$VDIR_PASSWORDS/$name" "$VDIR_PASSWORDS/$name.google-client-secret" "$GOOGLE_TOKENS/$name.json" "$VDIR_OAUTH_MODE/$name" "$VDIR_OAUTH_MODE/$name.redirect-uri" 2>/dev/null || true
     if [ -n "$tag" ]; then rm -f "$CAL_DIR/$name.$color.$tag.ics"; else rm -f "$CAL_DIR/$name.$color.ics"; fi
   done < "$old"
   rm -f "$old"
@@ -150,7 +176,18 @@ vdirsyncer_is_pinned(){
 pipx_run(){
   PIPX_HOME="$VDIR_PIPX_HOME" PIPX_BIN_DIR="$VDIR_PIPX_BIN" pipx "$@"
 }
+apt_codename(){
+  local os_release
+  if [ -n "${DASH_VDIR_APT_CODENAME:-}" ]; then
+    printf '%s\n' "$DASH_VDIR_APT_CODENAME"
+    return 0
+  fi
+  os_release="${DASH_VDIR_OS_RELEASE:-/etc/os-release}"
+  [ -r "$os_release" ] || return 0
+  sed -nE 's/^VERSION_CODENAME=//p; s/^DEBIAN_CODENAME=//p' "$os_release" | head -n1 | tr -d '"'
+}
 ensure_pipx(){
+  local codename
   if have pipx; then return 0; fi
   if ! have apt-get; then
     warn "pipx is required for Dash-Go private calendar sync. Install pipx with this system's native package manager, then re-run setup."
@@ -160,8 +197,15 @@ ensure_pipx(){
   read -rp "  Install pipx now? [Y/n]: " install_pipx
   case "${install_pipx:-y}" in n|N|no|NO) warn "pipx is required before private calendar sync can be configured"; return 1;; esac
   have sudo || { warn "sudo is required to install pipx with APT"; return 1; }
-  sudo apt-get update && sudo apt-get install -y pipx || { warn "could not install pipx through APT"; return 1; }
+  codename="$(apt_codename)"
+  if [ "$codename" = "bullseye" ]; then
+    echo "  Debian Bullseye uses pipx and python3-venv from bullseye-backports."
+    sudo apt-get update && sudo apt-get install -y -t bullseye-backports pipx python3-venv || { warn "could not install pipx and python3-venv from bullseye-backports"; return 1; }
+  else
+    sudo apt-get update && sudo apt-get install -y pipx python3-venv || { warn "could not install pipx and python3-venv through APT"; return 1; }
+  fi
   have pipx || { warn "pipx was installed but is not available on PATH; re-open the terminal and re-run setup"; return 1; }
+  have qrencode || echo "  Optional: install qrencode to show a Google sign-in QR code on the dashboard display."
 }
 install_pinned_vdirsyncer(){
   mkdir -p "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
@@ -659,6 +703,7 @@ echo "(owner-only permissions)."
 ensure_vdirsyncer || exit 0
 
 added=0
+if [ "$AUTHORIZE_ONLY" -eq 0 ]; then
 while true; do
   read -rp "  Calendar name (blank to finish): " name
   [ -n "$name" ] || break
@@ -694,11 +739,30 @@ while true; do
   provider="caldav"
   case "${provider_choice:-1}" in 2) provider="google";; esac
 
-  url=""; username=""; client_id=""
+  url=""; username=""; client_id=""; google_oauth_mode="desktop"; google_redirect_uri=""
   if [ "$provider" = "google" ]; then
     ensure_google_support || continue
-    echo "    Google needs a one-time OAuth client from your own Google Cloud project"
-    echo "    (Desktop-app type, CalDAV API enabled). See INTEGRATIONS.md for the recipe."
+    echo "    Google needs a one-time OAuth client from your own Google Cloud project."
+    echo "    Client type: Desktop app uses reliable paste-back with no public callback."
+    echo "    Web app enables automatic QR completion only through an exact HTTPS callback"
+    echo "    (normally a local reverse proxy to Dash-Go's loopback control server)."
+    read -rp "    OAuth client type [desktop/web, desktop]: " google_oauth_mode
+    google_oauth_mode="${google_oauth_mode:-desktop}"
+    case "$google_oauth_mode" in
+      desktop|Desktop|DESKTOP) google_oauth_mode="desktop";;
+      web|Web|WEB)
+        google_oauth_mode="web"
+        echo "    Register this exact HTTPS redirect URI before creating the Web client."
+        echo "    It must end in /oauth/google/callback and reach this Dash-Go device through your HTTPS proxy."
+        read -rp "    Exact HTTPS redirect URI [${DASH_OAUTH_WEB_REDIRECT_URI:-required}]: " google_redirect_uri
+        google_redirect_uri="${google_redirect_uri:-${DASH_OAUTH_WEB_REDIRECT_URI:-}}"
+        if ! valid_oauth_redirect_uri "$google_redirect_uri"; then warn "    web mode needs a single exact HTTPS callback ending in /oauth/google/callback; use desktop when none is configured"; continue; fi
+        echo "    Register exactly: $google_redirect_uri"
+        ;;
+      *) warn "    choose desktop or web"; continue;;
+    esac
+    echo "    Enable the Google Calendar API. Set the OAuth consent screen to In production"
+    echo "    for unattended calendar sync; test-only consent can expire before cron refreshes it."
     read -rp "    OAuth client ID: " client_id
     if ! valid_client_id "$client_id"; then warn "    no valid OAuth client ID given, skipping"; continue; fi
     read -rsp "    OAuth client secret: " password; echo
@@ -746,7 +810,9 @@ while true; do
   printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$url" "$username" "$collection_id" "$provider" "$client_id" "$name" "$name" "$local_id" >> "$VDIR_PAIRS"
   if [ "$provider" = "google" ]; then
     printf '%s' "$password" > "$VDIR_PASSWORDS/$name.google-client-secret"
-    chmod 600 "$VDIR_PASSWORDS/$name.google-client-secret" 2>/dev/null || true
+    printf '%s\n' "$google_oauth_mode" > "$VDIR_OAUTH_MODE/$name"
+    if [ "$google_oauth_mode" = "web" ]; then printf '%s\n' "$google_redirect_uri" > "$VDIR_OAUTH_MODE/$name.redirect-uri"; else rm -f "$VDIR_OAUTH_MODE/$name.redirect-uri"; fi
+    chmod 600 "$VDIR_PASSWORDS/$name.google-client-secret" "$VDIR_OAUTH_MODE/$name" "$VDIR_OAUTH_MODE/$name.redirect-uri" 2>/dev/null || true
   else
     printf '%s' "$password" > "$VDIR_PASSWORDS/$name"
     chmod 600 "$VDIR_PASSWORDS/$name" 2>/dev/null || true
@@ -756,6 +822,7 @@ while true; do
   added=$((added + 1))
   ok "    queued $name"
 done
+fi
 
 if [ "$added" -eq 0 ] && ! grep -q '[^[:space:]]' "$VDIR_PAIRS"; then
   warn "no private calendars are defined — re-run when ready"
@@ -782,7 +849,8 @@ authorize_google_pairs(){
   # The pairs file is read on its own descriptor so the authorization prompt
   # below keeps reading the user's answers from stdin. Selected calendars may
   # share a connection credential; prompt once for that shared token.
-  local gname gpair gprovider credential_ref answered any=0
+  local gname gpair gprovider credential_ref client_id_for_ref answered any=0 mode redirect_uri
+  local -a oauth_args
   local seen="|"
   while IFS='|' read -r gname _ _ gpair _ _ _ _ gprovider _ _ credential_ref _ <&3; do
     [ -n "$gname" ] || continue
@@ -793,19 +861,36 @@ authorize_google_pairs(){
     [ -s "$GOOGLE_TOKENS/$credential_ref.json" ] && continue
     if [ "$any" -eq 0 ]; then
       say "Google authorization (one time per connected account)"
-      echo "vdirsyncer will print a Google sign-in URL that redirects to"
-      echo "http://127.0.0.1:PORT on THIS device."
-      echo "  - With a desktop session here, the browser opens automatically."
-      echo "  - Over SSH, forward the local callback port shown by vdirsyncer."
+      echo "Desktop clients use paste-back: open the printed link on any phone or computer,"
+      echo "approve it, then paste the full 127.0.0.1 callback address here."
+      echo "Web clients can show a one-time QR on the dashboard display and finish automatically."
       any=1
     fi
     read -rp "  Authorize Google connection '$credential_ref' now? [Y/n]: " answered
     case "${answered:-y}" in
-      n|N) warn "  skipped; '$gname' stays read-only-idle until authorized (re-run setup or: $VDIRSYNCER_BIN -c $VDIR_CFG discover $gpair)"; continue;;
+      n|N) warn "  skipped; '$gname' stays read-only-idle until authorized (re-run: setup-vdirsyncer.sh --authorize)"; continue;;
     esac
-    if "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$gpair" && [ -s "$GOOGLE_TOKENS/$credential_ref.json" ]; then
+    [ -x "$CONTROL_SERVER_BIN" ] || { warn "  dashboard control server is unavailable; cannot authorize '$credential_ref'"; continue; }
+    client_id_for_ref="$(awk -F'|' -v ref="$credential_ref" '$12==ref && $9=="google" {print $10; exit}' "$VDIR_PAIRS")"
+    if [ -z "$client_id_for_ref" ]; then
+      warn "  saved Google client ID for '$credential_ref' is unavailable; cannot authorize it"
+      continue
+    fi
+    oauth_args=(--google-oauth authorize -client-id "$client_id_for_ref" -client-secret-file "$VDIR_PASSWORDS/$credential_ref.google-client-secret" -token-file "$GOOGLE_TOKENS/$credential_ref.json" -qr)
+    mode="$(oauth_mode_for_ref "$credential_ref")"
+    if [ "$mode" = "web" ]; then
+      redirect_uri="$(oauth_redirect_for_ref "$credential_ref")"
+      if [ -z "$redirect_uri" ]; then
+        warn "  '$credential_ref' has no valid saved HTTPS callback; using Desktop paste-back"
+      elif ! oauth_web_callback_ready; then
+        warn "  dashboard control server is not ready on loopback; using Desktop paste-back"
+      else
+        oauth_args+=(-relay-dir "$OAUTH_RELAY" -redirect-uri "$redirect_uri")
+        echo "  The Google QR will appear on the dashboard display for up to five minutes."
+      fi
+    fi
+    if "$CONTROL_SERVER_BIN" "${oauth_args[@]}"; then
       chmod 600 "$GOOGLE_TOKENS/$credential_ref.json" 2>/dev/null || true
-      mark_setup_discovered "$gpair"
       ok "  Google connection '$credential_ref' authorized"
     else
       warn "  authorization for '$credential_ref' did not complete; it is skipped by sync until it does"
@@ -836,6 +921,17 @@ discover_private_pairs(){
   [ "$discovered" -gt 0 ] && ok "discovered $discovered private pair(s)"
   [ "$skipped" -gt 0 ] && warn "$skipped Google pair(s) await authorization"
 }
+
+if [ "$AUTHORIZE_ONLY" -eq 1 ]; then
+  say "Google authorization"
+  authorize_google_pairs
+  say "Discovering authorized private calendar collections"
+  discover_private_pairs
+  write_sync_wrapper || { warn "could not write $BIN_DIR/sync-vdir.sh"; exit 1; }
+  write_writeback_registry || { warn "could not write calendar writeback registry"; exit 1; }
+  ok "Google authorization pass complete"
+  exit 0
+fi
 
 say "Discovering private calendar collections"
 authorize_google_pairs

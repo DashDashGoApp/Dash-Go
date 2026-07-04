@@ -1,0 +1,48 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import {fileURLToPath} from "node:url";
+
+const appRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
+const repoRoot=path.resolve(appRoot,"..");
+const readApp=relative=>fs.readFileSync(path.join(appRoot,relative),"utf8");
+const readRepo=relative=>fs.readFileSync(path.join(repoRoot,relative),"utf8");
+const manifest=JSON.parse(readApp("ui/js/bundle.manifest.json"));
+const cssManifest=JSON.parse(readApp("ui/css/bundle.manifest.json"));
+const html=readApp("index.html");
+const ui=readApp("ui/js/oauth-display.js");
+const css=readApp("ui/css/dashboard/oauth-display.css");
+const boot=readApp("ui/js/boot.js");
+const server=readApp("cmd/dashboard-control-server/http_server.go");
+const relay=readApp("cmd/dashboard-control-server/oauth_relay.go");
+const oauth=readApp("cmd/dashboard-control-server/google_oauth_cli.go")+readApp("cmd/dashboard-control-server/google_oauth_options.go");
+const setup=readApp("bin/setup-vdirsyncer.sh");
+const integrations=readRepo("INTEGRATIONS.md");
+const security=readRepo("SECURITY.md");
+
+assert.ok(manifest.bundles.app.includes("oauth-display.js"),"dashboard bundle must include the OAuth display controller");
+assert.ok(cssManifest.bundles.dashboard.includes("dashboard/oauth-display.css"),"dashboard bundle must include OAuth display styling");
+assert.match(html,/<div id="oauthdisplay"[^>]*aria-hidden="true"[^>]*aria-modal="true"/,"kiosk overlay must start hidden and remain an accessible modal shell");
+assert.match(html,/id="oauthdisplay-qr"[^>]*hidden/,"QR image must start hidden");
+assert.match(boot,/oauthDisplayBoot\(\)/,"dashboard boot must arm the low-frequency overlay poll");
+assert.match(ui,/fetch\("\/api\/oauth-display",\{cache:"no-store"\}\)/,"overlay must request only its no-store metadata endpoint");
+assert.match(ui,/response\.status===404\)\{ oauthDisplayHide\(\); return; \}/,"overlay must dismiss itself when the armed relay is gone");
+assert.doesNotMatch(ui,/\.style\.display\s*=/,"overlay visibility must use semantic classes instead of inline display mutation");
+assert.match(css,/background:#fff/,"QR must use an always-white backing panel in every dashboard theme");
+assert.match(css,/min-width:min\(40vh,70vw\)/,"QR backing panel must stay touch-visible on the kiosk display");
+assert.match(server,/GET \/oauth\/google\/callback/,"server must register the narrow public OAuth callback route");
+assert.match(server,/GET \/api\/oauth-display/,"server must register the loopback display metadata route");
+assert.match(server,/requireLoopback\(a\.handleOAuthDisplayMetadata\)/,"kiosk display metadata must remain loopback-only");
+assert.match(relay,/oauthRelayTTL\s*=\s*10 \* time\.Minute/,"relay window must remain bounded to ten minutes");
+assert.match(relay,/subtle\.ConstantTimeCompare/,"relay callback must compare state without a timing-sensitive string comparison");
+assert.match(relay,/cleanupOAuthRelayPresentation/,"display cleanup must be distinct from CLI result cleanup");
+assert.match(oauth,/code_challenge_method/,"authorization must use PKCE S256");
+assert.match(oauth,/googleOAuthValidateRelayOptions/,"automatic web mode must validate its callback contract");
+assert.match(oauth,/callback\.Scheme != "https"/,"web callback must require exact HTTPS instead of a raw LAN HTTP redirect");
+assert.match(setup,/--authorize/,"setup must provide a focused authorization recovery path");
+assert.match(setup,/-relay-dir "\$OAUTH_RELAY" -redirect-uri "\$redirect_uri"/,"web setup must pass the spool and exact callback URI to the Go helper");
+assert.match(setup,/bullseye-backports pipx python3-venv/,"Bullseye recovery must install pipx and python3-venv from backports");
+assert.match(integrations,/Web app \(automatic kiosk QR completion\)/,"integration guidance must distinguish the automatic Web-client flow");
+assert.match(security,/One-shot Google OAuth callback and kiosk QR/,"security guidance must document the narrow callback and kiosk enrollment boundary");
+console.log("PASS: Google OAuth kiosk display remains bundle-owned, short-lived, loopback-safe, and HTTPS-gated.");

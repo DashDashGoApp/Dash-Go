@@ -69,6 +69,46 @@ func TestDeviceHealthNullReasonUsesFactFallback(t *testing.T) {
 	}
 }
 
+func TestDeviceHealthNamesFailedDashGoApplicationUpdate(t *testing.T) {
+	dash := t.TempDir()
+	a := &app{dash: dash, cacheDir: filepath.Join(dash, "cache"), configDir: filepath.Join(dash, "config")}
+	a.ensureDirs()
+	if err := fileio.WriteJSON(filepath.Join(a.cacheDir, "update-status.json"), map[string]any{"state": "failed", "reason": nil}); err != nil {
+		t.Fatal(err)
+	}
+	h := a.deviceHealth()
+	line, _ := h["statusLine"].(string)
+	want := "the Dash-Go application update failed; review the Dashboard update log"
+	if line != want {
+		t.Fatalf("failed update line = %q, want %q", line, want)
+	}
+	facts := h["facts"].([]healthFact)
+	for _, fact := range facts {
+		if fact.Name == "update" {
+			if fact.Level != "failing" || fact.Reason != want {
+				t.Fatalf("update fact = %#v, want a named application update failure", fact)
+			}
+			return
+		}
+	}
+	t.Fatal("update fact missing")
+}
+
+func TestDeviceHealthNamesRolledBackDashGoApplicationUpdate(t *testing.T) {
+	dash := t.TempDir()
+	a := &app{dash: dash, cacheDir: filepath.Join(dash, "cache"), configDir: filepath.Join(dash, "config")}
+	a.ensureDirs()
+	if err := fileio.WriteJSON(filepath.Join(a.cacheDir, "update-status.json"), map[string]any{"state": "success", "rolledBack": true, "reason": nil}); err != nil {
+		t.Fatal(err)
+	}
+	h := a.deviceHealth()
+	line, _ := h["statusLine"].(string)
+	want := "the last Dash-Go application update was rolled back after its health check"
+	if line != want {
+		t.Fatalf("rolled-back update line = %q, want %q", line, want)
+	}
+}
+
 func TestDeviceHealthPendingPostUpdateIsSilent(t *testing.T) {
 	dash := t.TempDir()
 	a := &app{dash: dash, cacheDir: filepath.Join(dash, "cache"), configDir: filepath.Join(dash, "config")}

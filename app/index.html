@@ -23,8 +23,8 @@
   try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
 }());
 </script>
-<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.7">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.7">
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.8-beta.1">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.8-beta.1">
 <link rel="icon" href="data:,">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
@@ -189,6 +189,16 @@
   <div id="radarcontrols"><div id="radarbuttons"><button id="radarprev" class="cbtn" aria-label="Previous radar frame">‹</button><button id="radarplay" class="cbtn" aria-pressed="false">Play</button><button id="radarnext" class="cbtn" aria-label="Next radar frame">›</button><button id="radarnow" class="cbtn" aria-label="Latest radar frame">Now</button><button id="radarzoom" class="cbtn" aria-label="Toggle radar zoom" hidden>Zoom in</button><button id="radarrefresh" class="cbtn" aria-label="Refresh latest regional radar" hidden>Refresh</button></div><div id="radarreadout"><div id="radarstamp">Latest available</div><input id="radarscrub" aria-label="Radar timeline" type="range" min="0" max="0" value="0"></div></div>
 </div>
 
+<div id="oauthdisplay" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="oauthdisplay-title">
+  <section class="oauth-display-panel" role="document">
+    <h2 id="oauthdisplay-title">Connect Google Calendar</h2>
+    <p id="oauthdisplay-connection">Waiting for Google Calendar authorization…</p>
+    <div class="oauth-display-qr-wrap"><img id="oauthdisplay-qr" alt="Scan this Google Calendar authorization code with your phone" hidden></div>
+    <p id="oauthdisplay-countdown" class="oauth-display-countdown"></p>
+    <p id="oauthdisplay-fallback" class="oauth-display-fallback"></p>
+  </section>
+</div>
+
 <div id="applauncher" class="app-launcher" aria-hidden="true" aria-modal="true" role="dialog" aria-labelledby="applauncher-title">
   <section class="app-launcher-panel" role="document">
     <header class="app-launcher-head">
@@ -253,6 +263,6 @@
   </section>
 </div>
 
-<script src="/ui/js/app.bundle.js?v=1.5.7" defer></script>
+<script src="/ui/js/app.bundle.js?v=1.5.8-beta.1" defer></script>
 </body>
 </html>

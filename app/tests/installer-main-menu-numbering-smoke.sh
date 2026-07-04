@@ -64,4 +64,10 @@ fi
 grep -Fq 'configure_terminal_access(){' "$INSTALL" || { echo 'FAIL: Terminal access installer helper is missing' >&2; exit 1; }
 grep -Fq '"$server" --terminal-access status' "$INSTALL" || { echo 'FAIL: Terminal access installer menu does not read current state' >&2; exit 1; }
 grep -Fq '"$server" --terminal-access "$next"' "$INSTALL" || { echo 'FAIL: Terminal access installer menu does not apply its toggle through the server CLI' >&2; exit 1; }
-printf 'PASS: canonical top-level menu identities, visible ordering, exit placement, and dispatch are synchronized\n'
+ical_line="$(printf '%s\n' "$menu" | grep -F '  ${OPT_ICAL})' || true)"
+vdir_line="$(printf '%s\n' "$menu" | grep -F '  ${OPT_VDIR})' || true)"
+printf '%s' "$ical_line" | grep -Fq 'public iCal feed' || { echo 'FAIL: option 9 must clearly identify a public read-only iCal feed' >&2; exit 1; }
+printf '%s' "$ical_line" | grep -Fqi 'google' && { echo 'FAIL: option 9 must not present Google as the private-calendar route' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'Google OAuth' || { echo 'FAIL: option 10 must identify Google OAuth private-calendar setup' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'vdirsyncer' || { echo 'FAIL: option 10 must name vdirsyncer private-calendar setup' >&2; exit 1; }
+printf 'PASS: canonical top-level menu identities, clear public/private calendar routes, visible ordering, exit placement, and dispatch are synchronized\n'

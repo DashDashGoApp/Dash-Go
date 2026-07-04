@@ -82,3 +82,9 @@ Dash-Go administrators should:
 Use the repository's **Report a vulnerability** flow when it is visible. Otherwise, use the authorized private maintainer channel and do not disclose sensitive details publicly.
 
 For ordinary bugs, documentation corrections, feature requests, and support questions, use the appropriate public GitHub issue, discussion, or support channel.
+
+## One-shot Google OAuth callback and kiosk QR
+
+When a private Google Calendar connection is authorized with a Web OAuth client, Dash-Go exposes only a narrow one-shot callback route. The local owner’s authorization command first writes a random state value to an owner-only relay directory. The callback returns `404` unless that state is armed, unexpired, and an exact constant-time match; a successful callback records only the short-lived authorization code, removes the armed state, and then returns to `404`. The dashboard control server never receives the OAuth client secret and does not exchange or refresh tokens through this route. The CLI performs that exchange locally and writes the final token under the existing owner-only vdirsyncer home.
+
+The associated dashboard QR overlay is created only by an administrator actively authorizing a named connection, uses the same short armed window, and disappears when the flow completes, times out, or is cancelled. It carries the Google authorization URL but no client secret or token. A household member who scans it can authorize the Google account they select for that named connection, so administrators should arm it only while present; use the Desktop paste-back flow or the helper’s `-no-display` switch when that enrollment risk is not acceptable. Do not publish Dash-Go’s general loopback control API to a LAN or the Internet. A Web OAuth callback must be an administrator-managed exact HTTPS reverse-proxy route with only this one callback exposed.

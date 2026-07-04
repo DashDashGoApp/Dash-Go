@@ -124,6 +124,8 @@ func main() {
 			os.Exit(a.runMapPrewarmCLI(os.Args[2:]))
 		case "--update-message-feeds":
 			os.Exit(a.runUpdateMessageFeedsCLI(os.Args[2:]))
+		case "--google-oauth":
+			os.Exit(a.runGoogleOAuthCLI(os.Args[2:]))
 		case "--message-sources":
 			os.Exit(a.runMessageSourcesCLI(os.Args[2:]))
 		case "--migrate-compliments":

@@ -35,13 +35,6 @@ if [ "\${1:-}" = "--version" ]; then printf 'vdirsyncer, version 0.20.0\n'; exit
 printf '%s\n' "\$*" >> "\$FAKE_VDIR_LOG"
 root="\$(dirname "\${VDIRSYNCER_CONFIG:-\$HOME/.dashboard-vdirsyncer/config}")"
 case " \$* " in
-  *' discover dash_gcal '*)
-    # Simulate a completed one-time OAuth consent.
-    mkdir -p "\$root/google-tokens"
-    printf '{"access_token":"fixture","refresh_token":"fixture"}' > "\$root/google-tokens/gcal.json"
-    ;;
-esac
-case " \$* " in
   *' sync dash_gcal '*)
     [ "\${FAIL_GCAL_SYNC:-0}" = "1" ] && exit 1
     mkdir -p "\$root/collections/gcal/home@gmail.com"
@@ -70,18 +63,38 @@ exit 0
 GEN
 cat > "$HOME/dashboard/bin/dashboard-control-server" <<'SERVER'
 #!/usr/bin/env bash
+set -eu
+if [ "${1:-}" = "--google-oauth" ] && [ "${2:-}" = "authorize" ]; then
+  : "${FAKE_OAUTH_LOG:?}"
+  token_file=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -token-file) token_file="$2"; shift 2;;
+      *) shift;;
+    esac
+  done
+  [ -n "$token_file" ] || exit 2
+  mkdir -p "$(dirname "$token_file")"
+  printf '{"access_token":"fixture","refresh_token":"fixture","expires_in":3600,"token_type":"Bearer"}
+' > "$token_file"
+  chmod 600 "$token_file"
+  printf '%s
+' '--google-oauth authorize' >> "$FAKE_OAUTH_LOG"
+  exit 0
+fi
 exit 0
 SERVER
 chmod +x "$HOME/dashboard/bin/gen-calendars.sh" "$HOME/dashboard/bin/dashboard-control-server"
 
-export PATH="$TMP/fake-bin:$PATH" FAKE_CRONTAB="$TMP/crontab" FAKE_VDIR_LOG="$TMP/vdir-calls.log" DASH_VDIRSYNCER_BIN="$TMP/fake-bin/vdirsyncer" DASH_VDIRSYNCER_PYTHON="$TMP/fake-bin/fakepython"
-touch "$FAKE_VDIR_LOG"
+export PATH="$TMP/fake-bin:$PATH" FAKE_CRONTAB="$TMP/crontab" FAKE_VDIR_LOG="$TMP/vdir-calls.log" FAKE_OAUTH_LOG="$TMP/oauth-calls.log" DASH_VDIRSYNCER_BIN="$TMP/fake-bin/vdirsyncer" DASH_VDIRSYNCER_PYTHON="$TMP/fake-bin/fakepython"
+touch "$FAKE_VDIR_LOG" "$FAKE_OAUTH_LOG"
 
 # Two Google calendars (exact IDs, writable) and one CalDAV calendar (exact
 # collection, writable). After the blank line that ends the add loop, the
 # authorization prompts are answered in pairs-file order: 'y' authorizes gcal
-# and 'n' declines gcal2 — proving prompts read the user, not the pairs file.
-printf 'gcal\ngreen\nn\n2\n1234-fixture.apps.googleusercontent.com\ngsecret-fixture\nhome@gmail.com\ny\ngcal2\nred\nn\n2\n5678-fixture.apps.googleusercontent.com\ngsecret2-fixture\nsecond@gmail.com\ny\nical\nblue\nn\n1\nhttps://caldav.example/\nfamily@example.com\nicloud-password-fixture\ncollection-1\ny\n\ny\nn\n' \
+# through the Go helper and 'n' declines gcal2 — proving prompts read the user,
+# not the pairs file.
+printf 'gcal\ngreen\nn\n2\ndesktop\n1234-fixture.apps.googleusercontent.com\ngsecret-fixture\nhome@gmail.com\ny\ngcal2\nred\nn\n2\ndesktop\n5678-fixture.apps.googleusercontent.com\ngsecret2-fixture\nsecond@gmail.com\ny\nical\nblue\nn\n1\nhttps://caldav.example/\nfamily@example.com\nicloud-password-fixture\ncollection-1\ny\n\ny\nn\n' \
   | "$HOME/dashboard/bin/setup-vdirsyncer.sh" >"$TMP/setup.out" 2>&1 || { cat "$TMP/setup.out" >&2; exit 1; }
 
 CFG="$HOME/.dashboard-vdirsyncer/config"
@@ -104,14 +117,26 @@ SECRET="$HOME/.dashboard-vdirsyncer/passwords/gcal.google-client-secret"
 [ "$(stat -c '%a' "$SECRET")" = "600" ] || fail 'google client secret must be 0600'
 grep -Frq 'gsecret-fixture' "$HOME/dashboard" && fail 'google client secret leaked into the dashboard tree'
 
-# 3) One-time authorization ran during setup and produced a token; the
-#    declined pair was prompted but not discovered and has no token.
-grep -q 'discover dash_gcal$' "$FAKE_VDIR_LOG" || fail 'setup did not run interactive google discover'
+# 3) One-time authorization ran through the dashboard control server before
+#    the normal non-interactive discovery. The declined pair was prompted but
+#    not discovered and has no token.
+grep -Fxq -- '--google-oauth authorize' "$FAKE_OAUTH_LOG" || fail 'setup did not invoke Go-native Google authorization'
+grep -q 'discover dash_gcal$' "$FAKE_VDIR_LOG" || fail 'setup did not run non-interactive Google discovery after authorization'
 [ -s "$TOKENS/gcal.json" ] || fail 'google token missing after authorization'
 [ "$(stat -c '%a' "$TOKENS/gcal.json")" = "600" ] || fail 'google token must be 0600'
 grep -q "skipped; 'gcal2' stays read-only-idle until authorized" "$TMP/setup.out" || fail 'second google pair was never offered and declined'
 grep -q 'discover dash_gcal2' "$FAKE_VDIR_LOG" && fail 'declined google pair must not run discover'
 [ -e "$TOKENS/gcal2.json" ] && fail 'declined google pair must have no token'
+
+# 3b) --authorize is a focused recovery pass: it must not ask for a new
+# calendar name, start a synchronization, or change cron. It can re-run the
+# one-time authorization/discovery work for saved records only.
+: > "$FAKE_VDIR_LOG"
+printf 'n
+' | "$HOME/dashboard/bin/setup-vdirsyncer.sh" --authorize >"$TMP/authorize.out" 2>&1 || { cat "$TMP/authorize.out" >&2; exit 1; }
+grep -q 'Calendar name' "$TMP/authorize.out" && fail '--authorize must not prompt to add calendars'
+grep -q 'sync ' "$FAKE_VDIR_LOG" && fail '--authorize must not run a private-calendar sync'
+grep -q 'Google authorization pass complete' "$TMP/authorize.out" || fail '--authorize did not report its focused completion'
 
 # 4) Registry enrolls the exact Google collection as writable; the declined
 #    pair never materialized its exact vdir and must stay out of the registry.

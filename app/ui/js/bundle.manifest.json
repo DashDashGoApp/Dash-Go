@@ -68,6 +68,7 @@
       "settings-scroll-lifecycle.js",
       "control-core.js",
       "control-api.js",
+      "oauth-display.js",
       "boot.js",
       "app-launcher.js",
       "lists-dock.js",

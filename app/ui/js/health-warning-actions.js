@@ -12,7 +12,7 @@ const HEALTH_WARNING_SILENCE_DURATIONS=Object.freeze([
 ]);
 
 function healthWarningKeyLabel(key){
-  const labels={messages:"Message freshness reminder",weather:"Weather freshness reminder",calendar:"Calendar freshness reminder",storage:"Storage health notice",clock:"Clock health notice",config:"Configuration health notice",update:"Update health notice",postUpdate:"Post-update health notice",healthGuard:"Health guard notice"};
+  const labels={messages:"Message freshness reminder",weather:"Weather freshness reminder",calendar:"Calendar freshness reminder",storage:"Storage health notice",clock:"Clock health notice",config:"Configuration health notice",update:"Dash-Go application update notice",postUpdate:"Dash-Go post-update verification notice",healthGuard:"Health guard notice"};
   return labels[key]||"Dashboard health notice";
 }
 function healthWarningAgeLabel(ms){

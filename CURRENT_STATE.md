@@ -12,6 +12,14 @@
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
 
+## Current beta source handoff
+
+- **Version:** `1.5.8-beta.1`
+- **Track:** beta
+- **Minimum upgrade version:** `1.4.0`
+- **Scope:** Go-native, PKCE-protected Google OAuth for vdirsyncer: Desktop paste-back with an optional terminal QR, plus a one-shot exact-HTTPS Web callback that can show a kiosk-display QR and complete automatically. Also includes Bullseye pipx/venv recovery, clear public-versus-private calendar setup wording, and named Dash-Go application-update health warnings.
+- **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
+
 ## 1.5.7 stable scope
 
 - **Recurrence safety:** series time edits now preserve EXDATE occurrence identity when a UTC-form DTSTART crosses UTC midnight. Explicit TZID/DST and floating-time coverage protects the corresponding local-time paths.

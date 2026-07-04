@@ -20,6 +20,7 @@
       "dashboard/control-theme-actions-lite.css",
       "dashboard/control-visual-style.css",
       "dashboard/touch-radar.css",
+      "dashboard/oauth-display.css",
       "dashboard/app-launcher.css",
       "dashboard/lists-dock.css",
       "dashboard/family-board-footer.css"

@@ -227,15 +227,19 @@ func (s *Service) DeviceHealth() map[string]any {
 	}
 	add(cfg)
 	updatePath := filepath.Join(s.cacheDir, "update-status.json")
-	update := HealthFactFromState("update", "device", ReadHealthFile(updatePath))
+	updateRaw := ReadHealthFile(updatePath)
+	update := HealthFactFromState("update", "device", updateRaw)
 	if update.Level == "unknown" {
 		update.Level = "ok"
 	}
-	if raw := ReadHealthFile(updatePath); raw != nil && raw["rolledBack"] == true {
+	if updateRaw != nil && updateRaw["rolledBack"] == true {
 		update.Level = "degraded"
 		if update.Reason == "" {
-			update.Reason = "last update was rolled back after a health check"
+			update.Reason = "the last Dash-Go application update was rolled back after its health check"
 		}
+	}
+	if update.Level == "failing" && update.Reason == "" {
+		update.Reason = "the Dash-Go application update failed; review the Dashboard update log"
 	}
 	add(update)
 	postPath := filepath.Join(s.cacheDir, "post-update-verify.json")
@@ -250,7 +254,7 @@ func (s *Service) DeviceHealth() map[string]any {
 		case "failed", "fail", "error":
 			post.Level = "failing"
 			if post.Reason == "" {
-				post.Reason = "a new release failed its post-update health check"
+				post.Reason = "the latest Dash-Go application update failed its post-update health check"
 			}
 		}
 	}

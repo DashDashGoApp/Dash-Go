@@ -30,6 +30,7 @@ function boot(){
   if(lite && typeof complimentLitePrimeGeometry==="function") complimentLitePrimeGeometry();
   showInitialCompliment();
   setupMessageLongPress();
+  if(typeof oauthDisplayBoot==="function")oauthDisplayBoot();
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{
     if(lite && typeof complimentLiteInvalidateGeometry==="function") complimentLiteInvalidateGeometry("fonts");
     else fitCompliment();
