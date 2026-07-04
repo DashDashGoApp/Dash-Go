@@ -78,7 +78,7 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 	} else if editable {
 		a.calendarWritebackService().Record(selection.Source, "syncing", "Selected calendar is active; validating its initial remote sync.")
 	}
-	a.recordAction("calendars", "Select private calendar", "success", fmt.Sprintf("%s added as %s", candidate.Name, map[bool]string{true: "editable", false: "display-only"}[editable]), nil)
+	a.recordAction("calendars", "Select private calendar", "success", fmt.Sprintf("%s added with %s", candidate.Name, map[bool]string{true: "two-way sync", false: "view-only access"}[editable]), nil)
 	out := a.privateCalendarStatus()
 	out["result"] = kind
 	return out, nil
@@ -87,9 +87,11 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, error) {
 	source := strings.TrimSpace(jsonutil.BodyString(body, "source"))
 	editable := jsonutil.Truthy(body["editable"])
+	var selection privateCalendarSelection
 	selectionFound := false
-	for _, selection := range a.privateCalendarSelections() {
-		if selection.Source == source {
+	for _, row := range a.privateCalendarSelections() {
+		if row.Source == source {
+			selection = row
 			selectionFound = true
 			break
 		}
@@ -97,8 +99,17 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 	if !selectionFound {
 		return nil, errors.New("selected private calendar is no longer available")
 	}
+	if !editable {
+		if err := a.prepareCalendarAccessModeChange(selection.Source, selection.Pair); err != nil {
+			return nil, err
+		}
+	}
 	script := filepath.Join(a.binDir, "private-calendar-selection.sh")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// The helper intentionally allows one bounded 180-second targeted provider
+	// verification before restoring two-way controls. Keep the server-side
+	// process budget slightly larger so the API does not kill that safe check
+	// early while it is still within its documented bound.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute+15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, script, "--set-editable", source, map[bool]string{true: "1", false: "0"}[editable])
 	cmd.Env = append(os.Environ(), "DASH="+a.dash, "HOME="+a.home)
@@ -111,11 +122,14 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 		if _, err := a.calendarWritebackService().Configure(true, current["requirePin"] == true, nil); err != nil {
 			return nil, fmt.Errorf("enable Dashboard calendar edits: %w", err)
 		}
+		a.calendarWritebackService().Record(source, "synced", "Two-way sync was verified. Dashboard edits are available for supported events.")
+	} else {
+		a.calendarWritebackService().Record(source, "saved", "View-only mode is active. Dash-Go stopped queued writes and saved an owner-only local snapshot before locking provider changes.")
 	}
 	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
 		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
-	a.recordAction("calendars", "Update private calendar edits", "success", fmt.Sprintf("%s is now %s in Dashboard Control", source, map[bool]string{true: "editable", false: "display-only"}[editable]), nil)
+	a.recordAction("calendars", "Change private calendar access", "success", fmt.Sprintf("%s is now %s", source, map[bool]string{true: "two-way sync", false: "view-only"}[editable]), nil)
 	return a.privateCalendarStatus(), nil
 }
 

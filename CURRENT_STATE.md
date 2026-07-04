@@ -14,10 +14,10 @@
 
 ## Current beta source handoff
 
-- **Version:** `1.5.8-beta.2`
+- **Version:** `1.5.8-beta.3`
 - **Track:** beta
 - **Minimum upgrade version:** `1.4.0`
-- **Scope:** Guided account-first private-calendar setup. Google uses one clearly named Desktop-app credential path with a temporary SSH bridge for automatic computer-browser completion and a truthful kiosk-QR/paste-back phone fallback; Dash-Go does not publish a LAN OAuth callback route, headless SSH defaults to the phone route, and a typo never repeats completed authorization. Apple iCloud is now a first-class app-specific-password flow with fixed endpoint, discovery before selection, provider-specific recovery wording, and read-only defaults. Tool recovery distinguishes healthy pipx from the Dash-Go tool and adds isolated-venv and explicit last-resort user-pip fallbacks. The installer now starts with a visible device preflight, offers an Express lane with locale-aware units and safe defaults, contains no installer-authored Python calls, reports bounded step progress and a verified readiness outcome, and gives interruption/failure recovery directions instead of ambiguous terminal errors. First and later menu launches re-prompt on typos, summarize Custom tasks before execution, and state accurately whether access is local-only or deliberately available on the LAN.
+- **Scope:** Guided account-first private-calendar setup plus an explicit access model. Installer option 9 is a **read-only calendar link** that can never modify the provider; option 10 is **Personal calendar sync**, where iCloud and compatible CalDAV calendars can be selected view-only or two-way and Google uses secure OAuth for two-way synchronization. Calendar Manager can switch an exact private calendar between view-only and two-way safely: view-only clears queued writes, removes writeback eligibility, creates an owner-only local snapshot, and generates vdirsyncer read-only configuration; two-way requires a bounded targeted verification before Dashboard edits return. Existing Google secure sources can be safety-locked view-only before a separate, verified iCal-link migration. The earlier beta.2 guided Google/iCloud, pipx fallback, Express installer, preflight, recovery, and no-installer-Python work remains included.
 - **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
 
 ## 1.5.7 stable scope

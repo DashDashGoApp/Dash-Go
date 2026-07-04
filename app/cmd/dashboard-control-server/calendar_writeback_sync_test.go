@@ -230,3 +230,38 @@ func TestNonFinalMutationClearsDurableFinalDeleteAuthorization(t *testing.T) {
 		t.Fatalf("non-final mutation retained final-delete authority, err=%v", err)
 	}
 }
+
+func TestPrepareCalendarAccessModeChangeClearsQueuedWritesAndFinalDeletePermission(t *testing.T) {
+	a, source, pair, collection := newFinalDeleteSyncTestApp(t)
+	if err := a.recordCalendarWritebackMutation(source, pair, collection, true); err != nil {
+		t.Fatal(err)
+	}
+	a.writebackSyncMu.Lock()
+	a.writebackPending = map[string]writebackPendingSync{
+		pair: {Source: source, FinalDelete: true},
+	}
+	a.writebackSyncMu.Unlock()
+
+	if err := a.prepareCalendarAccessModeChange(source, pair); err != nil {
+		t.Fatalf("prepare access-mode change: %v", err)
+	}
+	a.writebackSyncMu.Lock()
+	_, pending := a.writebackPending[pair]
+	a.writebackSyncMu.Unlock()
+	if pending {
+		t.Fatal("queued private-calendar write survived the switch to view-only")
+	}
+	if _, err := os.Stat(a.calendarWritebackFinalDeletePath()); !os.IsNotExist(err) {
+		t.Fatalf("final-delete permission survived the switch to view-only, err=%v", err)
+	}
+}
+
+func TestPrepareCalendarAccessModeChangeRefusesDuringActiveSync(t *testing.T) {
+	a := testApp(t)
+	a.writebackSyncMu.Lock()
+	a.writebackSyncing = true
+	a.writebackSyncMu.Unlock()
+	if err := a.prepareCalendarAccessModeChange("calendars/family.blue.ics", "dash_family"); err == nil {
+		t.Fatal("access-mode change was allowed during an active private sync")
+	}
+}

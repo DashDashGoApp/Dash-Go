@@ -6,7 +6,7 @@ function ctrlCalendarWritebackSettings(status){
   const card=el("section","calendar-manager-group calwriteback-settings");
   card.append(el("div","calmanager-heading","Dashboard calendar edits"));
   const rows=Array.isArray(status.calendars)?status.calendars:[];
-  card.appendChild(el("p","calmanager-note",rows.length?"The master switch applies only to exact selected private calendars. Use each selected calendar row above to make an individual calendar editable or display-only.":"Discover and select a private Google, iCloud, or CalDAV calendar first. Website subscriptions and generated feeds are always read-only."));
+  card.appendChild(el("p","calmanager-note",rows.length?"The master switch applies only to exact calendars set to two-way sync. Use each selected calendar row above to switch an individual calendar between view-only and two-way sync.":"Discover and select a private Google, iCloud, or CalDAV calendar first. Calendar links and generated feeds are always view-only."));
   if(status.last&&status.last.detail)card.appendChild(el("p","calmanager-note",String(status.last.detail)));
   if(!rows.length)return card;
   const toggles=el("div","calmanager-actions");

@@ -2,7 +2,15 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.8-beta.2] — 2026-07-04
+## [1.5.8-beta.3] — 2026-07-04
+
+### Calendar access clarity and reversible private sync
+
+- Renamed installer option 9 to **Read-only calendar link** and option 10 to **Personal calendar sync**, making the provider-write boundary explicit before setup begins.
+- Added a first-install access decision: Google view-only calendars use an iCal/ICS link, Google two-way calendars use secure OAuth, and iCloud or compatible CalDAV calendars can use the same signed-in account in either view-only or two-way mode.
+- Added Calendar Manager switches for exact private calendars. Moving to view-only clears queued writes, saves an owner-only local snapshot, removes writeback eligibility, and regenerates a provider read-only policy. Moving back to two-way sync requires a bounded targeted provider verification before Dashboard edits return.
+- Added provider-aware migration guidance for Google: lock the secure source view-only first, add and verify a read-only link, then stop the old secure source. Dash-Go never guesses matches or silently merges two calendar sources.
+
 
 ### Guided private calendar accounts
 

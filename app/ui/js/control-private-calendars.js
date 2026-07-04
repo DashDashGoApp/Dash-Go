@@ -47,11 +47,11 @@ function ctrlPrivateCalendarPresentation(item,writeback){
   if(sync==="attention-auth"||sync==="skipped")return {kind:"attention",label:"Authorization required",detail:`${provider} · Authorization required`};
   if(sync==="attention-empty")return {kind:"attention",label:"Needs attention",detail:`${provider} · Local sync safety check required`};
   if(sync==="failed")return {kind:"attention",label:"Needs attention",detail:`${provider} · Last sync failed`};
-  if(item.writable!==true)return {kind:"readonly",label:"Display-only",detail:provider};
+  if(item.writable!==true)return {kind:"readonly",label:"View-only",detail:`${provider} · Dash-Go cannot change it`};
   if(!registered)return {kind:"attention",label:"Needs attention",detail:`${provider} · Writeback registration required`};
   if(writeback&&writeback.enabled!==true)return {kind:"readonly",label:"Edits off",detail:`${provider} · Dashboard edits off`};
   if(registered.enabled===false)return {kind:"readonly",label:"Edits off",detail:`${provider} · Dashboard edits disabled`};
-  return {kind:"healthy",label:"Editable",detail:`${provider} · Synced`};
+  return {kind:"healthy",label:"Two-way",detail:`${provider} · Dash-Go can send approved changes`};
 }
 function ctrlPrivateCalendarConflictActions(item,row){
   const reveal=ctrlCalendarManagerAction("Resolve conflict","Review which version should win for every unresolved conflict in this one calendar. A Dashboard Control PIN is required.","warning",async()=>{
@@ -83,8 +83,8 @@ function ctrlPrivateCalendarCandidateRow(item){
   const head=el("div","calmanager-head"),title=el("div","calmanager-title"),dot=el("span","calmanager-dot");dot.style.background=ctrlCalendarChipColor(item.color||item.name);title.append(dot,el("strong","",item.name||"Private calendar"));head.append(title,el("span","calmanager-state available","Available"));
   row.append(head,el("div","calmanager-detail",`${ctrlPrivateCalendarProvider(item)} · Not syncing yet`));
   const actions=el("div","calmanager-actions");
-  actions.appendChild(ctrlCalendarManagerAction("Add display-only","Show this calendar on Dash-Go without allowing event changes from the dashboard.","",async()=>ctrlPrivateCalendarActivate(item,false)));
-  actions.appendChild(ctrlCalendarManagerAction("Add & enable edits","Create one exact two-way calendar source and turn on Dashboard edits. Supported normal events can sync through the provider.","primary",async()=>ctrlPrivateCalendarActivate(item,true)));
+  actions.appendChild(ctrlCalendarManagerAction("Add view-only","Show this calendar on Dash-Go. Dash-Go cannot change the provider calendar.","",async()=>ctrlPrivateCalendarActivate(item,false)));
+  actions.appendChild(ctrlCalendarManagerAction("Add with two-way sync","Create one exact signed-in calendar source. Supported Dash-Go changes can sync through this provider.","primary",async()=>ctrlPrivateCalendarActivate(item,true)));
   row.appendChild(actions);return row;
 }
 function ctrlPrivateCalendarSelectedRow(item,writeback){
@@ -102,23 +102,26 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
       await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} connection repaired.`,item.source,true);
     }));
   }else if(item.writable!==true){
-    actions.appendChild(ctrlCalendarManagerAction("Enable Dashboard edits","Allow supported normal events in this exact selected calendar to be created, edited, and deleted from Dash-Go.","primary",async()=>{
+    actions.appendChild(ctrlCalendarManagerConfirmAction("Switch to two-way sync","Dash-Go will first verify this exact provider calendar, then allow supported calendar changes to sync back. Your sign-in and selected calendar stay the same.","Tap again: enable two-way sync",async()=>{
       await api("/api/calendars/private/editable","POST",{source:item.source,editable:true});
-      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} is editable and Dashboard edits are on.`,item.source);
+      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} now has verified two-way sync.`,item.source);
     }));
   }else if(!registered){
-    actions.appendChild(ctrlCalendarManagerAction("Repair edit setup","Rebuild this exact calendar’s local writeback registration without changing the remote calendar.","primary",async()=>{
+    actions.appendChild(ctrlCalendarManagerConfirmAction("Repair two-way sync","Rebuild this exact calendar’s writeback registration and verify a targeted provider sync before edits are available.","Tap again: repair two-way sync",async()=>{
       await api("/api/calendars/private/editable","POST",{source:item.source,editable:true});
-      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} edit setup repaired.`,item.source);
+      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} two-way sync setup repaired.`,item.source);
     }));
   }else if(writeback&&writeback.enabled!==true){
-    actions.appendChild(ctrlCalendarManagerAction("Turn on Dashboard edits","This calendar is selected for editing. Turn on the master Dashboard edit setting now.","primary",async()=>{
+    actions.appendChild(ctrlCalendarManagerAction("Turn on Dashboard edits","This calendar is set to two-way sync. Turn on the master Dashboard edit setting now.","primary",async()=>{
       await ctrlCalendarWritebackSave(writeback,{enabled:true},item.source);
     }));
   }else{
-    actions.appendChild(ctrlCalendarManagerAction("Disable Dashboard edits","Keep this calendar visible and syncing, but prevent Dash-Go from changing its events.","",async()=>{
+    const lockDescription=item.provider==="google"
+      ?"Stop queued Dash-Go writes now, save an owner-only local snapshot, and keep this secure Google connection view-only. To replace it with a Google calendar link later, add and verify the link with installer option 9 before stopping this connection."
+      :"Stop queued Dash-Go writes now, save an owner-only local snapshot, and keep this provider calendar visible. Future provider changes still appear here.";
+    actions.appendChild(ctrlCalendarManagerConfirmAction("Switch to view-only",lockDescription,"Tap again: switch to view-only",async()=>{
       await api("/api/calendars/private/editable","POST",{source:item.source,editable:false});
-      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} is now display-only.`,item.source);
+      await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} is now view-only.`,item.source);
     }));
   }
   if(!conflict&&!repair){
@@ -135,5 +138,5 @@ function ctrlPrivateCalendarSelectedRow(item,writeback){
 }
 async function ctrlPrivateCalendarActivate(item,editable){
   await api("/api/calendars/private/activate","POST",{pair:item.pair,remoteId:item.remoteId,editable});
-  await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} added${editable?" with Dashboard edits enabled":" as display-only"}.`,"",true);
+  await ctrlCalendarManagerRefresh(`${item.name||"Private calendar"} added${editable?" with two-way sync enabled":" as view-only"}.`,"",true);
 }

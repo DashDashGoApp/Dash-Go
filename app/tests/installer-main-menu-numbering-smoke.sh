@@ -67,8 +67,8 @@ grep -Fq '"$server" --terminal-access status' "$INSTALL" || { echo 'FAIL: Termin
 grep -Fq '"$server" --terminal-access "$next"' "$INSTALL" || { echo 'FAIL: Terminal access installer menu does not apply its toggle through the server CLI' >&2; exit 1; }
 ical_line="$(printf '%s\n' "$menu" | grep -F '"$OPT_ICAL"' || true)"
 vdir_line="$(printf '%s\n' "$menu" | grep -F '"$OPT_VDIR"' || true)"
-printf '%s' "$ical_line" | grep -Fq 'Add a calendar link' || { echo 'FAIL: option 9 must clearly identify adding a view-only calendar address' >&2; exit 1; }
-printf '%s' "$ical_line" | grep -Fq 'view-only' || { echo 'FAIL: option 9 must clearly remain view-only' >&2; exit 1; }
-printf '%s' "$vdir_line" | grep -Fq 'Connect a personal calendar' || { echo 'FAIL: option 10 must describe a guided personal calendar connection' >&2; exit 1; }
-printf '%s' "$vdir_line" | grep -Fq 'Google, Apple iCloud' || { echo 'FAIL: option 10 must name Google and iCloud without OAuth jargon' >&2; exit 1; }
+printf '%s' "$ical_line" | grep -Fq 'Read-only calendar link' || { echo 'FAIL: option 9 must clearly identify a read-only calendar address' >&2; exit 1; }
+printf '%s' "$ical_line" | grep -Fq 'never change that calendar' || { echo 'FAIL: option 9 must clearly remain read-only' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'Personal calendar sync' || { echo 'FAIL: option 10 must describe personal calendar sync' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'view-only or two-way sync' || { echo 'FAIL: option 10 must state that view-only and two-way sync are available' >&2; exit 1; }
 printf 'PASS: canonical top-level menu identities, clear public/private calendar routes, visible ordering, exit placement, and dispatch are synchronized\n'

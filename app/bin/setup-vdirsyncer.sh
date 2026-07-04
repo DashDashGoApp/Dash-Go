@@ -47,15 +47,24 @@ umask 077
 # OAuth, runs a sync, changes cron, or changes selected calendars.
 REFRESH_ONLY=0
 AUTHORIZE_ONLY=0
+# Access intent comes from the installer’s plain-language calendar choice.
+# “guided” keeps the existing per-calendar confirmation for direct terminal use.
+PRIVATE_ACCESS_MODE="guided"
 case "${1:-}" in
   "") ;;
   --refresh) REFRESH_ONLY=1 ;;
   --authorize) AUTHORIZE_ONLY=1 ;;
+  --view-only) PRIVATE_ACCESS_MODE="view_only" ;;
+  --two-way) PRIVATE_ACCESS_MODE="two_way" ;;
   --help|-h)
     cat <<'USAGE'
-Usage: setup-vdirsyncer.sh [--refresh|--authorize]
+Usage: setup-vdirsyncer.sh [--refresh|--authorize|--view-only|--two-way]
 
 Without arguments, add a private CalDAV or Google calendar interactively.
+--view-only keeps every selected private calendar visible in Dash-Go while
+preventing Dash-Go from changing the provider calendar.
+--two-way starts a signed-in setup intended for calendars Dash-Go may edit;
+each selected calendar still receives a final confirmation.
 --refresh regenerates Dash-Go-managed configuration from saved private state
 without contacting a provider or changing selected calendars.
 --authorize reconnects saved Google accounts, then lists their discovered
@@ -348,8 +357,15 @@ ensure_google_support(){
   ensure_vdirsyncer google || return 1
   offer_optional_qrencode
 }
+private_pair_writable(){
+  # Exact selected calendar rows own the access policy. Connection rows do not:
+  # one account may intentionally contain a mix of view-only and two-way calendars.
+  local pair="$1"
+  awk -F'|' -v pair="$pair" '$4==pair {print $6; exit}' "$MAP" 2>/dev/null || true
+}
+
 write_vdirsyncer_config(){
-  local temp name color tag pair ignored_path url username remote_id provider client_id display_name credential_ref local_id remote local_path coll_spec
+  local temp name color tag pair ignored_path url username remote_id provider client_id display_name credential_ref local_id remote local_path coll_spec writable
   temp="$(mktemp)" || return 1
   {
     printf '[general]\n'
@@ -375,23 +391,31 @@ write_vdirsyncer_config(){
       fi
       remote="${pair}_remote"
       local_path="${pair}_local"
+      writable="$(private_pair_writable "$pair")"
       printf '[pair %s]\n' "$pair"
       printf 'a = %s\n' "$(toml_quote "$remote")"
       printf 'b = %s\n' "$(toml_quote "$local_path")"
-      printf 'collections = %s\n\n' "$coll_spec"
+      printf 'collections = %s\n' "$coll_spec"
+      # A view-only private calendar is protected in both places: Dashboard
+      # Control removes it from writeback and vdirsyncer treats the provider as
+      # read-only, reverting any unexpected local mirror edits.
+      [ "$writable" = "1" ] || printf 'partial_sync = "revert"\n'
+      printf '\n'
 
       printf '[storage %s]\n' "$remote"
       if [ "$provider" = "google" ]; then
         printf 'type = "google_calendar"\n'
         printf 'token_file = %s\n' "$(toml_quote "$GOOGLE_TOKENS/$credential_ref.json")"
         printf 'client_id = %s\n' "$(toml_quote "$client_id")"
-        printf 'client_secret.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref.google-client-secret")"
+        printf 'client_secret.fetch = ["command", "cat", %s]\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref.google-client-secret")"
       else
         printf 'type = "caldav"\n'
         printf 'url = %s\n' "$(toml_quote "$url")"
         printf 'username = %s\n' "$(toml_quote "$username")"
-        printf 'password.fetch = ["command", "cat", %s]\n\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref")"
+        printf 'password.fetch = ["command", "cat", %s]\n' "$(toml_quote "$VDIR_PASSWORDS/$credential_ref")"
       fi
+      [ "$writable" = "1" ] || printf 'read_only = true\n'
+      printf '\n'
 
       printf '[storage %s]\n' "$local_path"
       printf 'type = "filesystem"\n'
@@ -1018,7 +1042,15 @@ private_prompt_calendar_selection(){
   done
 }
 private_choose_and_activate(){
-  local provider="$1" total index pair remote display color editable selected=0 output source name line="" chosen_color="" edit_answer=""
+  local provider="$1" total index pair remote display color editable selected=0 output source name line="" chosen_color="" edit_answer="" access_mode="$PRIVATE_ACCESS_MODE"
+  # Google’s ordinary view-only route is a tokenized iCal link. A signed-in
+  # Google connection is created for two-way sync; an existing secure source
+  # can later be safety-locked view-only from Calendar Manager without forcing
+  # a risky source migration during setup.
+  if [ "$provider" = google ] && [ "$access_mode" = guided ]; then
+    access_mode="two_way"
+    echo "  Google secure sign-in is for two-way sync. For a Google calendar link that Dash-Go can only read, use installer option 9."
+  fi
   total="$(wc -l < "$PRIVATE_DRAFT/candidates.tsv")"
   echo ""
   echo "Step 3 of 4 — Choose calendars"
@@ -1038,11 +1070,31 @@ private_choose_and_activate(){
     color="${color:-blue}"; valid_color "$color" || color="blue"
     prompt_retry chosen_color "Display color for $display [$color]" valid_color_or_blank "Use a palette color or six-digit hex value." 0 || return $?
     chosen_color="${chosen_color:-$color}"
-    while :; do
-      read -rp "  Allow Dash-Go to add, edit, or skip events in $display? [y/N, q=cancel]: " edit_answer || return 2
-      edit_answer="$(private_input_trim "$edit_answer")"
-      case "$edit_answer" in q|Q) return 2;; y|Y|yes|YES|' '| '') editable=0; case "$edit_answer" in y|Y|yes|YES) editable=1;; esac; break;; *) warn "Answer y for editable or press Enter to keep $display read-only.";; esac
-    done
+    case "$access_mode" in
+      view_only)
+        editable=0
+        echo "  $display will be view-only. Dash-Go will not send event changes back."
+        ;;
+      two_way)
+        if [ "$provider" = google ]; then
+          editable=1
+          echo "  $display will use two-way sync. For a Google calendar link that Dash-Go can only read, use installer option 9."
+        else
+          while :; do
+            read -rp "  Enable two-way sync for $display? [Y/n, q=cancel]: " edit_answer || return 2
+            edit_answer="$(private_input_trim "$edit_answer")"
+            case "$edit_answer" in q|Q) return 2;; n|N|no|NO) editable=0; echo "  $display will stay view-only."; break;; y|Y|yes|YES|'') editable=1; break;; *) warn "Press Enter for two-way sync, n for view-only, or q to cancel.";; esac
+          done
+        fi
+        ;;
+      *)
+        while :; do
+          read -rp "  Allow Dash-Go to add, edit, or skip events in $display? [y/N, q=cancel]: " edit_answer || return 2
+          edit_answer="$(private_input_trim "$edit_answer")"
+          case "$edit_answer" in q|Q) return 2;; y|Y|yes|YES|' '| '') editable=0; case "$edit_answer" in y|Y|yes|YES) editable=1;; esac; break;; *) warn "Answer y for two-way sync or press Enter to keep $display view-only.";; esac
+        done
+        ;;
+    esac
     output="$(DASH_VDIRSYNCER_BIN="$VDIRSYNCER_BIN" "$BIN_DIR/private-calendar-selection.sh" --activate "$PRIVATE_BASE_PAIR" "$remote" "$display" "$chosen_color" "$editable" 2>&1)" || { warn "Could not activate $display safely. Try again from Calendar Manager."; printf '%s\n' "$output" | sed 's/^/  /'; return 1; }
     case "$output" in
       activated$'\t'*)
@@ -1100,6 +1152,10 @@ private_connect_account(){
     choice="$(private_input_trim "$choice")"
     case "$choice" in ''|q|Q) return 2;; 1) provider=google; break;; 2) provider=icloud; break;; 3) provider=caldav; break;; *) warn "Choose 1, 2, or 3.";; esac
   done
+  if [ "$provider" = google ] && [ "$PRIVATE_ACCESS_MODE" = view_only ]; then
+    warn "Google view-only calendars use a calendar link. Return to the installer and choose option 9: Read-only calendar link."
+    return 2
+  fi
   ensure_vdirsyncer "$(private_provider_code "$provider")" || return 1
   PRIVATE_SECRET=""; PRIVATE_USERNAME=""; PRIVATE_URL=""; PRIVATE_CLIENT_ID=""; PRIVATE_LABEL="$(private_connection_label "$provider")"
   case "$provider" in google) private_google_prepare || return $?;; icloud) private_icloud_prepare || return $?;; caldav) private_caldav_prepare || return $?;; esac
@@ -1215,8 +1271,11 @@ if [ "$REFRESH_ONLY" -eq 1 ]; then
 fi
 
 say "Private calendar setup"
-echo "Connect calendars that need a sign-in: Google, Apple iCloud, or another CalDAV account."
-echo "For a public read-only .ics link, return to the installer and use option 9 instead."
+case "$PRIVATE_ACCESS_MODE" in
+  view_only) echo "Connect an iCloud or CalDAV account and keep selected calendars view-only. Google view-only calendars use installer option 9: Read-only calendar link." ;;
+  two_way) echo "Connect a personal Google, Apple iCloud, or CalDAV account for two-way sync. Dash-Go will ask for a final confirmation for each calendar." ;;
+  *) echo "Connect calendars that need a sign-in: Google, Apple iCloud, or another CalDAV account. Public view-only .ics links use installer option 9 instead." ;;
+esac
 legacy_icloud_notice
 
 if [ "$AUTHORIZE_ONLY" -eq 1 ]; then

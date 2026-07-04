@@ -2,7 +2,7 @@
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.8-beta.2, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.8-beta.3, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -17,8 +17,8 @@ When an optional service is unavailable, Dash-Go does not invent missing data or
 | Integration | What it provides | Information sent when used | Offline or unlinked behavior |
 |---|---|---|---|
 | Local iCalendar files | Calendar events from local `.ics` files | Nothing leaves the device | Fully available |
-| Remote iCalendar feeds | Read-only calendars from an HTTPS or webcal feed | Feed request; the URL may itself contain a private token | Existing local calendar content remains available until refreshed or removed |
-| CalDAV | Calendar synchronization through a compatible CalDAV server; explicit discovery and per-collection display-only or editable selection | CalDAV endpoint, configured credentials, calendar data, and user-requested local-first changes when writeback is enabled | Existing local mirror remains available; writes wait locally for the next successful synchronization |
+| Remote iCalendar feeds | **Read-only** calendars from an HTTPS or webcal feed; Dash-Go never writes to the provider | Feed request; the URL may itself contain a private token | Existing local calendar content remains available until refreshed or removed |
+| CalDAV | Calendar synchronization through a compatible CalDAV server; explicit discovery and per-collection **view-only** or **two-way** selection | CalDAV endpoint, configured credentials, calendar data, and user-requested local-first changes only when two-way sync is enabled | Existing local mirror remains available; writes wait locally for the next successful synchronization |
 | Microsoft To Do | Optional task-list synchronization | Microsoft authorization data, mapped list information, and relevant task changes | Local task workflows remain available; remote synchronization waits for recovery |
 | Apprise-Go notifications | Optional delivery through configured notification services | Notification text and the configured destination route | No notification is sent while the destination is unavailable |
 | Weather and air quality | Forecasts, conditions, air quality, and severe-weather alerts | Configured location coordinates and, where needed, a provider API key | Cached information may remain visible; fresh data cannot be retrieved |
@@ -36,9 +36,15 @@ Dash-Go can display local `.ics` files stored on the device. These files remain 
 
 ### Remote iCalendar feeds
 
-A remote iCalendar feed can be added through its URL. Dash-Go requests the feed directly from the configured host.
+A remote iCalendar feed can be added through installer option **9) Read-only calendar link**. Dash-Go requests the feed directly from the configured host and treats it as a one-way display source: it can show events but can never add, edit, delete, or skip provider events through that link.
 
 Treat a private calendar URL as a secret. Some providers embed an access token in the URL itself. Do not place private calendar URLs in screenshots, public issues, source files, or shared configuration exports.
+
+### Personal calendar access and safe mode changes
+
+Installer option **10) Personal calendar sync** is the signed-in route. It supports a per-calendar choice between **view-only** and **two-way sync**. View-only keeps provider events visible but makes Dashboard Control refuse edits, removes the calendar from the writeback registry, and generates a read-only provider policy. Two-way sync is an explicit opt-in; Dash-Go verifies a targeted provider sync before edit controls are made available.
+
+Switching a signed-in iCloud or CalDAV calendar from two-way to view-only immediately stops queued writes, takes an owner-only local snapshot, and preserves the account connection for future reads. Switching back verifies the exact selected provider calendar before Dash-Go restores writeback. Google has the same immediate secure-connection safety lock. To replace a Google secure source with a true iCal link, first switch it view-only in Calendar Manager, add and verify the link through option 9, then stop the old secure source; Dash-Go does not silently merge or duplicate data sources.
 
 ### CalDAV
 
@@ -46,7 +52,7 @@ Dash-Go supports compatible CalDAV workflows through its local synchronization s
 
 A CalDAV setup can store an endpoint, account name, app password, token, collection selection, and synchronized calendar data locally on the Dash-Go device. Those credentials are used only to communicate with the configured CalDAV server.
 
-Dashboard writeback is optional and narrow. A connected account is discovered only by a user-led **Discover available calendars** action; discovery creates a review inventory and never changes active syncs. The user then selects each wanted remote collection as display-only or editable. Every selected collection gets an exact local vdir mapping and a separate Dashboard source. A supported Dashboard-created, edited, or deleted event is written locally first and synchronized remotely later for that one selected pair. Eligible recurring events can make a local exception for one occurrence or update a simple series without rewriting its repeat rule; advanced rules, attendee/organizer events, and ambiguous existing exception sets remain provider-managed. URL subscriptions, broad legacy multi-collection mirrors, generated feeds, and unmanaged local ICS files are never writeback targets. Dash-Go never deletes a remote calendar; stopping future synchronization preserves the local mirror by default.
+Dashboard writeback is optional and narrow. A connected account is discovered only by a user-led **Discover available calendars** action; discovery creates a review inventory and never changes active syncs. The user then selects each wanted remote collection as **view-only** or **two-way**. Every selected collection gets an exact local vdir mapping and a separate Dashboard source. A supported Dashboard-created, edited, or deleted event is written locally first and synchronized remotely later for that one selected pair. Eligible recurring events can make a local exception for one occurrence or update a simple series without rewriting its repeat rule; advanced rules, attendee/organizer events, and ambiguous existing exception sets remain provider-managed. URL subscriptions, broad legacy multi-collection mirrors, generated feeds, and unmanaged local ICS files are never writeback targets. Dash-Go never deletes a remote calendar; stopping future synchronization preserves the local mirror by default.
 
 Conflicts are safe-stop behavior. When the same event changes locally and remotely before a sync, Dash-Go keeps both sides intact, marks only that selected source as needing attention, and does not automatically choose a winner. The dashboard continues to show its local version. Scheduled-sync outcomes are summarized into the Calendar Manager without exposing raw vdirsyncer logs. A selected exact pair that needs initial discovery can use **Repair connection**, which performs one targeted discovery and sync without changing selected calendars.
 
@@ -56,7 +62,7 @@ Timed private-calendar event forms also offer local touch time nudges and length
 
 ### Google Calendar
 
-Google Calendar uses the same selected-calendar vdirsyncer pipeline as other private accounts. One Google account can own several selected calendar mappings while reusing one owner-only OAuth token. Selected calendars are read-only by default; Dashboard edits are enabled only for an exact calendar the administrator deliberately selects. A provider failure, revoked token, or conflict leaves other selected calendars available and preserves the last good local dashboard data.
+Google offers two deliberate Dash-Go routes. Use installer option **9) Read-only calendar link** for a view-only Google iCal/ICS address. Use option **10) Personal calendar sync** for signed-in Google OAuth and two-way synchronization. One Google account can own several exact selected mappings while reusing one owner-only OAuth token. An existing signed-in Google calendar can be locked view-only from Calendar Manager immediately; converting it to a separate iCal link remains a staged, verified source change so Dash-Go never guesses which similarly named calendar should replace it.
 
 Private-calendar setup is a guided account-first flow. Choose **Google Calendar**, let Dash-Go check its private calendar tool, then create one OAuth client in your own Google Cloud project. Dash-Go tells you exactly what to select: enable Google Calendar API, configure the consent screen, and create an OAuth Client ID with application type **Desktop app**. “Desktop app” is Google’s label for this secure local sign-in method; it does not mean the dashboard itself must be a desktop computer. The normal wizard never asks you to choose “desktop” versus “web.”
 
@@ -68,7 +74,7 @@ Setup trims pasted credentials, accepts `q` as a safe cancellation at each priva
 
 Dash-Go stores the client secret and OAuth token only under `~/.dashboard-vdirsyncer/` with owner-only permissions. The Go-native helper uses PKCE, verifies one random state value, and writes the token mapping vdirsyncer refreshes during normal sync. Dash-Go never asks vdirsyncer to open its own interactive browser flow. Use `~/dashboard/bin/setup-vdirsyncer.sh --authorize` to reconnect an existing Google account without entering names, colors, or new calendar selections.
 
-Keep a household Google project out of the temporary testing state when Google permits it. A project left in testing can lose unattended refresh access after about seven days, which makes regular calendar sync unreliable. Google Calendar setup then discovers the actual calendars, lets the administrator choose them by their human-readable names, asks for an optional display color and per-calendar edit permission, performs a first sync, and only then activates scheduled synchronization. Normal setup never asks for a Google Calendar ID.
+Keep a household Google project out of the temporary testing state when Google permits it. A project left in testing can lose unattended refresh access after about seven days, which makes regular calendar sync unreliable. Google Calendar setup then discovers the actual calendars, lets the administrator choose them by their human-readable names, preserves an optional display color, creates the selected secure source for two-way sync, performs a first sync, and only then activates scheduled synchronization. Normal setup never asks for a Google Calendar ID.
 
 ### Apple iCloud Calendar
 
@@ -76,7 +82,7 @@ Apple iCloud Calendar is a first-class private-calendar option, not a generic Ca
 
 Create the Apple app-specific password at `account.apple.com` under **Sign-In and Security** → **App-Specific Passwords**. Name it something recognizable such as `Dash-Go Calendar`, then paste it into the masked prompt. The password is stored only in Dash-Go’s owner-only private calendar folder and is never printed, placed in a URL, or passed as a command-line argument.
 
-Dash-Go tests the account in a private draft, discovers the available iCloud calendars, and lets the administrator choose familiar names such as Family or Birthdays. Selected calendars are read-only by default. Edit/writeback permission is an explicit choice per selected calendar and should normally be limited to calendars the household owns. Dash-Go performs a first sync before it activates the connection or creates the scheduled sync wrapper. Cancelling or a failed first sync leaves existing dashboard calendars, cron state, and private mappings unchanged.
+Dash-Go tests the account in a private draft, discovers the available iCloud calendars, and lets the administrator choose familiar names such as Family or Birthdays. Each selected iCloud calendar can stay **view-only** or use **two-way sync** through the same Apple account connection. Two-way/writeback permission is an explicit per-calendar choice and should normally be limited to calendars the household owns. Dash-Go performs a first sync before it activates the connection or creates the scheduled sync wrapper. Cancelling or a failed first sync leaves existing dashboard calendars, cron state, and private mappings unchanged.
 
 If an app-specific password is revoked or the primary Apple Account password changes, Calendar Manager reports that the iCloud connection needs a new app-specific password and directs the administrator to replace it through private-calendar setup. Setup trims pasted values, gives a non-blocking example of the usual `abcd-efgh-ijkl-mnop` app-password shape, and translates iCloud authorization, account/2FA, and network failures into a concrete next action. Dash-Go does not create remote iCloud calendars; create those in Apple Calendar or iCloud’s own web interface.
 

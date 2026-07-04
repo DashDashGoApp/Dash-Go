@@ -18,6 +18,24 @@ type writebackPendingSync struct {
 	Automatic   bool
 }
 
+// prepareCalendarAccessModeChange removes a not-yet-started targeted write and
+// rejects a mode flip while any private writeback is already running. A caller
+// can therefore say “view-only” without a queued Dashboard edit racing past
+// the new vdirsyncer read_only configuration.
+func (a *app) prepareCalendarAccessModeChange(source, pair string) error {
+	pair = strings.TrimSpace(pair)
+	a.writebackSyncMu.Lock()
+	if a.writebackSyncing {
+		a.writebackSyncMu.Unlock()
+		return errors.New("a private calendar sync is already running; wait for it to finish, then change access")
+	}
+	if pair != "" {
+		delete(a.writebackPending, pair)
+	}
+	a.writebackSyncMu.Unlock()
+	return a.clearFinalDeletePermission(source, pair)
+}
+
 func (a *app) queueCalendarWritebackSync(source, pair string, automatic bool) {
 	script := filepath.Join(a.binDir, "sync-vdir.sh")
 	if info, err := os.Stat(script); err != nil || info.Mode()&0111 == 0 {

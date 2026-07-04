@@ -98,7 +98,7 @@ function renderCtrlQuickActions(){
     try{
       const r=await api("/api/calendars/sync","POST",{});
       await discoverCalendars(); await loadCalendars();
-      ctrlMsg(r.ran&&r.ran.length?"Synced via "+r.ran.join(", ")+" — calendar updated.":"No sync script installed. Use installer option 10 for private calendar sync or option 9 for a public iCal feed.");
+      ctrlMsg(r.ran&&r.ran.length?"Synced via "+r.ran.join(", ")+" — calendar updated.":"No sync script installed. Use installer option 9 for a read-only calendar link or option 10 for signed-in personal calendar sync.");
     }catch(e){ctrlMsg("Sync failed: "+e.message);}
   }));
   common.grid.appendChild(caction("Refresh data","Refresh calendar, weather, and alert data.","",async()=>{

@@ -5015,8 +5015,8 @@ installer_selected_tasks(){
   [ "$DO_MESSAGE_SOURCES" = 1 ] && printf '%s\n' "Message sources"
   [ "$DO_APP_SETUP" = 1 ] && printf '%s\n' "Microsoft To Do setup"
   [ "$DO_CALENDARS" = 1 ] && printf '%s\n' "Built-in/default calendars"
-  [ "$DO_ICAL" = 1 ] && printf '%s\n' "Add a calendar link"
-  [ "$DO_VDIR" = 1 ] && printf '%s\n' "Connect a personal calendar"
+  [ "$DO_ICAL" = 1 ] && printf '%s\n' "Add a read-only calendar link"
+  [ "$DO_VDIR" = 1 ] && printf '%s\n' "Connect a personal calendar (view-only or two-way)"
   [ "$DO_PIN" = 1 ] && printf '%s\n' "Control-panel PIN"
   [ "$DO_SERVICE" = 1 ] && printf '%s\n' "Dashboard service"
   [ "$DO_AUTOLOGIN" = 1 ] && printf '%s\n' "Boot straight into the dashboard"
@@ -5030,41 +5030,41 @@ while [ -z "$MODE" ]; do
   echo "What do you want to do?  (${DEFHINT}; Enter = $( [ "$DEFMODE" = "$OPT_UPDATE" ] && printf 'Update the app' || printf 'Full install'))"
   echo
   echo "  INSTALL & UPDATE"
-  printf '  %2s) %-24s %s\n' "$OPT_FULL" "Full install" "everything, start to finish (first time)"
-  printf '  %2s) %-24s %s\n' "$OPT_UPDATE" "Update the app" "get the newest version; keeps settings and calendars"
-  printf '  %2s) %-24s %s\n' "$OPT_UPDATE_RECONFIGURE" "Update + reconfigure" "new files, then re-answer setup questions"
+  printf '  %2s) %-28s %s\n' "$OPT_FULL" "Full install" "everything, start to finish (first time)"
+  printf '  %2s) %-28s %s\n' "$OPT_UPDATE" "Update the app" "get the newest version; keeps settings and calendars"
+  printf '  %2s) %-28s %s\n' "$OPT_UPDATE_RECONFIGURE" "Update + reconfigure" "new files, then re-answer setup questions"
   echo
   echo "  SETTINGS"
-  printf '  %2s) %-24s %s\n' "$OPT_RECONFIGURE" "Reconfigure all" "profile, location, display, weather, messages, theme, birthdays"
-  printf '  %2s) %-24s %s\n' "$OPT_WEATHER_DISPLAY" "Weather display" "units, days shown, refresh, alert severity"
-  printf '  %2s) %-24s %s\n' "$OPT_WEATHER_SOURCES" "Weather sources" "guided menu for free/keyed providers"
-  printf '  %2s) %-24s %s\n' "$OPT_RADAR" "Weather radar" "choose provider + optional protected key"
-  printf '  %2s) %-24s %s\n' "$OPT_CALENDARS" "Built-in calendars" "holidays, sky calendars, celebrations, pickup"
-  printf '  %2s) %-24s %s\n' "$OPT_ICAL" "Add a calendar link" "paste a calendar address from Google/Outlook/school (view-only)"
-  printf '  %2s) %-24s %s\n' "$OPT_VDIR" "Connect a personal calendar" "Google, Apple iCloud, Nextcloud/Fastmail — sign in and pick calendars"
-  printf '  %2s) %-24s %s\n' "$OPT_MESSAGES" "Message sources" "quotes, jokes, facts, prompts, API refresh"
-  printf '  %2s) %-24s %s\n' "$OPT_TODO" "Microsoft To Do" "connect a Microsoft account for shared to-do lists (guided)"
-  printf '  %2s) %-24s %s\n' "$OPT_THEME" "Theme" "pick from built-in color schemes"
-  printf '  %2s) %-24s %s\n' "$OPT_SEASONAL" "Seasonal themes" "holiday auto-theming on or off"
+  printf '  %2s) %-28s %s\n' "$OPT_RECONFIGURE" "Reconfigure all" "profile, location, display, weather, messages, theme, birthdays"
+  printf '  %2s) %-28s %s\n' "$OPT_WEATHER_DISPLAY" "Weather display" "units, days shown, refresh, alert severity"
+  printf '  %2s) %-28s %s\n' "$OPT_WEATHER_SOURCES" "Weather sources" "guided menu for free/keyed providers"
+  printf '  %2s) %-28s %s\n' "$OPT_RADAR" "Weather radar" "choose provider + optional protected key"
+  printf '  %2s) %-28s %s\n' "$OPT_CALENDARS" "Built-in calendars" "holidays, sky calendars, celebrations, pickup"
+  printf '  %2s) %-28s %s\n' "$OPT_ICAL" "Read-only calendar link" "show events only; Dash-Go can never change that calendar"
+  printf '  %2s) %-28s %s\n' "$OPT_VDIR" "Personal calendar sync" "secure sign-in; choose view-only or two-way sync"
+  printf '  %2s) %-28s %s\n' "$OPT_MESSAGES" "Message sources" "quotes, jokes, facts, prompts, API refresh"
+  printf '  %2s) %-28s %s\n' "$OPT_TODO" "Microsoft To Do" "connect a Microsoft account for shared to-do lists (guided)"
+  printf '  %2s) %-28s %s\n' "$OPT_THEME" "Theme" "pick from built-in color schemes"
+  printf '  %2s) %-28s %s\n' "$OPT_SEASONAL" "Seasonal themes" "holiday auto-theming on or off"
   echo
   echo "  SECURITY"
-  printf '  %2s) %-24s %s\n' "$OPT_PIN" "Control PIN" "set/reset/disable passcode + unlock duration"
+  printf '  %2s) %-28s %s\n' "$OPT_PIN" "Control PIN" "set/reset/disable passcode + unlock duration"
   echo
   echo "  SYSTEM"
-  printf '  %2s) %-24s %s\n' "$OPT_SERVICE" "Dashboard service" "web server + on-screen control panel"
-  printf '  %2s) %-24s %s\n' "$OPT_SSH" "Remote access (SSH)" "manage the dashboard from another computer"
+  printf '  %2s) %-28s %s\n' "$OPT_SERVICE" "Dashboard service" "web server + on-screen control panel"
+  printf '  %2s) %-28s %s\n' "$OPT_SSH" "Remote access (SSH)" "manage the dashboard from another computer"
   echo
   echo "  HELP & ADMIN"
-  printf '  %2s) %-24s %s\n' "$OPT_DOCTOR" "Health check" "verify everything is running"
-  printf '  %2s) %-24s %s\n' "$OPT_TOUR" "Feature tour" "what this dashboard can do, in plain words"
-  printf '  %2s) %-24s %s\n' "$OPT_DEMO" "Demo mode" "fill the screen with sample data (clearly marked DEMO; removable)"
-  printf '  %2s) %-24s %s\n' "$OPT_CUSTOM" "Custom" "choose a focused set of setup/system tasks"
-  printf '  %2s) %-24s %s\n' "$OPT_NOTIFICATIONS" "Phone/email alerts" "send dashboard alerts to your phone or email (advanced)"
-  printf '  %2s) %-24s %s\n' "$OPT_TERMINAL" "Terminal access" "toggle Dashboard Control Terminal card"
+  printf '  %2s) %-28s %s\n' "$OPT_DOCTOR" "Health check" "verify everything is running"
+  printf '  %2s) %-28s %s\n' "$OPT_TOUR" "Feature tour" "what this dashboard can do, in plain words"
+  printf '  %2s) %-28s %s\n' "$OPT_DEMO" "Demo mode" "fill the screen with sample data (clearly marked DEMO; removable)"
+  printf '  %2s) %-28s %s\n' "$OPT_CUSTOM" "Custom" "choose a focused set of setup/system tasks"
+  printf '  %2s) %-28s %s\n' "$OPT_NOTIFICATIONS" "Phone/email alerts" "send dashboard alerts to your phone or email (advanced)"
+  printf '  %2s) %-28s %s\n' "$OPT_TERMINAL" "Terminal access" "toggle Dashboard Control Terminal card"
   echo
   echo "  REMOVE"
-  printf '  %2s) %-24s %s\n' "$OPT_REMOVE" "Remove Dash-Go" "uninstall from this device — offers to save a backup first"
-  printf '  %2s) %-24s %s\n' "$OPT_EXIT" "Exit installer" "close without changing anything"
+  printf '  %2s) %-28s %s\n' "$OPT_REMOVE" "Remove Dash-Go" "uninstall from this device — offers to save a backup first"
+  printf '  %2s) %-28s %s\n' "$OPT_EXIT" "Exit installer" "close without changing anything"
   echo
   read -rp "  Choose [1-25, q=exit; Enter=$DEFMODE]: " MODE
   MODE="$(normalize_menu_choice "${MODE:-$DEFMODE}")"
@@ -5095,8 +5095,8 @@ custom_questionnaire(){
     "Message sources (quotes, jokes, facts, prompts)"
     "Microsoft To Do / Graph setup"
     "Built-in/default calendars"
-    "Add a calendar link (read-only)"
-    "Connect a personal calendar"
+    "Add a read-only calendar link"
+    "Connect a personal calendar (view-only or two-way)"
     "Control-panel PIN lock"
     "Dashboard service (web server + on-screen control panel)"
     "Boot straight into the dashboard + scheduled tasks"
@@ -6723,23 +6723,25 @@ ok "calendars.json initialized (add your own .ics files, see README)"
 
 
 if [ "$DO_ICAL" = "1" ]; then
-  installer_stage "Adding public calendars"
-  say "iCal URL calendar setup"
+  installer_stage "Adding view-only calendar links"
+  say "Read-only calendar link"
+  echo "Dash-Go will show these events but can never change the remote calendar."
   if [ -x "$BIN_DIR/setup-ical-urls.sh" ]; then
     "$BIN_DIR/setup-ical-urls.sh"
   else
-    warn "iCal URL setup is unavailable. Run Update the app first, then try again."
+    warn "Read-only calendar-link setup is unavailable. Run Update the app first, then try again."
   fi
 fi
 
 if [ "$DO_VDIR" = "1" ]; then
-  installer_stage "Connecting private calendars"
-  say "Private calendar/vdirsyncer setup"
-  echo "Private calendar setup will verify the selected provider only; it does not test unrelated weather services."
+  installer_stage "Connecting personal calendars"
+  say "Personal calendar sync"
+  echo "Dash-Go will use a secure sign-in. Choose view-only or two-way sync for each selected iCloud or CalDAV calendar."
+  echo "Google two-way sync uses secure sign-in; Google view-only calendars use option 9."
   if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
     "$BIN_DIR/setup-vdirsyncer.sh"
   else
-    warn "Private calendar/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+    warn "Personal-calendar setup is unavailable. Run Update the app first, then try again."
   fi
 fi
 
@@ -6965,33 +6967,46 @@ if [ "$DO_CALENDARS" = "1" ]; then
 if installer_demo_prompt_defaults_active; then
   ok "Demo Mode uses seeded local ICS calendars; skipped add-calendar prompts"
 else
-# Optional: set up local calendar sync so the Pi pulls calendars itself —
-# no separate sync server / rsync needed. The menu repeats after each source,
-# so you can add several from either provider; choose 3 when finished.
+# Calendar setup starts with the one decision a normal household user can
+# understand: may Dash-Go only show events, or may it send approved changes
+# back? Provider-specific mechanics follow only after that answer.
 while true; do
   echo
-  echo "Calendar sync — choose a source to add (repeats so you can add several):"
-  echo "  1) Public iCal/.ics URL (read-only) — HTTPS or webcal feed"
-  echo "  2) Private calendar (vdirsyncer) — Google OAuth, iCloud, or CalDAV"
-  echo "  3) Continue / don't add another calendar"
-  read -rp "  Choose [1/2/3]: " calmethod
-  case "$calmethod" in
+  echo "How should Dash-Go use a personal calendar?"
+  echo "  1) View events only"
+  echo "     Dash-Go shows the calendar but never changes it."
+  echo "  2) Two-way sync"
+  echo "     Dash-Go may add, edit, or skip supported events in calendars you choose."
+  echo "  3) Skip for now"
+  read -rp "  Choose [3]: " calaccess
+  calaccess="$(normalize_menu_choice "${calaccess:-3}")"
+  case "$calaccess" in
     1)
-      if [ -x "$BIN_DIR/setup-ical-urls.sh" ]; then
-        "$BIN_DIR/setup-ical-urls.sh"
-      else
-        warn "iCal URL setup is unavailable. Run Update the app first, then try again."
-      fi
+      while true; do
+        echo "  View-only calendar type:"
+        echo "    1) Google, Outlook, school, or public feed — paste a calendar link"
+        echo "    2) Apple iCloud — sign in with an app-specific password; keep calendars view-only"
+        echo "    3) Another personal CalDAV account — sign in; keep calendars view-only"
+        echo "    b) Back"
+        read -rp "  Choose [1]: " calmethod
+        calmethod="$(normalize_menu_choice "${calmethod:-1}")"
+        case "$calmethod" in
+          1) [ -x "$BIN_DIR/setup-ical-urls.sh" ] && "$BIN_DIR/setup-ical-urls.sh" || warn "Read-only calendar-link setup is unavailable. Run Update the app first, then try again."; break;;
+          2|3) [ -x "$BIN_DIR/setup-vdirsyncer.sh" ] && "$BIN_DIR/setup-vdirsyncer.sh" --view-only || warn "Private calendar setup is unavailable. Run Update the app first, then try again."; break;;
+          b|B) break;;
+          *) warn "Choose 1, 2, 3, or b to go back.";;
+        esac
+      done
       ;;
     2)
       if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
-        "$BIN_DIR/setup-vdirsyncer.sh"
+        "$BIN_DIR/setup-vdirsyncer.sh" --two-way
       else
-        warn "Private calendar/vdirsyncer setup is unavailable. Run Update the app first, then try again."
+        warn "Two-way personal-calendar setup is unavailable. Run Update the app first, then try again."
       fi
       ;;
-    3) ok "Calendar sync setup finished."; break;;
-    *) warn "  Please choose 1, 2, or 3.";;
+    3|q|Q) ok "Calendar setup skipped. You can add or change access later from installer options 9 and 10 or Calendar Manager."; break;;
+    *) warn "Choose 1 for view-only, 2 for two-way sync, or 3 to skip.";;
   esac
 done
 fi
@@ -7399,7 +7414,7 @@ dashboard, fullscreen, no desktop.
   On the device: http://localhost:8090
   From phones/other computers: the dashboard stays private by default.
   Add calendars from Dashboard Control, or re-run ~/install.sh and choose
-  Connect a personal calendar / Add a calendar link when you are ready.
+  Personal calendar sync / Read-only calendar link when you are ready.
 
 NEXT STEPS FOR RASPBERRY PI:
 

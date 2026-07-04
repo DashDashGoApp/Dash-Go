@@ -14,6 +14,7 @@ VDIR_HOME="${DASH_VDIR_HOME:-$HOME/.dashboard-vdirsyncer}"
 VDIR_PAIRS="${DASH_VDIR_PAIRS:-$VDIR_HOME/pairs}"
 MAP="${DASH_VDIR_MAP:-$VDIR_HOME/calendars.map}"
 VDIR_COLLECTIONS="$VDIR_HOME/collections"
+ACCESS_BACKUPS="$VDIR_HOME/access-mode-backups"
 SETUP="$BIN_DIR/setup-vdirsyncer.sh"
 SYNC="$BIN_DIR/sync-vdir.sh"
 LOWPRIO="$BIN_DIR/dashboard-lowprio.sh"
@@ -28,6 +29,26 @@ valid_remote(){ [ -n "$1" ] && [ "${#1}" -le 512 ] && valid_single_line "$1"; }
 key_for(){ printf '%s' "$1" | cksum | awk '{print $1}'; }
 source_for(){ local n="$1" c="$2" t="$3"; if [ -n "$t" ]; then printf 'calendars/%s.%s.%s.ics' "$n" "$c" "$t"; else printf 'calendars/%s.%s.ics' "$n" "$c"; fi; }
 valid_source(){ case "$1" in calendars/*.ics) valid_single_line "$1";; *) return 1;; esac; }
+
+snapshot_before_view_only(){
+  # A mode switch must never silently lose a local mirror that was awaiting a
+  # remote sync. Retain an owner-only snapshot before vdirsyncer begins
+  # treating the provider as read-only.
+  local name="$1" color="$2" tag="$3" collection="$4" stamp dest source
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  dest="$ACCESS_BACKUPS/${name}-${stamp}"
+  mkdir -p "$dest" || return 1
+  chmod 700 "$ACCESS_BACKUPS" "$dest" 2>/dev/null || true
+  source="$(source_for "$name" "$color" "$tag")"
+  if [ -d "$collection" ]; then cp -a "$collection" "$dest/vdir" || return 1; fi
+  if [ -f "$DASH/$source" ]; then cp -p "$DASH/$source" "$dest/dashboard-mirror.ics" || return 1; fi
+  printf 'View-only access snapshot for %s
+Source: %s
+Created: %s
+' "$name" "$source" "$stamp" > "$dest/README.txt"
+  chmod 600 "$dest/README.txt" "$dest/dashboard-mirror.ics" 2>/dev/null || true
+  printf '%s' "$dest"
+}
 
 [ -r "$VDIR_PAIRS" ] && [ -r "$MAP" ] && [ -x "$SETUP" ] || { printf 'error\tPrivate calendar setup is unavailable.\n'; exit 1; }
 [ -d "$VDIR_HOME/sync.lock" ] && { printf 'error\tA calendar sync is already running. Try again shortly.\n'; exit 75; }
@@ -136,18 +157,21 @@ case "$mode" in
     printf 'deactivated\t%s\n' "$source"
     ;;
   --set-editable)
-    [ "$#" -eq 3 ] || { printf 'error\tInvalid calendar edit setting.\n'; exit 2; }
+    [ "$#" -eq 3 ] || { printf 'error\tInvalid calendar access setting.\n'; exit 2; }
     source="$2"; editable="$3"
     valid_source "$source" || { printf 'error\tInvalid calendar source.\n'; exit 2; }
-    case "$editable" in 0|1) ;; *) printf 'error\tInvalid edit setting.\n'; exit 2;; esac
-    found=""
-    while IFS='|' read -r name color tag pair collection writable remote_id display_name provider connection local_id _; do
-      [ "$(source_for "$name" "$color" "$tag")" = "$source" ] || continue
-      found="$name"; break
+    case "$editable" in 0|1) ;; *) printf 'error\tInvalid calendar access setting.\n'; exit 2;; esac
+    found=""; pair=""; collection=""; color=""; tag=""; snapshot=""
+    while IFS='|' read -r name row_color row_tag row_pair row_collection writable remote_id display_name provider connection local_id _; do
+      [ "$(source_for "$name" "$row_color" "$row_tag")" = "$source" ] || continue
+      found="$name"; pair="$row_pair"; collection="$row_collection"; color="$row_color"; tag="$row_tag"; break
     done < "$MAP"
     [ -n "$found" ] || { printf 'error\tThis selected calendar is no longer available.\n'; exit 1; }
     tmp_map="$(mktemp "$VDIR_HOME/map.XXXXXX")"; backup_map="$(mktemp "$VDIR_HOME/map-backup.XXXXXX")"
     cp "$MAP" "$backup_map"
+    if [ "$editable" = "0" ]; then
+      snapshot="$(snapshot_before_view_only "$found" "$color" "$tag" "$collection")" || { rm -f "$tmp_map" "$backup_map"; printf 'error\tCould not create the owner-only calendar safety snapshot. Existing access was left unchanged.\n'; exit 1; }
+    fi
     awk -F'|' -v n="$found" -v e="$editable" 'BEGIN{OFS="|"} $1 == n {$6=e} {print}' "$MAP" > "$tmp_map"
     chmod 600 "$tmp_map" "$backup_map"
     mv "$tmp_map" "$MAP"
@@ -155,10 +179,21 @@ case "$mode" in
       cp "$backup_map" "$MAP"
       "$SETUP" --refresh >/dev/null 2>&1 || true
       rm -f "$backup_map"
-      printf 'error\tCould not update Dashboard edit permission safely.\n'; exit 1
+      printf 'error\tCould not change calendar access safely. Existing access was restored.\n'; exit 1
+    fi
+    # When enabling two-way access, validate one bounded targeted sync before
+    # Dashboard Control exposes edit actions. View-only does not sync here: its
+    # new vdirsyncer read_only policy is intentionally in place first.
+    if [ "$editable" = "1" ]; then
+      if [ ! -x "$SYNC" ] || ! timeout 180 "$SYNC" --pair "$pair" >/dev/null 2>&1; then
+        cp "$backup_map" "$MAP"
+        "$SETUP" --refresh >/dev/null 2>&1 || true
+        rm -f "$backup_map"
+        printf 'error\tCould not verify two-way sync. The calendar stayed view-only; check the provider connection, then try again.\n'; exit 1
+      fi
     fi
     rm -f "$backup_map"
-    printf 'updated\t%s\t%s\n' "$source" "$editable"
+    printf 'updated\t%s\t%s\t%s\n' "$source" "$editable" "$snapshot"
     ;;
   --repair)
     [ "$#" -eq 2 ] || { printf 'error\tInvalid calendar source.\n'; exit 2; }

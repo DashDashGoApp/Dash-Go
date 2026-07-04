@@ -15,9 +15,12 @@ say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
 
-say "Calendar sync via iCal (.ics) URLs"
-echo "Paste any .ics calendar URL — Google secret addresses, Outlook,"
+say "Read-only calendar links"
+echo "Paste an .ics calendar URL — Google secret addresses, Outlook,"
 echo "Nextcloud shares, webcal:// links, or a plain hosted .ics file."
+echo "Dash-Go only reads these events. It can never add, edit, or delete events"
+echo "in the provider calendar through a calendar link."
+echo "For Google two-way sync, use installer option 10: Personal calendar sync."
 echo
 mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$LOG_DIR"
 touch "$MAP"; chmod 600 "$MAP"
@@ -179,4 +182,6 @@ ok "cron installed"
 
 say "iCal URL sync complete"
 echo "Calendars refresh every 10 min into: $CAL_DIR/*.ics"
-echo "Re-run setup-ical-urls.sh to change the set of calendars."
+echo "Re-run setup-ical-urls.sh to change the set of calendar links."
+echo "To move a Google calendar from two-way sync to a link: switch it to view-only"
+echo "in Calendar Manager first, add and verify this link, then stop the old private source."

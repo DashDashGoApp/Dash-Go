@@ -51,7 +51,7 @@ function renderCtrlCalendarHealth(st,wrap,withSummary){
   const rows=st.calendars||[];
   wrap.innerHTML="";
   if(withSummary) renderCalendarSummaryCard(st,wrap);
-  if(!rows.length){ wrap.appendChild(ctrlStateCard("empty","No calendar sources yet","Add .ics files under ~/dashboard/calendars, use installer option 9 for a public iCal feed, or option 10 for a private calendar connection.")); return; }
+  if(!rows.length){ wrap.appendChild(ctrlStateCard("empty","No calendar sources yet","Add .ics files under ~/dashboard/calendars, use installer option 9 for a read-only calendar link, or option 10 for signed-in personal calendar sync.")); return; }
   if(withSummary){
     const actions=el("div","ctrlrow compact calhealthactions");
     actions.appendChild(cbtn("Sync calendars","",async()=>{
