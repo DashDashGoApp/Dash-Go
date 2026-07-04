@@ -20,6 +20,31 @@ toml_quote(){ local v="$1"; v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; printf '"%s"' 
 clean_field(){ printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/^ *//;s/ *$//' ; }
 notice(){ printf 'notice\t%s\n' "$(clean_field "$1")"; }
 
+classify_discovery_failure(){
+  local provider="$1" endpoint="$2" output="$3" lower
+  lower="$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')"
+  if [ "$provider" = "caldav" ] && printf '%s' "$endpoint" | grep -q 'caldav\.icloud\.com'; then
+    case "$lower" in
+      *401*|*unauthorized*|*authentication*)
+        notice "iCloud rejected the sign-in. Use a fresh Apple app-specific password; Apple revokes those after a main Apple Account password change."
+        return
+        ;;
+      *403*|*forbidden*)
+        notice "iCloud refused this connection. Confirm two-factor authentication is enabled and generate a new app-specific password at account.apple.com."
+        return
+        ;;
+    esac
+  fi
+  case "$lower" in
+    *"could not resolve"*|*"name or service not known"*|*timeout*|*"timed out"*|*"network is unreachable"*)
+      notice "Calendar discovery could not reach the provider. Check the network, then try again; existing selections were not changed."
+      ;;
+    *)
+      notice "Could not discover calendars for '$4'. Existing selections were not changed."
+      ;;
+  esac
+}
+
 [ -x "$VDIRSYNCER_BIN" ] || { notice "Private calendar sync is unavailable."; exit 1; }
 [ -r "$VDIR_PAIRS" ] || { notice "No private calendar connection is configured yet."; exit 0; }
 if [ -d "$VDIR_HOME/sync.lock" ]; then
@@ -74,19 +99,22 @@ chmod 600 "$CFG"
 
 for connection in "${!SEEN[@]}"; do
   stage_pair="discover_${connection}"
+  # Recover provider/base-pair metadata before discovery so failures can name
+  # the next user action without printing provider internals or secrets.
+  base_pair=""; provider="caldav"; endpoint=""
+  while IFS='|' read -r name color tag pair ignored url username remote_id pprovider client_id display_name credential_ref local_id _; do
+    [ "$credential_ref" = "$connection" ] || continue
+    base_pair="$pair"; provider="${pprovider:-caldav}"; endpoint="$url"; break
+  done < "$VDIR_PAIRS"
+  [ -n "$base_pair" ] || continue
   # Discover only updates the isolated stage. metasync copies collection
   # displayname/color metadata into that stage; it does not transfer events.
-  if ! yes | "$VDIRSYNCER_BIN" -c "$CFG" discover "$stage_pair" >/dev/null 2>&1; then
-    notice "Could not discover calendars for '$connection'. Existing selections were not changed."
+  discover_log="$STAGE/discover-${connection}.log"
+  if ! yes | "$VDIRSYNCER_BIN" -c "$CFG" discover "$stage_pair" >"$discover_log" 2>&1; then
+    classify_discovery_failure "$provider" "$endpoint" "$(cat "$discover_log" 2>/dev/null || true)" "$connection"
     continue
   fi
   "$VDIRSYNCER_BIN" -c "$CFG" metasync "$stage_pair" >/dev/null 2>&1 || true
-  # Recover provider/base-pair metadata from the persisted private connection.
-  base_pair=""; provider="caldav"
-  while IFS='|' read -r name color tag pair ignored url username remote_id pprovider client_id display_name credential_ref local_id _; do
-    [ "$credential_ref" = "$connection" ] || continue
-    base_pair="$pair"; provider="${pprovider:-caldav}"; break
-  done < "$VDIR_PAIRS"
   [ -n "$base_pair" ] || continue
   for dir in "$STAGE/collections/$connection"/*; do
     [ -d "$dir" ] || continue

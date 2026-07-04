@@ -13,20 +13,21 @@ expected_names=(
   OPT_FULL OPT_UPDATE OPT_UPDATE_RECONFIGURE OPT_RECONFIGURE
   OPT_WEATHER_DISPLAY OPT_WEATHER_SOURCES OPT_RADAR OPT_CALENDARS OPT_ICAL
   OPT_VDIR OPT_MESSAGES OPT_TODO OPT_THEME OPT_SEASONAL OPT_PIN OPT_SERVICE
-  OPT_SSH OPT_DOCTOR OPT_TOUR OPT_DEMO OPT_CUSTOM OPT_REMOVE
-  OPT_NOTIFICATIONS OPT_TERMINAL OPT_EXIT
+  OPT_SSH OPT_DOCTOR OPT_TOUR OPT_DEMO OPT_CUSTOM OPT_NOTIFICATIONS
+  OPT_TERMINAL OPT_REMOVE OPT_EXIT
 )
-mapfile -t shown_names < <(printf '%s\n' "$menu" | sed -nE 's/.*\$\{(OPT_[A-Z_]+)\}\).*/\1/p')
+mapfile -t shown_names < <(printf '%s\n' "$menu" | sed -nE 's/.*"\$(OPT_[A-Z_]+)".*/\1/p')
 [ "${shown_names[*]}" = "${expected_names[*]}" ] || {
   echo "FAIL: menu identities are out of order: ${shown_names[*]}" >&2
   exit 1
 }
 
-for index in "${!expected_names[@]}"; do
-  name="${expected_names[$index]}"
-  value="$((index + 1))"
-  grep -Fxq "$name=$value" "$INSTALL" || {
-    echo "FAIL: missing canonical menu identity $name=$value" >&2
+# Display order intentionally puts Remove at the end, while its stable menu
+# number remains 22. Verify every symbolic identity is declared, then verify
+# the persistent numeric assignments explicitly below.
+for name in "${expected_names[@]}"; do
+  grep -Eq "^${name}=[0-9]+$" "$INSTALL" || {
+    echo "FAIL: missing canonical menu identity $name" >&2
     exit 1
   }
 done
@@ -44,7 +45,7 @@ for required in \
   '  "$OPT_NOTIFICATIONS") configure_apprise_notifications; exit $?;;' \
   '  "$OPT_TERMINAL") configure_terminal_access; exit $?;;' \
   '  "$OPT_EXIT"|q|Q|quit|exit)' \
-  'DOC_AT_END=1;;'; do
+  'DOC_AT_END=1'; do
   grep -Fq -- "$required" "$INSTALL" || { echo "FAIL: missing menu/dispatch contract: $required" >&2; exit 1; }
 done
 
@@ -64,10 +65,10 @@ fi
 grep -Fq 'configure_terminal_access(){' "$INSTALL" || { echo 'FAIL: Terminal access installer helper is missing' >&2; exit 1; }
 grep -Fq '"$server" --terminal-access status' "$INSTALL" || { echo 'FAIL: Terminal access installer menu does not read current state' >&2; exit 1; }
 grep -Fq '"$server" --terminal-access "$next"' "$INSTALL" || { echo 'FAIL: Terminal access installer menu does not apply its toggle through the server CLI' >&2; exit 1; }
-ical_line="$(printf '%s\n' "$menu" | grep -F '  ${OPT_ICAL})' || true)"
-vdir_line="$(printf '%s\n' "$menu" | grep -F '  ${OPT_VDIR})' || true)"
-printf '%s' "$ical_line" | grep -Fq 'public iCal feed' || { echo 'FAIL: option 9 must clearly identify a public read-only iCal feed' >&2; exit 1; }
-printf '%s' "$ical_line" | grep -Fqi 'google' && { echo 'FAIL: option 9 must not present Google as the private-calendar route' >&2; exit 1; }
-printf '%s' "$vdir_line" | grep -Fq 'Google OAuth' || { echo 'FAIL: option 10 must identify Google OAuth private-calendar setup' >&2; exit 1; }
-printf '%s' "$vdir_line" | grep -Fq 'vdirsyncer' || { echo 'FAIL: option 10 must name vdirsyncer private-calendar setup' >&2; exit 1; }
+ical_line="$(printf '%s\n' "$menu" | grep -F '"$OPT_ICAL"' || true)"
+vdir_line="$(printf '%s\n' "$menu" | grep -F '"$OPT_VDIR"' || true)"
+printf '%s' "$ical_line" | grep -Fq 'Add a calendar link' || { echo 'FAIL: option 9 must clearly identify adding a view-only calendar address' >&2; exit 1; }
+printf '%s' "$ical_line" | grep -Fq 'view-only' || { echo 'FAIL: option 9 must clearly remain view-only' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'Connect a personal calendar' || { echo 'FAIL: option 10 must describe a guided personal calendar connection' >&2; exit 1; }
+printf '%s' "$vdir_line" | grep -Fq 'Google, Apple iCloud' || { echo 'FAIL: option 10 must name Google and iCloud without OAuth jargon' >&2; exit 1; }
 printf 'PASS: canonical top-level menu identities, clear public/private calendar routes, visible ordering, exit placement, and dispatch are synchronized\n'

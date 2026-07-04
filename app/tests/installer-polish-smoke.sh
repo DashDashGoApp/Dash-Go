@@ -10,23 +10,21 @@ CATALOG="$ROOT/themes.list"
 bash -n "$INSTALL"; bash -n "$SET_THEME"
 require(){ grep -Fq -- "$1" "$INSTALL" || { echo "FAIL: missing installer contract: $1" >&2; exit 1; }; }
 reject(){ if grep -Fq -- "$1" "$INSTALL"; then echo "FAIL: retired installer text/code remains: $1" >&2; exit 1; fi; }
-require 'This version is too old to update automatically. Run --repair --system first, then update.'
+require 'This version is too old to update automatically. Run ~/install.sh --repair --system first, then update.'
 reject 'installed Go updater does not expose release-manifest-v1'
 require 'dashboard server binary missing or not executable for $ARCH: $BIN'
 reject 'dashboard Go server binary missing or not executable for $ARCH: $BIN'
-require 'warn "set-theme.sh not found in $DASH. Run Update the app first."'
-require 'warn "seasonal-themes.sh not found in $DASH. Run Update the app first."'
-require 'warn "doctor.sh not found in $DASH. Run Update the app first."'
-require 'exit 1;;'
 reject 'invalid numeric choice'
 reject '*) warn "invalid choice"; exit 1;;'
-require '*) warn "Choose a listed action or q to exit."; exit 1;;'
+require '*) warn "Choose a listed action or q to exit."; MODE="" ;;'
 reject 'read -rp "Continue? [y/N] " go'
-require 'read -rp "Continue? [y/N] " proceed'
+require 'Run these $selected_count tasks now? [Y/n]'
+require 'menu_handoff_missing(){'
+require 'Choose option 2 (Update the app) from the menu'
 reject 'migrate-compliments.py'
 [ "$(grep -Ec '^(say|warn|ok)\(\)' "$INSTALL")" -eq 3 ] || { echo "FAIL: duplicate output helpers" >&2; exit 1; }
 require 'Keep current location ('
-require 'Choose [1/2, Enter=current ${TEMPU}/${WINDU}]'
+require 'Choose [1/2, Enter=current ${TEMPU}/${WINDU}, q=cancel]'
 require 'THEME_CATALOG="$DASH/themes.list"'
 reject 'THEMES_LIST='
 home="$(mktemp -d)"; trap 'rm -rf "$home"' EXIT

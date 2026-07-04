@@ -91,12 +91,9 @@ func (a *app) handleStaticRoute(w http.ResponseWriter, r *http.Request) {
 // for unsupported methods, rather than falling back to ServeMux's text 405.
 func (a *app) httpRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	// This route is deliberately separate from /api/: an OAuth provider reaches
-	// it without a dashboard session. It remains inert unless the owner-local
-	// CLI has armed an expiring, one-shot relay file.
-	mux.HandleFunc("GET /oauth/google/callback", a.handleGoogleOAuthCallback)
-	// The kiosk display is still loopback-only. These endpoints are 404 until
-	// an active relay has produced a QR image and display metadata.
+	// The phone QR is presentation-only. Dash-Go does not publish an OAuth
+	// callback endpoint; a phone user explicitly pastes the final address into
+	// the owner-local setup terminal. The kiosk display remains loopback-only.
 	mux.HandleFunc("GET /api/oauth-display", a.requireLoopback(a.handleOAuthDisplayMetadata))
 	mux.HandleFunc("GET /api/oauth-display/qr.png", a.requireLoopback(a.handleOAuthDisplayQR))
 	// The generic API path keeps Dash-Go's JSON 405 behavior without a method

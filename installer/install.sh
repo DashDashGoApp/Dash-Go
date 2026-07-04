@@ -54,6 +54,11 @@ DASH_TRACK="${ENV_DASH_TRACK:-$(legacy_saved_update_track)}"
 DASH_TRACK="${DASH_TRACK:-}"
 # =====================================================================
 set -u
+# Keep the original invocation shape for interactive-only reassurance and
+# preflight behavior. Argument parsing below may shift positional parameters.
+# Interactive restarts must preserve a caller's shortcut flags as well.
+INSTALLER_ORIGINAL_ARGC=$#
+INSTALLER_ORIGINAL_ARGS=("$@")
 INSTALLER_SOURCE_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DASH="$HOME/dashboard"
 BIN_DIR="$DASH/bin"
@@ -89,6 +94,130 @@ update_cli(){
   bin="$(update_cli_for_host)"
   [ -n "$bin" ] && [ -x "$bin" ] || return 1
   "$bin" "$@"
+}
+
+# The installer never depends on a system Python interpreter. Runtime JSON,
+# PIN, and geocoding work uses the installed Go control server; the small
+# shell fallbacks below are used only before a trusted Go binary exists.
+installer_cli(){ update_cli "$@"; }
+trim_input(){
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+json_escape_shell(){
+  printf '%s' "${1:-}" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\r/\\r/g; s/\n/\\n/g'
+}
+json_basic_valid(){
+  # Bootstrap-only structural guard. Release manifests receive the stronger
+  # path/hash verification below; normal installs use --json-validate.
+  [ -s "$1" ] || return 1
+  awk 'BEGIN{RS=""} {gsub(/[[:space:]]/, "", $0); if (($0 ~ /^\{.*\}$/) || ($0 ~ /^\[.*\]$/)) exit 0; exit 1}' "$1"
+}
+installer_json_validate(){
+  installer_cli --json-validate "$1" >/dev/null 2>&1 || json_basic_valid "$1"
+}
+# This parser is deliberately limited to the trusted resolver's compact JSON
+# shape. It is only a first-install bootstrap fallback; normal updates use the
+# Go --json-get command and never parse release metadata with shell text tools.
+json_field_shell(){
+  local file="$1" field="$2" raw group key
+  raw="$(tr -d '\n\r' < "$file" 2>/dev/null || true)"
+  [ -n "$raw" ] || return 1
+  case "$field" in
+    assets.release.*) group='release'; key="${field#assets.release.}" ;;
+    assets.checksums.*) group='checksums'; key="${field#assets.checksums.}" ;;
+    *) group=''; key="$field" ;;
+  esac
+  if [ -n "$group" ]; then
+    raw="$(printf '%s' "$raw" | sed -nE 's/.*"'"$group"'"[[:space:]]*:[[:space:]]*\\{([^}]*)\\}.*/\\1/p')"
+  fi
+  case "$key" in
+    immutable) printf '%s' "$raw" | sed -nE 's/.*"immutable"[[:space:]]*:[[:space:]]*(true|false).*/\1/p' | head -n1 ;;
+    *) printf '%s' "$raw" | sed -nE 's/.*"'"$key"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -n1 ;;
+  esac
+}
+json_field(){
+  local file="$1" field="$2"
+  if installer_cli --json-get "$file" "$field" 2>/dev/null; then return 0; fi
+  json_field_shell "$file" "$field"
+}
+manifest_entries_shell(){
+  # Emit path<TAB>sha256 from the builder's stable pretty JSON. Entries with
+  # missing values are rejected by callers before any staged file is trusted.
+  awk '
+    /"path"[[:space:]]*:/ { path=$0; sub(/.*"path"[[:space:]]*:[[:space:]]*"/, "", path); sub(/".*/, "", path) }
+    /"sha256"[[:space:]]*:/ { hash=$0; sub(/.*"sha256"[[:space:]]*:[[:space:]]*"/, "", hash); sub(/".*/, "", hash) }
+    /}[[:space:]]*,?[[:space:]]*$/ { if (path != "" || hash != "") { if (path != "" && hash != "") print path "\t" hash; path=""; hash="" } }
+  ' "$1"
+}
+manifest_verify_shell(){
+  local manifest="$1" root="$2" version="$3" target_bin="$4" path expected actual saw=0
+  [ "$(json_field_shell "$manifest" version 2>/dev/null || true)" = "$version" ] || return 1
+  while IFS=$'\t' read -r path expected; do
+    [ -n "$path" ] && [ -n "$expected" ] || return 1
+    case "$path" in /*|*'..'*|*$'\n'*|*$'\r'*) return 1;; esac
+    [ -f "$root/$path" ] || return 1
+    saw=1
+    case "$path" in
+      manifest.json) continue;;
+      bin/dashboard-control-server-linux-*) [ -n "$target_bin" ] && [ "$path" != "$target_bin" ] && continue;;
+    esac
+    actual="$(sha256sum "$root/$path" 2>/dev/null | awk '{print $1}')" || return 1
+    [ "$actual" = "$expected" ] || return 1
+  done < <(manifest_entries_shell "$manifest")
+  [ "$saw" = 1 ]
+}
+manifest_file_list_shell(){
+  local manifest="$1" path expected
+  while IFS=$'\t' read -r path expected; do
+    [ -n "$path" ] || continue
+    case "$path" in
+      config/*|calendars/*|cache/*|logs/*|releases/*|.git/*|install.sh|AI.md) continue;;
+    esac
+    printf '%s\n' "$path"
+  done < <(manifest_entries_shell "$manifest") | awk '!seen[$0]++'
+}
+json_array_lines(){
+  local first=1 value
+  printf '['
+  while IFS= read -r value; do
+    [ -n "$value" ] || continue
+    [ "$first" = 1 ] || printf ','
+    printf '"%s"' "$(json_escape_shell "$value")"
+    first=0
+  done
+  printf ']'
+}
+zip_has_entries(){ unzip -Z1 "$1" 2>/dev/null | grep -q .; }
+zip_restore_config_fallback(){
+  local archive="$1" config="$2" entry base dest tmp
+  while IFS= read -r entry; do
+    entry="${entry#./}"; case "$entry" in config/*) ;; *) continue;; esac
+    base="${entry#config/}"; case "$base" in */|*/*) continue;; esac
+    case "$base" in settings.json|compliments.json|message-sources.json|message-cache-overrides.json|temp-messages.json|scheduled-messages.json|chalkboard.json|map-provider.json|config.local.js) ;; *) continue;; esac
+    dest="$config/$base"; [ -f "$dest" ] && installer_json_validate "$dest" && continue
+    tmp="${dest}.restore.$$"; mkdir -p "$config" || return 1
+    unzip -p "$archive" "$entry" > "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }
+    case "$base" in *.js) :;; *) installer_json_validate "$tmp" || { rm -f "$tmp"; continue; };; esac
+    mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+  done < <(unzip -Z1 "$archive" 2>/dev/null)
+}
+zip_restore_config_and_calendars(){
+  local archive="$1" entry clean top rel root dest tmp
+  while IFS= read -r entry; do
+    clean="${entry#./}"; case "$clean" in config/*|calendars/*) ;; *) continue;; esac
+    case "$clean" in */|/*|*'/../'*|../*|*'\\'*) continue;; esac
+    top="${clean%%/*}"; rel="${clean#*/}"
+    case "$top" in config) root="$CONFIG_DIR";; calendars) root="$CAL_DIR";; esac
+    [ -n "$rel" ] || continue
+    dest="$root/$rel"; case "$dest" in "$root"/*) ;; *) continue;; esac
+    mkdir -p "$(dirname "$dest")" || return 1
+    tmp="${dest}.restore.$$"
+    unzip -p "$archive" "$entry" > "$tmp" 2>/dev/null || { rm -f "$tmp"; continue; }
+    mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+  done < <(unzip -Z1 "$archive" 2>/dev/null)
 }
 installed_dashboard_version(){
   head -n 1 "$DASH/VERSION" 2>/dev/null | tr -d '[:space:]'
@@ -237,20 +366,17 @@ write_update_phase(){
   write_update_job "$state" "$label" "$detail" 0 || true
 }
 require_update_compatibility_tools(){
-  # A beta.72+ binary must prove its real release-manifest capability. Never
-  # fall back to Python when a modern updater is incomplete or corrupted.
+  # A beta.72+ binary must prove its real release-manifest capability. Older
+  # Dash-Go builds use the installer’s bounded shell verifier for this one
+  # bridge update; no system scripting runtime is required.
   if update_cli_supports '--verify-release-manifest'; then return 0; fi
   if updater_capability_query_is_safe; then
-    warn "This version is too old to update automatically. Run --repair --system first, then update."
+    warn "This version is too old to update automatically. Run ~/install.sh --repair --system first, then update."
     return 1
   fi
-  if command -v python3 >/dev/null 2>&1; then
-    say "One-time compatibility step: upgrading the installed updater to Go-native release verification."
-    DASH_UPDATE_LEGACY_BRIDGE=1; export DASH_UPDATE_LEGACY_BRIDGE
-    return 0
-  fi
-  warn "Updater dependency missing: this installed legacy updater requires python3 for one bridge update. Install python3 or run repair --system, then retry."
-  return 1
+  say "One-time compatibility step: upgrading the installed updater to Go-native release verification."
+  DASH_UPDATE_LEGACY_BRIDGE=1; export DASH_UPDATE_LEGACY_BRIDGE
+  return 0
 }
 write_updater_migration_receipt(){
   local arch
@@ -363,6 +489,58 @@ TRACK_REQUEST=""
 say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
+
+# Interactive setup reports its current high-level stage. This makes a
+# screenshot or a Ctrl-C interruption useful without exposing noisy commands.
+INSTALLER_STAGE="starting"
+INSTALLER_STAGE_INDEX=0
+INSTALLER_STAGE_TOTAL=0
+INSTALLER_INTERRUPTED=0
+INTERACTIVE_INSTALLER=0
+INSTALLER_STAGE_NAMES=()
+
+installer_build_stage_plan(){
+  INSTALLER_STAGE_NAMES=()
+  [ "${DO_SYSTEM:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Preparing the operating system")
+  [ "${DO_PKGS:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Installing dashboard components")
+  [ "${DO_FILES:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Installing Dash-Go")
+  [ "${RESTORE_FROM_BACKUP:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Restoring saved dashboard data")
+  [ "${DO_CUSTOM:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Setting up this dashboard")
+  [ "${DO_ICAL:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Adding public calendars")
+  [ "${DO_VDIR:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Connecting private calendars")
+  [ "${DO_CALENDARS:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Setting up built-in calendars")
+  [ "${DO_SERVICE:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Starting Dashboard Control")
+  [ "${DO_PIN:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Setting the dashboard PIN")
+  [ "${DO_AUTOLOGIN:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Preparing automatic sign-in")
+  [ "${DO_AUTOSTART:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Preparing automatic startup")
+  [ "${DO_SSH:-0}" = "1" ] && INSTALLER_STAGE_NAMES+=("Preparing remote access")
+  INSTALLER_STAGE_NAMES+=("Checking the finished dashboard")
+  INSTALLER_STAGE_TOTAL=${#INSTALLER_STAGE_NAMES[@]}
+  INSTALLER_STAGE_INDEX=0
+}
+
+installer_stage(){
+  local label="$1"
+  INSTALLER_STAGE_INDEX=$((INSTALLER_STAGE_INDEX + 1))
+  INSTALLER_STAGE="step ${INSTALLER_STAGE_INDEX}/${INSTALLER_STAGE_TOTAL}: ${label}"
+  say "Step ${INSTALLER_STAGE_INDEX}/${INSTALLER_STAGE_TOTAL} — ${label}"
+}
+
+installer_interrupt(){
+  INSTALLER_INTERRUPTED=1
+  printf '\n'
+  warn "Install interrupted at ${INSTALLER_STAGE}. Your existing dashboard files and settings were left in place where possible. Run ~/install.sh again anytime to continue safely."
+  exit 130
+}
+
+installer_exit_summary(){
+  local code=$?
+  trap - EXIT
+  if [ "$INTERACTIVE_INSTALLER" = "1" ] && [ "$code" -ne 0 ] && [ "$INSTALLER_INTERRUPTED" != "1" ]; then
+    warn "Install stopped at ${INSTALLER_STAGE}. Existing settings were preserved where possible; run ~/install.sh again to resume or choose a smaller repair action."
+  fi
+  exit "$code"
+}
 
 # Keep optional installer stages resilient without pretending that a required
 # configuration write succeeded.  Stages may continue, but failures are named
@@ -685,6 +863,39 @@ dashboard_server_failure_hint(){
   fi
 }
 
+installer_final_dashboard_check(){
+  local ip
+  installer_stage "Checking the finished dashboard"
+  say "Final dashboard check"
+
+  # A focused configuration-only action does not necessarily start/restart the
+  # service. For an install, update, or service action, readiness is proof of
+  # life and must pass before the installer says it is done.
+  if [ "$DO_SERVICE" = "1" ] || [ "$DO_FILES" = "1" ]; then
+    if ! dashboard_server_confirm_live; then
+      warn "Dash-Go did not confirm that it is running. Running Doctor now; the installer will not report success."
+      if [ -x "$BIN_DIR/doctor.sh" ]; then
+        bash "$BIN_DIR/doctor.sh" || true
+      else
+        warn "Doctor is not available yet. Run ~/install.sh --repair --system after checking the warnings above."
+      fi
+      return 1
+    fi
+    ok "Dashboard is running locally: http://localhost:8090"
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-enabled dashboard-server.service >/dev/null 2>&1; then
+      ok "Dashboard Control will start automatically on boot"
+    else
+      warn "Dashboard Control is running now, but automatic startup was not confirmed. Run ~/install.sh and choose Dashboard service."
+    fi
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$ip" ] && echo "   Device address for SSH: $USER_NAME@$ip"
+  else
+    ok "Selected settings were saved. No dashboard-server restart was needed."
+  fi
+  echo "Next: open Dashboard Control on the kiosk (triple-tap the moon icon) to add calendars or change any default."
+  return 0
+}
+
 show_install_help(){
   cat <<'HELP'
 Dash-Go installer
@@ -757,12 +968,17 @@ fi
 # kiosk (its files, autologin, autostart, and cron are all set up for that
 # user). It uses sudo only for the few system-level steps. Running as root
 # would put everything under /root and create the service for root, which is
-# not what you want.
-if [ "$(id -u)" -eq 0 ]; then
-  echo "ERROR: do not run this as root."
-  echo "Run it as the regular user that will run the kiosk, e.g.:"
+# not what you want. Starting it as `sudo ./install.sh` has the same harmful
+# effect, so catch both variants before any interactive question is asked.
+if [ "$(id -u)" -eq 0 ] || [ -n "${SUDO_USER:-}" ]; then
+  echo "ERROR: Dash-Go must be started as the normal kiosk user, not with sudo."
+  if [ -n "${SUDO_USER:-}" ]; then
+    echo "You started this with sudo. Log in as ${SUDO_USER} and run:"
+  else
+    echo "You are currently root. Log in as the normal kiosk user and run:"
+  fi
   echo "    ~/install.sh"
-  echo "That user needs sudo for the system-level steps."
+  echo "Dash-Go will ask for sudo only when a system-level step needs it."
   exit 1
 fi
 if [ "$UPDATE_MODE" != "1" ] && [ "$REPAIR_MODE" != "1" ] && [ "$DOCTOR_MODE" != "1" ] && ! command -v sudo >/dev/null 2>&1; then
@@ -1110,6 +1326,100 @@ ensure_lightdm_default(){
   ok "LightDM selected as the dashboard display manager for next boot"
 }
 bootstrap_detect_platform
+
+# A novice should learn about a broken clock, missing storage, unsupported
+# device, or unreachable release host before answering setup questions. This
+# preflight intentionally checks the canonical GitHub Release route rather
+# than an unrelated provider. Direct --doctor/--remove/update commands retain
+# their own narrow behavior and do not call this interactive-only helper.
+preflight_item(){
+  local state="$1" label="$2" detail="${3:-}"
+  printf '  %s %s%s\n' "$state" "$label" "${detail:+ — $detail}"
+}
+
+installer_supported_platform(){
+  case "${OS_ID:-unknown}" in
+    raspbian) [ "${IS_PI:-0}" = "1" ] ;;
+    debian) [ "${IS_PI:-0}" = "1" ] || [ "${IS_X86:-0}" = "1" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+installer_clock_is_sane(){
+  local year
+  year="$(date +%Y 2>/dev/null || true)"
+  case "$year" in ''|*[!0-9]*) return 1;; esac
+  [ "$year" -ge 2024 ] && [ "$year" -le 2100 ]
+}
+
+run_startup_preflight(){
+  local failed=0 free_mb year
+  say "Checking your device"
+  echo "This quick check runs before setup questions so problems are easy to fix."
+
+  if installer_supported_platform; then
+    preflight_item '✓' "$PLATFORM_LABEL"
+  else
+    preflight_item '✗' "Unsupported platform: $PLATFORM_LABEL" "Dash-Go supports Raspberry Pi OS and Debian x86/Pi installations"
+    failed=1
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    preflight_item '✓' 'Normal user with sudo available'
+  else
+    preflight_item '✗' 'sudo is missing' 'install it as root, add this user to sudo, then run ~/install.sh again'
+    failed=1
+  fi
+
+  free_mb="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
+  case "$free_mb" in
+    ''|*[!0-9]*)
+      preflight_item '✗' 'Free disk space could not be checked' 'make sure your home folder is available, then run ~/install.sh again'
+      failed=1
+      ;;
+    *)
+      if [ "$free_mb" -ge 500 ]; then
+        preflight_item '✓' "Free disk space: ${free_mb} MB"
+      else
+        preflight_item '✗' "Free disk space: ${free_mb} MB" 'need at least 500 MB; free space, then run ~/install.sh again'
+        failed=1
+      fi
+      ;;
+  esac
+
+  year="$(date +%Y 2>/dev/null || true)"
+  if installer_clock_is_sane; then
+    preflight_item '✓' "Clock: $(date '+%Y-%m-%d %H:%M' 2>/dev/null || true)"
+  else
+    preflight_item '✗' "Clock looks wrong (${year:-unknown})" 'connect to the network, run sudo timedatectl set-ntp true, then run ~/install.sh again'
+    failed=1
+  fi
+
+  if command -v getent >/dev/null 2>&1 && getent ahosts github.com >/dev/null 2>&1; then
+    preflight_item '✓' 'DNS can find GitHub'
+  else
+    preflight_item '✗' 'DNS cannot find GitHub' 'connect this device to the internet, then run ~/install.sh again'
+    failed=1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    preflight_item '✗' 'curl is missing' 'install curl, then run ~/install.sh again'
+    failed=1
+  elif curl -fsSIL --connect-timeout 5 --max-time 12 --proto '=https' --tlsv1.2 \
+      'https://github.com/DashDashGoApp/Dash-Go/releases' >/dev/null 2>&1; then
+    preflight_item '✓' 'Dash-Go release host is reachable'
+  else
+    preflight_item '✗' 'Dash-Go release host is not reachable' 'check Wi-Fi/internet and the clock, then run ~/install.sh again'
+    failed=1
+  fi
+
+  if [ "$failed" = "1" ]; then
+    echo
+    warn 'Fix the items marked ✗ and run ~/install.sh again. Nothing was changed.'
+    return 1
+  fi
+  return 0
+}
 
 # Downloads used by installer recovery are public GitHub Release assets or
 # pinned public font sources. Dash-Go deliberately does not accept an arbitrary
@@ -1540,24 +1850,15 @@ configure_control_pin(){
       while true; do
         read -rsp "  New PIN (4-8 digits): " PIN1; echo
         read -rsp "  Confirm PIN: " PIN2; echo
-        if [ "$PIN1" != "$PIN2" ]; then warn "PINs did not match."; continue; fi
+        if [ "$PIN1" != "$PIN2" ]; then warn "PINs did not match. Try both entries again."; continue; fi
         if ! printf '%s' "$PIN1" | grep -qE '^[0-9]{4,8}$'; then warn "Use 4-8 digits only."; continue; fi
         break
       done
       PIN_TIMEOUT="$(prompt_control_pin_timeout)"
-      PIN_DATA="$(PIN_VALUE="$PIN1" python3 - <<'PYPIN'
-import base64, hashlib, os
-pin=os.environ['PIN_VALUE'].encode()
-salt=os.urandom(16)
-iters=200000
-digest=hashlib.pbkdf2_hmac('sha256', pin, salt, iters)
-enc=lambda b: base64.urlsafe_b64encode(b).decode().rstrip('=')
-print('DASH_CONTROL_PIN_ENABLED=1')
-print('DASH_CONTROL_PIN_ITERATIONS=%d' % iters)
-print('DASH_CONTROL_PIN_SALT=%s' % enc(salt))
-print('DASH_CONTROL_PIN_HASH=%s' % enc(digest))
-PYPIN
-)"
+      PIN_DATA="$(PIN_VALUE="$PIN1" installer_cli --pin-hash 2>/dev/null)" || {
+        warn "Dash-Go could not secure the PIN on this device. Choose Update the app, then try Control PIN again."
+        return 1
+      }
       {
         echo "# saved by install.sh — optional dashboard control PIN lock"
         echo "DASH_CONTROL_PIN_TIMEOUT=$PIN_TIMEOUT"
@@ -1593,6 +1894,15 @@ PYPIN
   fi
 }
 # ---------------------------------------------------------------------
+# An interactive run gets one visible device check before its first question.
+# Command modes already have narrower, operation-specific preflights.
+if [ "$INSTALLER_ORIGINAL_ARGC" -eq 0 ]; then
+  INTERACTIVE_INSTALLER=1
+  trap 'installer_interrupt' INT TERM
+  trap 'installer_exit_summary' EXIT
+  run_startup_preflight || exit 1
+fi
+
 say "Dash-Go installer"
 cat <<'WELCOME'
 Dash-Go (pronounced "Dash Dash Go") is a local, touch-first household kiosk.
@@ -1658,52 +1968,7 @@ valid_microsoft_client_id(){
 }
 write_todo_app_settings(){
   local sync_mode="$1" client_id="${2:-}"
-  TODO_SETTINGS_FILE="$SETTINGS_FILE" TODO_SYNC_MODE="$sync_mode" TODO_CLIENT_ID="$client_id" python3 - <<'PY_TODO_SETTINGS'
-import json, os, pathlib, tempfile
-path = pathlib.Path(os.environ["TODO_SETTINGS_FILE"])
-mode = os.environ["TODO_SYNC_MODE"]
-client_id = os.environ.get("TODO_CLIENT_ID", "").strip()
-settings = {}
-if path.exists():
-    try:
-        candidate = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(candidate, dict):
-            settings = candidate
-    except Exception:
-        raise SystemExit("settings.json is not valid JSON; resolve it before App Setup can safely change Lists settings")
-todo = settings.get("todo")
-if not isinstance(todo, dict):
-    todo = {}
-mapping = todo.get("map")
-if not isinstance(mapping, dict):
-    mapping = {}
-todo["source"] = "local"
-todo["syncMode"] = mode
-# Local To Do and Grocery are always the retained write-first defaults. A user
-# who later selects a Microsoft list in Dashboard Control replaces only that slot.
-if mode == "local":
-    mapping["todo"] = "local-todo"
-    mapping["grocery"] = "local-grocery"
-else:
-    mapping.setdefault("todo", "local-todo")
-    mapping.setdefault("grocery", "local-grocery")
-if client_id:
-    todo["clientId"] = client_id
-todo["map"] = mapping
-settings["todo"] = todo
-path.parent.mkdir(parents=True, exist_ok=True)
-fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
-try:
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2, sort_keys=True)
-        f.write("\n")
-    os.replace(tmp_name, path)
-finally:
-    try:
-        os.unlink(tmp_name)
-    except FileNotFoundError:
-        pass
-PY_TODO_SETTINGS
+  installer_cli --installer-todo-settings --file "$SETTINGS_FILE" --mode "$sync_mode" --client-id "$client_id"
 }
 
 # beta.37 retires app-visibility switches. The app shells are permanently
@@ -1712,60 +1977,9 @@ PY_TODO_SETTINGS
 # integrations, and every unrelated preference.
 normalize_app_visibility_preferences(){
   local settings_path="$SETTINGS_FILE" local_path="$CONFIG_DIR/config.local.js"
-  APP_VISIBILITY_SETTINGS="$settings_path" python3 - <<'PY_APP_VISIBILITY'
-import json, os, pathlib, tempfile
-path=pathlib.Path(os.environ["APP_VISIBILITY_SETTINGS"])
-if not path.exists():
-    raise SystemExit(0)
-try:
-    payload=json.loads(path.read_text(encoding="utf-8"))
-except Exception:
-    raise SystemExit("settings.json is not valid JSON; leaving legacy app visibility fields untouched")
-if not isinstance(payload, dict):
-    raise SystemExit("settings.json is not an object; leaving legacy app visibility fields untouched")
-changed=False
-for key in ("showChalkboard", "radarEnabled"):
-    if key in payload:
-        payload.pop(key, None); changed=True
-todo=payload.get("todo")
-if isinstance(todo, dict):
-    if "enabled" in todo:
-        todo.pop("enabled", None); changed=True
-    mapping=todo.get("map")
-    if not isinstance(mapping, dict):
-        mapping={}; todo["map"]=mapping; changed=True
-    for slot, default in (("todo", "local-todo"), ("grocery", "local-grocery")):
-        value=mapping.get(slot)
-        if not isinstance(value, str) or not value.strip():
-            mapping[slot]=default; changed=True
-if changed:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd,tmp=tempfile.mkstemp(prefix=path.name+".",suffix=".tmp",dir=str(path.parent))
-    try:
-        with os.fdopen(fd,"w",encoding="utf-8") as handle:
-            json.dump(payload,handle,indent=2,sort_keys=True); handle.write("\n")
-        os.replace(tmp,path)
-    finally:
-        try: os.unlink(tmp)
-        except FileNotFoundError: pass
-PY_APP_VISIBILITY
-  APP_VISIBILITY_CONFIG_LOCAL="$local_path" python3 - <<'PY_APP_VISIBILITY_LOCAL'
-import os, pathlib, re, tempfile
-path=pathlib.Path(os.environ["APP_VISIBILITY_CONFIG_LOCAL"])
-if not path.exists():
-    raise SystemExit(0)
-text=path.read_text(encoding="utf-8")
-new=re.sub(r'(?m)^\s*(?:showChalkboard|radarEnabled)\s*:\s*.*?,?\s*\n', '', text)
-if new != text:
-    fd,tmp=tempfile.mkstemp(prefix=path.name+".",suffix=".tmp",dir=str(path.parent))
-    try:
-        with os.fdopen(fd,"w",encoding="utf-8") as handle: handle.write(new)
-        os.replace(tmp,path)
-    finally:
-        try: os.unlink(tmp)
-        except FileNotFoundError: pass
-PY_APP_VISIBILITY_LOCAL
+  installer_cli --installer-normalize-app-visibility --settings "$settings_path" --config-local "$local_path" ||     warn "Dash-Go could not normalize older app-visibility settings. Choose Update the app and try again."
 }
+
 todo_azure_cli_supported_architecture(){
   # Microsoft documents supported Azure CLI apt packages for amd64 and arm64.
   # Do not offer a package-repository install on a 32-bit Pi/armhf image that
@@ -2175,13 +2389,9 @@ validate_download(){
       grep -qi '<!DOCTYPE html\|<html' "$path"
       ;;
     *.manifest.json|manifest.json|*.json)
-      if update_cli --json-validate "$path" >/dev/null 2>&1; then
-        return 0
-      fi
-      # Fresh install/bootstrap only: no trusted dashboard binary exists yet.
-      # Existing update transactions must pass require_update_compatibility_tools
-      # before this point, so this is never a hidden update-path fallback.
-      command -v python3 >/dev/null 2>&1 && python3 -m json.tool "$path" >/dev/null 2>&1
+      # Fresh bootstrap has no installed Go binary yet. The payload manifest is
+      # subsequently checked path-by-path and hash-by-hash before replacement.
+      installer_json_validate "$path"
       ;;
     *.tar.gz|*.tgz)
       tar -tzf "$path" >/dev/null 2>&1
@@ -2199,31 +2409,10 @@ validate_download(){
   esac
 }
 
-# GitHub Release metadata and payload helpers. The installed Go resolver owns
-# canonical repository, version ordering, tag, asset, and digest validation.
-json_field(){
-  local file="$1" field="$2"
-  if update_cli --json-get "$file" "$field" 2>/dev/null; then return 0; fi
-  # Bootstrap-only fallback; never parse JSON with shell text processing.
-  command -v python3 >/dev/null 2>&1 || return 1
-  python3 - "$file" "$field" <<'PYJSONFIELD'
-import json, sys
-try:
-    value = json.load(open(sys.argv[1], encoding='utf-8'))
-    for part in sys.argv[2].split('.'):
-        if not isinstance(value, dict): raise KeyError(part)
-        value = value[part]
-    if isinstance(value, bool): print('true' if value else 'false')
-    elif value is None: print('')
-    else: print(value)
-except Exception:
-    raise SystemExit(1)
-PYJSONFIELD
-}
-
-# The installer keeps this low-memory Python bridge only for local manifest
-# verification during fresh bootstrap. Normal updates use the installed Go
-# verifier; the cap is
+# GitHub Release metadata and payload helpers. json_field is defined near
+# update_cli: Go is authoritative when installed, with a bounded bootstrap
+# reader for first install only.
+# The bootstrap verifier runs at low priority and remains memory-bounded; it is
 # intentionally generous enough for Python startup but bounded on the Pi.
 DASH_MANIFEST_VERIFY_VMEM_KB="${DASH_MANIFEST_VERIFY_VMEM_KB:-262144}"
 manifest_verify_vmem_kb(){
@@ -2638,43 +2827,12 @@ install_release_payload(){
       warn "release manifest verification failed"; rm -rf "$stage"; return 1
     fi
   else
-    local -a verify_cmd
-    if command -v ionice >/dev/null 2>&1 && ionice -c3 true >/dev/null 2>&1; then verify_cmd=(ionice -c3 nice -n 10 python3); else verify_cmd=(nice -n 10 python3); fi
-    if ! (
-      ulimit -v "$(manifest_verify_vmem_kb)" 2>/dev/null || true
-      "${verify_cmd[@]}" - "$manifest_file" "$src" "$version" "$manifest_target_bin" <<'PYMANVERIFY'
-import hashlib, json, os, sys
-manifest, root, version, target_bin = sys.argv[1:5]
-def sha256_file(path):
-    h = hashlib.sha256()
-    with open(path, 'rb') as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b''):
-            h.update(chunk)
-    return h.hexdigest()
-try:
-    data = json.load(open(manifest, encoding='utf-8'))
-except Exception as exc:
-    print(f'manifest JSON error: {exc}', file=sys.stderr); raise SystemExit(2)
-if str(data.get('version') or '') != str(version):
-    print('manifest version mismatch', file=sys.stderr); raise SystemExit(3)
-files = data.get('files')
-if not isinstance(files, list) or not files:
-    print('manifest has no files list', file=sys.stderr); raise SystemExit(4)
-for item in files:
-    rel = item.get('path') if isinstance(item, dict) else None
-    if not rel or rel.startswith('/') or '..' in rel.split('/'):
-        print(f'unsafe manifest path: {rel!r}', file=sys.stderr); raise SystemExit(5)
-    path = os.path.join(root, rel)
-    if not os.path.isfile(path):
-        print(f'missing manifest file: {rel}', file=sys.stderr); raise SystemExit(6)
-    expected = str(item.get('sha256') or '')
-    cross_binary = rel.startswith('bin/dashboard-control-server-linux-')
-    if expected and rel != 'manifest.json' and not (cross_binary and target_bin and rel != target_bin):
-        if sha256_file(path) != expected:
-            print(f'hash mismatch for {rel}', file=sys.stderr); raise SystemExit(7)
-PYMANVERIFY
-    ); then
-      warn "release manifest verification failed"; rm -rf "$stage"; return 1
+    # First install has no trusted resident Go binary. Verify the known
+    # builder manifest with a bounded shell reader before any staged binary is
+    # executed; every managed path and expected SHA-256 is checked below.
+    if ! manifest_verify_shell "$manifest_file" "$src" "$version" "$manifest_target_bin"; then
+      warn "release manifest verification failed; run ~/install.sh again after checking the downloaded release."
+      rm -rf "$stage"; return 1
     fi
   fi
   # The generic server path is a portable shell selector, never a host-built
@@ -2699,20 +2857,12 @@ PYMANVERIFY
       warn "could not derive release file list from manifest"; rm -rf "$stage"; return 1
     fi
   else
-    if ! python3 - "$manifest_file" <<'PYMANLIST' > "$file_list"; then
-import json, sys
-skip_prefixes = ('config/', 'calendars/', 'cache/', 'logs/', 'releases/', '.git/')
-skip_exact = {'install.sh', 'AI.md'}
-data = json.load(open(sys.argv[1], encoding='utf-8'))
-out=[]
-for item in data.get('files', []):
-    rel = item.get('path') if isinstance(item, dict) else None
-    if rel and rel not in skip_exact and not rel.startswith(skip_prefixes): out.append(rel)
-if 'manifest.json' not in out: out.append('manifest.json')
-print('\n'.join(sorted(set(out))))
-PYMANLIST
-      warn "could not derive release file list from manifest"; rm -rf "$stage"; return 1
+    if ! manifest_file_list_shell "$manifest_file" > "$file_list"; then
+      warn "could not derive release file list from manifest; run ~/install.sh again."
+      rm -rf "$stage"; return 1
     fi
+    grep -Fqx 'manifest.json' "$file_list" || printf 'manifest.json
+' >> "$file_list"
   fi
   local critical_files="index.html kiosk.sh VERSION manifest.json ui/dashboard.css ui/control-layout.css ui/js/app.bundle.js ui/js/app.control.bundle.js bin/dashboard-common.sh bin/doctor.sh bin/dashboard-control-server bin/dashboard-control-server-linux-386 bin/dashboard-control-server-linux-amd64 bin/dashboard-control-server-linux-arm64 bin/dashboard-control-server-linux-armv6 bin/dashboard-control-server-linux-armv7 go.mod cmd/dashboard-control-server/main.go"
   for rel in $critical_files; do
@@ -3169,19 +3319,26 @@ remove_state_prepare(){
 }
 
 remove_note(){
-  local phase="${1:-unknown}" detail="${2:-}" errors="${3:-}"
-  REMOVE_PHASE="$phase" REMOVE_DETAIL="$detail" REMOVE_ERRORS_JSON="$errors" REMOVE_JOURNAL="$REMOVE_JOURNAL" \
-  python3 - <<'PY_REMOVE_NOTE' >/dev/null 2>&1 || return 1
-import json, os, time
-p=os.environ['REMOVE_JOURNAL']
-data={'updatedAt':int(time.time()), 'phase':os.environ.get('REMOVE_PHASE',''),
-      'detail':os.environ.get('REMOVE_DETAIL',''), 'errors':os.environ.get('REMOVE_ERRORS_JSON','')}
-tmp=p+'.tmp'
-with open(tmp,'w',encoding='utf-8') as f:
-    json.dump(data,f,indent=2,sort_keys=True)
-    f.write('\n')
-os.replace(tmp,p)
-PY_REMOVE_NOTE
+  local phase="${1:-unknown}" detail="${2:-}" errors="${3:-}" tmp
+  tmp="${REMOVE_JOURNAL}.tmp"
+  umask 077
+  mkdir -p "$(dirname "$REMOVE_JOURNAL")" || return 1
+  {
+    printf '{
+'
+    printf '  "detail": "%s",
+' "$(json_escape_shell "$detail")"
+    printf '  "errors": "%s",
+' "$(json_escape_shell "$errors")"
+    printf '  "phase": "%s",
+' "$(json_escape_shell "$phase")"
+    printf '  "updatedAt": %s
+' "$(date +%s)"
+    printf '}
+'
+  } > "$tmp" || return 1
+  chmod 600 "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$REMOVE_JOURNAL"
 }
 
 remove_step(){
@@ -3265,13 +3422,21 @@ remove_make_archive(){
   [ -d "$CONFIG_DIR" ] && cp -a "$CONFIG_DIR" "$stage/dashboard/config" || true
   if [ -L "$CAL_DIR" ]; then
     target="$(readlink "$CAL_DIR" 2>/dev/null || true)"
-    CAL_LINK="$CAL_DIR" CAL_TARGET="$target" python3 - "$stage/meta/calendar-source.json" <<'PY_REMOVE_CAL' || { rm -rf "$tmpdir"; return 1; }
-import json, os, sys
-json.dump({'kind':'external-symlink','link':os.environ.get('CAL_LINK',''),
-           'target':os.environ.get('CAL_TARGET',''),'targetPreserved':False,
-           'note':'External calendar target was intentionally left untouched. Recreate its symlink after reinstall if desired.'},
-          open(sys.argv[1],'w',encoding='utf-8'),indent=2,sort_keys=True)
-PY_REMOVE_CAL
+    {
+      printf '{
+'
+      printf '  "kind": "external-symlink",
+'
+      printf '  "link": "%s",
+' "$(json_escape_shell "$CAL_DIR")"
+      printf '  "note": "External calendar target was intentionally left untouched. Recreate its symlink after reinstall if desired.",
+'
+      printf '  "target": "%s",
+' "$(json_escape_shell "$target")"
+      printf '  "targetPreserved": false
+}
+'
+    } > "$stage/meta/calendar-source.json" || { rm -rf "$tmpdir"; return 1; }
   elif [ -d "$CAL_DIR" ]; then
     cp -a "$CAL_DIR" "$stage/dashboard/calendars" || { rm -rf "$tmpdir"; return 1; }
   fi
@@ -3282,18 +3447,21 @@ PY_REMOVE_CAL
     [ -f "$HOME/$f" ] && cp -p "$HOME/$f" "$stage/home/$f" || true
   done
   chmod 600 "$stage/home"/.dashboard-*.env "$stage/home"/.dashboard-update-profile.json 2>/dev/null || true
-  REMOVE_DASH="$DASH" python3 - "$stage/meta/uninstall-manifest.json" <<'PY_REMOVE_MANIFEST' || { rm -rf "$tmpdir"; return 1; }
-import json, os, sys, time
-root=os.environ.get('REMOVE_DASH','')
-version='unknown'
-try:
-    with open(os.path.join(root,'VERSION'),encoding='utf-8') as f: version=f.read().strip() or 'unknown'
-except OSError: pass
-json.dump({'type':'dash-go-preserved-uninstall','createdAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),
-           'sourceVersion':version,
-           'contents':['settings','calendar sources or external-calendar metadata','private Dash-Go environment files']},
-          open(sys.argv[1],'w',encoding='utf-8'),indent=2,sort_keys=True)
-PY_REMOVE_MANIFEST
+  {
+    version="$(head -n 1 "$DASH/VERSION" 2>/dev/null | tr -d '
+' || true)"
+    printf '{
+'
+    printf '  "contents": ["settings", "calendar sources or external-calendar metadata", "private Dash-Go environment files"],
+'
+    printf '  "createdAt": "%s",
+' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '  "sourceVersion": "%s",
+' "$(json_escape_shell "${version:-unknown}")"
+    printf '  "type": "dash-go-preserved-uninstall"
+}
+'
+  } > "$stage/meta/uninstall-manifest.json" || { rm -rf "$tmpdir"; return 1; }
   tar -C "$stage" -czf "$archive.tmp" . || { rm -rf "$tmpdir" "$archive.tmp"; return 1; }
   tar -tzf "$archive.tmp" > "$list" || { rm -rf "$tmpdir" "$archive.tmp"; return 1; }
   grep -qx './meta/uninstall-manifest.json' "$list" || { rm -rf "$tmpdir" "$archive.tmp"; return 1; }
@@ -3411,6 +3579,13 @@ remove_verify(){
   return "$failed"
 }
 
+remove_confirmation_matches(){
+  local expected="$1" supplied="$2" normalized_expected normalized_supplied
+  normalized_expected="$(printf '%s' "$expected" | tr '[:lower:]' '[:upper:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]][[:space:]]*/ /g')"
+  normalized_supplied="$(printf '%s' "$supplied" | tr '[:lower:]' '[:upper:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/[[:space:]][[:space:]]*/ /g')"
+  [ "$normalized_supplied" = "$normalized_expected" ]
+}
+
 run_remove_install(){
   local preserve answer archive=""
   REMOVE_ERRORS=()
@@ -3421,18 +3596,24 @@ run_remove_install(){
   fi
   remove_state_prepare || { warn "cannot create the Dash-Go uninstall state directory"; return 1; }
   read -rp "Type UNINSTALL DASH-GO to continue: " answer
-  [ "$answer" = "UNINSTALL DASH-GO" ] || { warn "uninstall cancelled"; return 1; }
+  if ! remove_confirmation_matches "UNINSTALL DASH-GO" "$answer"; then
+    warn "Uninstall was not started. Type exactly: UNINSTALL DASH-GO"
+    return 1
+  fi
   if [ "$REMOVE_PRESERVE_REQUESTED" = "-1" ]; then
     read -rp "Create a verified private recovery archive before removal? [Y/n] " preserve
     case "$preserve" in n|N) REMOVE_PRESERVE_REQUESTED=0;; *) REMOVE_PRESERVE_REQUESTED=1;; esac
   fi
   if [ "$REMOVE_PURGE_REQUESTED" != "1" ]; then
-    read -rp "Remove Dash-Go application data and private credentials after wiring is removed? [Y/n] " answer
-    case "$answer" in n|N) REMOVE_PURGE_REQUESTED=0;; *) REMOVE_PURGE_REQUESTED=1;; esac
+    read -rp "Remove Dash-Go application data and private credentials after wiring is removed? [y/N] " answer
+    case "$answer" in y|Y) REMOVE_PURGE_REQUESTED=1;; *) REMOVE_PURGE_REQUESTED=0;; esac
   fi
   if [ "$REMOVE_PRESERVE_REQUESTED" != "1" ] && [ "$REMOVE_PURGE_REQUESTED" = "1" ]; then
     read -rp "No recovery archive was requested. Type PURGE DASH-GO to confirm destructive removal: " answer
-    [ "$answer" = "PURGE DASH-GO" ] || { warn "destructive uninstall cancelled"; return 1; }
+    if ! remove_confirmation_matches "PURGE DASH-GO" "$answer"; then
+      warn "Destructive uninstall was not started. Type exactly: PURGE DASH-GO"
+      return 1
+    fi
   fi
   remove_require_sudo || return 1
   if [ "$REMOVE_PRESERVE_REQUESTED" = "1" ]; then
@@ -3627,7 +3808,7 @@ say "Installing required runtime packages"
 echo "Detected platform: $PLATFORM_LABEL"
 # Base packages the dashboard/kiosk needs everywhere. x11-xserver-utils provides
 # xset, used for screen blanking/wake; cron provides crontab on Debian.
-BASE_PKGS="curl python3 cron surf wmctrl unclutter-xfixes scrot x11-xserver-utils xterm xbindkeys"
+BASE_PKGS="curl cron surf wmctrl unclutter-xfixes scrot x11-xserver-utils xterm xbindkeys"
 if [ "$IS_PI" = "1" ]; then
   PKGS="$BASE_PKGS"
   echo "Raspberry Pi mode: installing the lightweight browser/X11 helper set."
@@ -3799,41 +3980,41 @@ repair_log(){
 }
 
 write_repair_status(){
-  local state="$1" label="$2" detail="$3" backup_path="${4:-}" target="${5:-${REPAIR_TARGET:-latest}}" rc="${6:-0}"
-  mkdir -p "$CACHE_DIR"
-  STATE="$state" LABEL="$label" DETAIL="$detail" BACKUP_PATH="$backup_path" TARGET="$target" RC="$rc" REPAIR_WARNINGS_JSON="${REPAIR_WARNINGS:-}" \
-    python3 - "$CACHE_DIR/repair-install-status.json" <<'PYSTATUS'
-import json, os, time, sys
-path=sys.argv[1]
-try:
-    old=json.load(open(path, encoding='utf-8'))
-    if not isinstance(old, dict): old={}
-except Exception:
-    old={}
-now=int(time.time())
-state=os.environ.get('STATE','unknown')
-data=dict(old)
-data.update({
-    'state': state,
-    'label': os.environ.get('LABEL',''),
-    'detail': os.environ.get('DETAIL',''),
-    'target': os.environ.get('TARGET','latest'),
-    'backup': os.environ.get('BACKUP_PATH',''),
-    'updated': now,
-    'rc': int(os.environ.get('RC','0') or 0),
-    'warnings': [line for line in (os.environ.get('REPAIR_WARNINGS_JSON','') or '').split('\n') if line],
-})
-if state == 'running':
-    data['started'] = now
-    data.pop('finished', None)
-else:
-    data.setdefault('started', now)
-    data['finished'] = now
-tmp=path+'.tmp'
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(tmp,'w',encoding='utf-8') as f: json.dump(data,f,indent=1,sort_keys=True)
-os.replace(tmp,path)
-PYSTATUS
+  local state="$1" label="$2" detail="$3" backup_path="${4:-}" target="${5:-${REPAIR_TARGET:-latest}}" rc="${6:-0}" path tmp now warnings line first=1
+  path="$CACHE_DIR/repair-install-status.json"
+  mkdir -p "$CACHE_DIR" || return 1
+  now="$(date +%s)"; tmp="${path}.tmp"; warnings="${REPAIR_WARNINGS:-}"
+  {
+    printf '{
+'
+    printf '  "backup": "%s",
+' "$(json_escape_shell "$backup_path")"
+    printf '  "detail": "%s",
+' "$(json_escape_shell "$detail")"
+    printf '  "label": "%s",
+' "$(json_escape_shell "$label")"
+    printf '  "rc": %s,
+' "${rc:-0}"
+    printf '  "state": "%s",
+' "$(json_escape_shell "$state")"
+    printf '  "target": "%s",
+' "$(json_escape_shell "$target")"
+    printf '  "updated": %s,
+' "$now"
+    printf '  "warnings": ['
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      [ "$first" = 1 ] || printf ', '
+      printf '"%s"' "$(json_escape_shell "$line")"; first=0
+    done <<EOFREPAIRWARNINGS
+$warnings
+EOFREPAIRWARNINGS
+    printf ']
+}
+'
+  } > "$tmp" || return 1
+  chmod 600 "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$path"
 }
 
 make_repair_backup(){
@@ -3956,10 +4137,7 @@ restore_repair_user_data(){
 # missing/corrupt preferences instead of overwriting a working current setup.
 repair_json_usable(){
   [ -f "$1" ] || return 1
-  python3 - "$1" <<'PYJSON' >/dev/null 2>&1
-import json, sys
-json.load(open(sys.argv[1], encoding='utf-8'))
-PYJSON
+  installer_json_validate "$1"
 }
 
 repair_archive_has_preferences(){
@@ -4038,33 +4216,7 @@ repair_restore_missing_from_tar(){
 
 repair_restore_missing_from_zip(){
   local archive="$1"
-  ZIPFILE="$archive" CONFIG_DIR="$CONFIG_DIR" python3 - <<'PYFALLBACKZIP' || return 1
-import json, os, shutil, zipfile
-zpath=os.environ['ZIPFILE']; config=os.environ['CONFIG_DIR']
-allowed={'settings.json','compliments.json','message-sources.json','message-cache-overrides.json','temp-messages.json','scheduled-messages.json','chalkboard.json','map-provider.json','config.local.js'}
-def valid(path):
-    if not os.path.isfile(path): return False
-    if path.endswith('.js'): return True
-    try:
-        json.load(open(path, encoding='utf-8')); return True
-    except Exception: return False
-with zipfile.ZipFile(zpath) as z:
-    for info in z.infolist():
-        name=info.filename.replace('\\','/').lstrip('./')
-        if not name.startswith('config/') or name.count('/') != 1: continue
-        base=name.split('/',1)[1]
-        if base not in allowed: continue
-        dest=os.path.join(config,base)
-        if valid(dest): continue
-        data=z.read(info)
-        # Validate archive JSON before it can replace a missing/corrupt local
-        # file. config.local.js remains opaque user-owned JavaScript.
-        if not base.endswith('.js'):
-            try: json.loads(data.decode('utf-8'))
-            except Exception: continue
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        with open(dest,'wb') as out: out.write(data)
-PYFALLBACKZIP
+  zip_restore_config_fallback "$archive" "$CONFIG_DIR"
 }
 
 repair_restore_discovered_preferences(){
@@ -4091,6 +4243,22 @@ restore_candidate_kind(){
     *.tar.gz|*.tgz) echo "repair/preserve archive";;
     *.zip) echo "config backup ZIP";;
     *) [ -d "$1" ] && echo "directory" || echo "file";;
+  esac
+}
+
+restore_candidate_looks_usable(){
+  local candidate="$1"
+  [ -e "$candidate" ] || return 1
+  case "$candidate" in
+    *.tar.gz|*.tgz)
+      tar -tzf "$candidate" >/dev/null 2>&1
+      ;;
+    *.zip)
+      zip_has_entries "$candidate"
+      ;;
+    *)
+      [ -d "$candidate" ] && { [ -d "$candidate/config" ] || [ -d "$candidate/calendars" ] || [ -f "$candidate/config.local.js" ]; }
+      ;;
   esac
 }
 
@@ -4145,38 +4313,23 @@ EOFRESTOREPICK
         ;;
     esac
   fi
-  read -rp "Path to backup/preserved archive/directory: " manual
-  [ -n "$manual" ] || return 1
-  manual="${manual/#\~/$HOME}"
-  [ -e "$manual" ] || { warn "restore path not found: $manual"; return 1; }
-  printf '%s\n' "$manual"
+  while :; do
+    read -rp "Path to backup/preserved archive/directory [blank=skip, b=back]: " manual
+    case "$manual" in
+      ''|b|B) return 1;;
+    esac
+    manual="${manual/#\~/$HOME}"
+    if restore_candidate_looks_usable "$manual"; then
+      printf '%s\n' "$manual"
+      return 0
+    fi
+    warn "That path is not a readable Dash-Go backup. Check the path, choose a .tar.gz/.tgz/.zip backup or a backup folder, then try again."
+  done
 }
 
 restore_from_config_zip(){
   local zipfile="$1"
-  ZIPFILE="$zipfile" CONFIG_DIR="$CONFIG_DIR" CAL_DIR="$CAL_DIR" CACHE_DIR="$CACHE_DIR" python3 - <<'PYRESTOREZIP'
-import os, shutil, zipfile, sys
-zipfile_path=os.environ['ZIPFILE']
-allowed={'config':os.environ['CONFIG_DIR'], 'calendars':os.environ['CAL_DIR']}
-restored=0
-with zipfile.ZipFile(zipfile_path) as z:
-    for info in z.infolist():
-        arc=info.filename.replace('\\','/')
-        if info.is_dir() or arc.startswith('/') or '..' in arc.split('/') or '/' not in arc:
-            continue
-        top, rel=arc.split('/',1)
-        if top not in allowed or not rel:
-            continue
-        root=os.path.abspath(allowed[top])
-        dest=os.path.abspath(os.path.join(root, rel))
-        if not (dest == root or dest.startswith(root + os.sep)):
-            continue
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        with z.open(info) as src, open(dest, 'wb') as out:
-            shutil.copyfileobj(src, out)
-        restored += 1
-print(restored)
-PYRESTOREZIP
+  zip_restore_config_and_calendars "$zipfile"
 }
 
 restore_from_directory(){
@@ -4626,42 +4779,11 @@ if [ "$UPDATE_MODE" = "1" ]; then
   exit 0
 fi
 
-# --- Pre-flight checks (plain-English failures, after workflow selection) ---
-# Purely local actions such as Exit, Feature tour, Doctor, and administrator
-# toggles return before this runs, so opening the menu never waits on a weather
-# endpoint merely to quit or inspect a local system.
+# --- Workflow-specific preflight -----------------------------------------
+# The device/network/clock checks happen before the first interactive question.
+# This smaller phase belongs after the user selects an action because restore
+# discovery is meaningful only for a fresh installation.
 run_interactive_preflight(){
-  say "Checking this device is ready"
-  echo "Detected platform: $PLATFORM_LABEL"
-  PREFLIGHT_OK=1
-  for tool in curl python3 crontab; do
-    if command -v "$tool" >/dev/null 2>&1; then
-      ok "$tool found"
-    else
-      case "$tool" in
-        crontab) warn "crontab is missing — install it with: sudo apt install cron";;
-        *)       warn "$tool is missing — install it with: sudo apt install $tool";;
-      esac
-      PREFLIGHT_OK=0
-    fi
-  done
-  # Do not use an unrelated weather provider as a generic connectivity test.
-  # Each selected workflow verifies its own real dependency at the operation
-  # that needs it, so a blocked Open-Meteo endpoint cannot falsely report that
-  # Google, iCloud, APT, or the device internet connection is unavailable.
-  if [ "${DO_VDIR:-0}" = "1" ]; then
-    echo "  Private calendar setup will verify the selected provider when you choose Google, iCloud, or CalDAV."
-  fi
-  # Disk space: a full install + system update wants a bit of headroom.
-  FREE_MB="$(df -Pm "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
-  if [ -n "$FREE_MB" ] && [ "$FREE_MB" -lt 500 ]; then
-    warn "only ${FREE_MB}MB free on the SD card — a full system update may fail."
-    warn "Consider freeing space first (sudo apt clean) or skip the update step."
-  else
-    ok "disk space OK (${FREE_MB:-?}MB free)"
-  fi
-  [ "$PREFLIGHT_OK" = "1" ] || { warn "Fix the missing tools above, then re-run:  ~/install.sh"; exit 1; }
-
   # On a fresh install, optionally restore a previous dashboard config/calendar
   # backup before the setup questions run. App files still install first; the
   # restore is applied immediately after file download so the fresh server code is
@@ -4828,54 +4950,219 @@ OPT_TERMINAL=24
 OPT_EXIT=25
 
 DO_SYSTEM=0 DO_PKGS=0 DO_FILES=0 DO_FONTS=0 DO_CUSTOM=0 DO_WEATHER=0 DO_RADAR=0 DO_WEATHER_DISPLAY=0 DO_MESSAGE_SOURCES=0 DO_APP_SETUP=0 DO_ICAL=0 DO_VDIR=0 DO_SERVICE=0 DO_AUTOLOGIN=0 DO_AUTOSTART=0 DO_CALENDARS=0 DO_PIN=0 DO_SSH=0 DOC_AT_END=0 DO_DEMO=0
-# Detect whether this looks like a first install and default accordingly,
-# so a brand-new user can just press Enter at the menu.
-if [ -f "$DASH/index.html" ]; then DEFMODE="$OPT_UPDATE"; DEFHINT="files are already installed"; else DEFMODE="$OPT_FULL"; DEFHINT="first install detected"; fi
-echo
-echo "What do you want to do?  (${DEFHINT}; press Enter for the suggested action)"
-echo
-echo "  INSTALL & UPDATE"
-echo "  ${OPT_FULL}) Full install            everything, start to finish (first time)"
-echo "  ${OPT_UPDATE}) Update the app          re-download files + restart the web server"
-echo "  ${OPT_UPDATE_RECONFIGURE}) Update + reconfigure    new files, then re-answer setup questions"
-echo
-echo "  SETTINGS"
-echo "  ${OPT_RECONFIGURE}) Reconfigure all         profile, location, display, weather,"
-echo "                              messages, theme, birthdays"
-echo "  ${OPT_WEATHER_DISPLAY}) Weather display         units, days shown, refresh, alert severity"
-echo "  ${OPT_WEATHER_SOURCES}) Weather sources         guided toggle menu for free/keyed providers"
-echo "  ${OPT_RADAR}) Weather radar           choose provider + optional protected key"
-echo "  ${OPT_CALENDARS}) Built-in calendars      holidays, sky calendars, celebrations, pickup"
-echo "  ${OPT_ICAL}) Add public iCal feed    HTTPS/webcal .ics link (read-only)"
-echo "  ${OPT_VDIR}) Connect private calendar Google OAuth/iCloud/CalDAV (vdirsyncer)"
-echo "  ${OPT_MESSAGES}) Message sources         quotes, jokes, facts, prompts, API refresh"
-echo "                              optional keys saved in ~/.dashboard-message.env"
-echo "  ${OPT_TODO}) Microsoft To Do / Graph local Lists, client ID, and Azure CLI app setup"
-echo "  ${OPT_THEME}) Theme                   pick from built-in color schemes"
-echo "  ${OPT_SEASONAL}) Seasonal themes         holiday auto-theming on or off"
-echo
-echo "  SECURITY"
-echo "  ${OPT_PIN}) Control PIN             set/reset/disable passcode + unlock duration"
-echo
-echo "  SYSTEM"
-echo "  ${OPT_SERVICE}) Dashboard service       web server + on-screen control panel"
-echo "  ${OPT_SSH}) Remote access (SSH)     manage the dashboard from another computer"
-echo
-echo "  HELP & ADMIN"
-echo "  ${OPT_DOCTOR}) Health check            verify everything is running (doctor)"
-echo "  ${OPT_TOUR}) Feature tour            what this dashboard can do, in plain words"
-echo "  ${OPT_DEMO}) Demo mode               seed Chicago sample calendars/messages"
-echo "                              with a clear DEMO MODE badge"
-echo "  ${OPT_CUSTOM}) Custom                  choose a focused set of setup/system tasks"
-echo "  ${OPT_REMOVE}) Uninstall Dash-Go       offline project uninstall (verified archive optional)"
-echo "  ${OPT_NOTIFICATIONS}) Notifications (Apprise-Go) configure private outbound delivery routes"
-echo "  ${OPT_TERMINAL}) Terminal access         toggle Dashboard Control Terminal card"
-echo "  ${OPT_EXIT}) Exit installer          close without changing anything"
-echo
-read -rp "  Choose [1-25, q=exit; Enter=$DEFMODE]: " MODE
-MODE="${MODE:-$DEFMODE}"
+EXPRESS_MODE=0
+MODE=""
+# Detect whether this looks like a first install and default accordingly.
+if [ -f "$DASH/index.html" ]; then DEFMODE="$OPT_UPDATE"; DEFHINT="Dash-Go is already installed"; else DEFMODE="$OPT_FULL"; DEFHINT="first install detected"; fi
+
+# Keep the first decision human-sized. The detailed menu remains available,
+# but a first-time owner should not have to understand every safe default.
+normalize_menu_choice(){
+  local value
+  value="$(trim_input "${1:-}")"
+  value="${value%)}"
+  printf '%s' "$value"
+}
+while :; do
+  installed_version="$(installed_dashboard_version)"
+  if [ -f "$DASH/index.html" ]; then
+    echo
+    echo "Start here — Dash-Go ${installed_version:-is} already installed."
+    echo "  1) Update Dash-Go (recommended)"
+    echo "     Download the newest version; keeps all your settings and calendars."
+  else
+    echo
+    echo "Start here — first install detected."
+    echo "  1) Express setup (recommended)"
+    echo "     Use safe defaults. You will only choose your location and, if wanted, a dashboard PIN."
+  fi
+  echo "  2) Show the full menu (updates, settings, tools)"
+  echo "  3) Exit without changing anything"
+  read -rp "  Choose [1/2/3, Enter=1]: " START_LANE
+  START_LANE="$(normalize_menu_choice "${START_LANE:-1}")"
+  case "$START_LANE" in
+    1)
+      EXPRESS_MODE=1
+      if [ -f "$DASH/index.html" ]; then
+        MODE="$OPT_UPDATE"
+        ok "Update selected — Dash-Go will download the newest selected release and confirm it starts."
+      else
+        MODE="$OPT_FULL"
+        echo "Express setup uses safe display, weather, and maintenance defaults. Everything can be changed later in Dashboard Control."
+        read -rp "  Set a Dashboard Control PIN now? [y/N] " EXPRESS_PIN
+        case "$(normalize_menu_choice "$EXPRESS_PIN")" in y|Y) DO_PIN=1;; esac
+      fi
+      break
+      ;;
+    2) break ;;
+    3|q|Q|quit|exit)
+      ok "installer closed without making changes"
+      exit 0
+      ;;
+    *) warn "Choose 1 for the recommended path, 2 for the full menu, or 3 to exit." ;;
+  esac
+done
+
+installer_selected_tasks(){
+  [ "$DO_SYSTEM" = 1 ] && printf '%s\n' "System update / optional platform trim"
+  [ "$DO_PKGS" = 1 ] && printf '%s\n' "Install runtime packages"
+  [ "$DO_FILES" = 1 ] && printf '%s\n' "Download/refresh the dashboard app files"
+  [ "$DO_FONTS" = 1 ] && printf '%s\n' "Download fonts"
+  [ "$DO_CUSTOM" = 1 ] && printf '%s\n' "Setup questions"
+  [ "$DO_WEATHER_DISPLAY" = 1 ] && printf '%s\n' "Weather display behavior"
+  [ "$DO_WEATHER" = 1 ] && printf '%s\n' "Weather source configuration"
+  [ "$DO_RADAR" = 1 ] && printf '%s\n' "Weather radar provider"
+  [ "$DO_MESSAGE_SOURCES" = 1 ] && printf '%s\n' "Message sources"
+  [ "$DO_APP_SETUP" = 1 ] && printf '%s\n' "Microsoft To Do setup"
+  [ "$DO_CALENDARS" = 1 ] && printf '%s\n' "Built-in/default calendars"
+  [ "$DO_ICAL" = 1 ] && printf '%s\n' "Add a calendar link"
+  [ "$DO_VDIR" = 1 ] && printf '%s\n' "Connect a personal calendar"
+  [ "$DO_PIN" = 1 ] && printf '%s\n' "Control-panel PIN"
+  [ "$DO_SERVICE" = 1 ] && printf '%s\n' "Dashboard service"
+  [ "$DO_AUTOLOGIN" = 1 ] && printf '%s\n' "Boot straight into the dashboard"
+  [ "$DO_AUTOSTART" = 1 ] && printf '%s\n' "Autostart + scheduled tasks"
+  [ "$DO_SSH" = 1 ] && printf '%s\n' "Enable SSH"
+  [ "$DOC_AT_END" = 1 ] && printf '%s\n' "Run a health check"
+}
+
+while [ -z "$MODE" ]; do
+  echo
+  echo "What do you want to do?  (${DEFHINT}; Enter = $( [ "$DEFMODE" = "$OPT_UPDATE" ] && printf 'Update the app' || printf 'Full install'))"
+  echo
+  echo "  INSTALL & UPDATE"
+  printf '  %2s) %-24s %s\n' "$OPT_FULL" "Full install" "everything, start to finish (first time)"
+  printf '  %2s) %-24s %s\n' "$OPT_UPDATE" "Update the app" "get the newest version; keeps settings and calendars"
+  printf '  %2s) %-24s %s\n' "$OPT_UPDATE_RECONFIGURE" "Update + reconfigure" "new files, then re-answer setup questions"
+  echo
+  echo "  SETTINGS"
+  printf '  %2s) %-24s %s\n' "$OPT_RECONFIGURE" "Reconfigure all" "profile, location, display, weather, messages, theme, birthdays"
+  printf '  %2s) %-24s %s\n' "$OPT_WEATHER_DISPLAY" "Weather display" "units, days shown, refresh, alert severity"
+  printf '  %2s) %-24s %s\n' "$OPT_WEATHER_SOURCES" "Weather sources" "guided menu for free/keyed providers"
+  printf '  %2s) %-24s %s\n' "$OPT_RADAR" "Weather radar" "choose provider + optional protected key"
+  printf '  %2s) %-24s %s\n' "$OPT_CALENDARS" "Built-in calendars" "holidays, sky calendars, celebrations, pickup"
+  printf '  %2s) %-24s %s\n' "$OPT_ICAL" "Add a calendar link" "paste a calendar address from Google/Outlook/school (view-only)"
+  printf '  %2s) %-24s %s\n' "$OPT_VDIR" "Connect a personal calendar" "Google, Apple iCloud, Nextcloud/Fastmail — sign in and pick calendars"
+  printf '  %2s) %-24s %s\n' "$OPT_MESSAGES" "Message sources" "quotes, jokes, facts, prompts, API refresh"
+  printf '  %2s) %-24s %s\n' "$OPT_TODO" "Microsoft To Do" "connect a Microsoft account for shared to-do lists (guided)"
+  printf '  %2s) %-24s %s\n' "$OPT_THEME" "Theme" "pick from built-in color schemes"
+  printf '  %2s) %-24s %s\n' "$OPT_SEASONAL" "Seasonal themes" "holiday auto-theming on or off"
+  echo
+  echo "  SECURITY"
+  printf '  %2s) %-24s %s\n' "$OPT_PIN" "Control PIN" "set/reset/disable passcode + unlock duration"
+  echo
+  echo "  SYSTEM"
+  printf '  %2s) %-24s %s\n' "$OPT_SERVICE" "Dashboard service" "web server + on-screen control panel"
+  printf '  %2s) %-24s %s\n' "$OPT_SSH" "Remote access (SSH)" "manage the dashboard from another computer"
+  echo
+  echo "  HELP & ADMIN"
+  printf '  %2s) %-24s %s\n' "$OPT_DOCTOR" "Health check" "verify everything is running"
+  printf '  %2s) %-24s %s\n' "$OPT_TOUR" "Feature tour" "what this dashboard can do, in plain words"
+  printf '  %2s) %-24s %s\n' "$OPT_DEMO" "Demo mode" "fill the screen with sample data (clearly marked DEMO; removable)"
+  printf '  %2s) %-24s %s\n' "$OPT_CUSTOM" "Custom" "choose a focused set of setup/system tasks"
+  printf '  %2s) %-24s %s\n' "$OPT_NOTIFICATIONS" "Phone/email alerts" "send dashboard alerts to your phone or email (advanced)"
+  printf '  %2s) %-24s %s\n' "$OPT_TERMINAL" "Terminal access" "toggle Dashboard Control Terminal card"
+  echo
+  echo "  REMOVE"
+  printf '  %2s) %-24s %s\n' "$OPT_REMOVE" "Remove Dash-Go" "uninstall from this device — offers to save a backup first"
+  printf '  %2s) %-24s %s\n' "$OPT_EXIT" "Exit installer" "close without changing anything"
+  echo
+  read -rp "  Choose [1-25, q=exit; Enter=$DEFMODE]: " MODE
+  MODE="$(normalize_menu_choice "${MODE:-$DEFMODE}")"
+
 case "$MODE" in
-  "$OPT_FULL") DO_SYSTEM=1; DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_CALENDARS=1; DO_PIN=1; DO_SSH=1; DOC_AT_END=1;;
+    q|Q|quit|exit) ok "installer closed without making changes"; exit 0 ;;
+    [1-9]|1[0-9]|2[0-5]) : ;;
+    *) warn "Choose a listed action or q to exit."; MODE="" ;;
+  esac
+done
+
+menu_handoff_missing(){
+  local feature="$1"
+  warn "$feature isn't installed yet. Choose option 2 (Update the app) from the menu, then try again."
+  echo "Returning to the installer menu without changing anything."
+  exec bash "$0" "${INSTALLER_ORIGINAL_ARGS[@]}"
+}
+
+custom_questionnaire(){
+  local -a task_labels=(
+    "System update / optional platform trim (slow; rarely needed twice)"
+    "Install runtime packages and fonts"
+    "Download/refresh the dashboard app files"
+    "Setup questions (profile, location, units, theme, birthdays)"
+    "Weather display behavior (days, refresh, alerts, units)"
+    "Weather source configuration (guided provider menu)"
+    "Weather radar provider (on-demand; no background polling)"
+    "Message sources (quotes, jokes, facts, prompts)"
+    "Microsoft To Do / Graph setup"
+    "Built-in/default calendars"
+    "Add a calendar link (read-only)"
+    "Connect a personal calendar"
+    "Control-panel PIN lock"
+    "Dashboard service (web server + on-screen control panel)"
+    "Boot straight into the dashboard + scheduled tasks"
+    "Enable SSH for remote administration"
+    "Run a health check when finished"
+  )
+  local -a answers=()
+  local index=0 answer total=${#task_labels[@]}
+  # This questionnaire is deliberately stateful: b revisits and replaces the
+  # previous answer instead of leaving a stale "yes" selected behind.
+  DO_SYSTEM=0 DO_PKGS=0 DO_FILES=0 DO_FONTS=0 DO_CUSTOM=0 DO_WEATHER=0 DO_RADAR=0 DO_WEATHER_DISPLAY=0 DO_MESSAGE_SOURCES=0 DO_APP_SETUP=0 DO_ICAL=0 DO_VDIR=0 DO_SERVICE=0 DO_AUTOLOGIN=0 DO_AUTOSTART=0 DO_CALENDARS=0 DO_PIN=0 DO_SSH=0 DOC_AT_END=0
+  echo "Custom mode — choose the tasks you want. Type y or n; b goes back; q returns to the menu without selecting anything."
+  while [ "$index" -lt "$total" ]; do
+    read -rp "  [$((index+1))/$total] ${task_labels[$index]}? [y/N, b=back, q=cancel] " answer || return 2
+    answer="$(normalize_menu_choice "$answer")"
+    case "$answer" in
+      q|Q|quit|exit)
+        echo "Nothing selected — returning to the menu."
+        return 2
+        ;;
+      b|B)
+        [ "$index" -gt 0 ] && index=$((index-1)) || warn "This is the first question."
+        continue
+        ;;
+      ''|n|N) answers[$index]=0 ;;
+      y|Y) answers[$index]=1 ;;
+      *) warn "Please answer y, n, b, or q."; continue ;;
+    esac
+    index=$((index+1))
+  done
+  for index in "${!answers[@]}"; do
+    [ "${answers[$index]:-0}" = 1 ] || continue
+    case "$index" in
+      0) DO_SYSTEM=1;;
+      1) DO_PKGS=1; DO_FONTS=1;;
+      2) DO_FILES=1;;
+      3) DO_CUSTOM=1;;
+      4) DO_WEATHER_DISPLAY=1;;
+      5) DO_WEATHER=1;;
+      6) DO_RADAR=1;;
+      7) DO_MESSAGE_SOURCES=1;;
+      8) DO_APP_SETUP=1;;
+      9) DO_CALENDARS=1;;
+      10) DO_ICAL=1;;
+      11) DO_VDIR=1;;
+      12) DO_PIN=1;;
+      13) DO_SERVICE=1;;
+      14) DO_AUTOLOGIN=1; DO_AUTOSTART=1;;
+      15) DO_SSH=1;;
+      16) DOC_AT_END=1;;
+    esac
+  done
+  return 0
+}
+
+case "$MODE" in
+  "$OPT_FULL")
+     if [ "$EXPRESS_MODE" = "1" ]; then
+       # Express avoids system upgrade, optional providers, remote access,
+       # and lengthy preference menus. It remains a complete local kiosk
+       # installation and every omitted choice is available later.
+       DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_CUSTOM=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DOC_AT_END=1
+     else
+       DO_SYSTEM=1; DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_CALENDARS=1; DO_PIN=1; DO_SSH=1; DOC_AT_END=1
+     fi
+     ;;
   "$OPT_UPDATE") DO_FILES=1;;
   "$OPT_UPDATE_RECONFIGURE") DO_FILES=1; DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
   "$OPT_RECONFIGURE") DO_CUSTOM=1; DO_WEATHER_DISPLAY=1; DO_WEATHER=1; DO_RADAR=1; DO_MESSAGE_SOURCES=1;;
@@ -4892,12 +5179,10 @@ case "$MODE" in
        "$BIN_DIR/set-theme.sh"
        exit $?
      fi
-     warn "set-theme.sh not found in $DASH. Run Update the app first."
-     exit 1;;
+     menu_handoff_missing "Theme support";;
   "$OPT_SEASONAL") # Seasonal themes: show the current state, offer to flip it, and exit.
      if [ ! -x "$BIN_DIR/seasonal-themes.sh" ]; then
-       warn "seasonal-themes.sh not found in $DASH. Run Update the app first."
-       exit 1
+       menu_handoff_missing "Seasonal themes support"
      fi
      if crontab -l 2>/dev/null | grep -q "seasonal-themes.sh apply"; then
        echo "Seasonal auto-theming is currently ON — holiday themes apply by"
@@ -4926,8 +5211,7 @@ case "$MODE" in
      if [ -x "$BIN_DIR/doctor.sh" ]; then
        bash "$BIN_DIR/doctor.sh"; exit $?
      else
-       warn "doctor.sh not found in $DASH. Run Update the app first."
-       exit 1
+       menu_handoff_missing "Health Check"
      fi;;
   "$OPT_TOUR") # Feature tour: a plain-language overview, then exit.
      cat <<'TOUR'
@@ -4995,33 +5279,10 @@ case "$MODE" in
 TOUR
      exit 0;;
   "$OPT_DEMO") DO_PKGS=1; DO_FILES=1; DO_FONTS=1; DO_SERVICE=1; DO_AUTOLOGIN=1; DO_AUTOSTART=1; DO_DEMO=1;;
-  "$OPT_CUSTOM") echo
-     echo "Custom mode — choose the core setup and system tasks you want."
-     echo "Theme, Seasonal themes, Demo Mode, Notifications, and Terminal access each have their own focused menu action."
-     echo "(Tasks run in the order shown; each is safe to re-run.)"
-     ask(){ read -rp "  $1? [y/N] " a; [ "$a" = "y" ] || [ "$a" = "Y" ]; }
-     ask "System update / optional platform trim (slow; rarely needed twice)" && DO_SYSTEM=1
-     ask "Install runtime packages (browser, X/LightDM/LXDE tools)"       && DO_PKGS=1
-     ask "Download/refresh the dashboard app files"                  && DO_FILES=1
-     ask "Download fonts"                                            && DO_FONTS=1
-     ask "Setup questions (profile, location, units, theme, birthdays)" && DO_CUSTOM=1
-     ask "Weather display behavior (days, refresh, alerts, units)" && DO_WEATHER_DISPLAY=1
-     ask "Weather source configuration (guided provider toggle menu)" && DO_WEATHER=1
-     ask "Weather radar provider (on-demand; no background polling)" && DO_RADAR=1
-     ask "Message sources (quotes, jokes, facts, prompts)"         && DO_MESSAGE_SOURCES=1
-     ask "Microsoft To Do / Graph setup (local Lists, client ID, Azure CLI registration)" && DO_APP_SETUP=1
-     ask "Built-in/default calendars"                              && DO_CALENDARS=1
-     ask "Add public iCal feed (read-only)"                         && DO_ICAL=1
-     ask "Connect private calendar (Google OAuth, iCloud, or CalDAV)" && DO_VDIR=1
-     ask "Control-panel PIN lock (set/reset/disable/duration)"       && DO_PIN=1
-     ask "Dashboard service (web server + on-screen control panel)" && DO_SERVICE=1
-     ask "Boot straight into the dashboard (graphical autologin)"    && DO_AUTOLOGIN=1
-     ask "Autostart + scheduled tasks (holidays, event cache, housekeeping, restart)" && DO_AUTOSTART=1
-     ask "Enable SSH for remote administration"                      && DO_SSH=1
-     ask "Run a health check when finished"                          && DOC_AT_END=1
-     if [ "$DO_SERVICE" = "1" ] || [ "$DO_AUTOLOGIN" = "1" ] || [ "$DO_AUTOSTART" = "1" ]; then
-       echo "  (the system tasks each confirm their own sub-steps — watchdog,"
-       echo "   reboot permission, nightly restart — as they run)"
+  "$OPT_CUSTOM")
+     if ! custom_questionnaire; then
+       ok "No custom tasks selected. Returning to the installer menu without changing anything."
+       exec bash "$0" "${INSTALLER_ORIGINAL_ARGS[@]}"
      fi
      ;;
   "$OPT_REMOVE") run_remove_install; exit $?;;
@@ -5030,8 +5291,24 @@ TOUR
   "$OPT_EXIT"|q|Q|quit|exit)
      ok "installer closed without making changes"
      exit 0;;
-  *) warn "Choose a listed action or q to exit."; exit 1;;
+  # The menu loop validates every normal input before dispatch. Keep this
+  # defensive fallback non-fatal so a future menu refactor cannot strand a
+  # novice after a harmless typo or silently discard their original flags.
+  *)
+     warn "That menu choice could not be used. Returning to the menu; nothing was changed."
+     exec bash "$0" "${INSTALLER_ORIGINAL_ARGS[@]}"
+     ;;
 esac
+
+# The Go control-server helper owns installer JSON, PIN, and geocoding writes.
+# A focused first-run/custom selection might otherwise reach those prompts before
+# a payload exists, so transparently add the safe app-file refresh it requires.
+if [ "$DO_FILES" != "1" ] && { [ "$DO_CUSTOM" = "1" ] || [ "$DO_WEATHER_DISPLAY" = "1" ] || [ "$DO_WEATHER" = "1" ] || [ "$DO_RADAR" = "1" ] || [ "$DO_MESSAGE_SOURCES" = "1" ] || [ "$DO_APP_SETUP" = "1" ] || [ "$DO_PIN" = "1" ] || [ "$DO_VDIR" = "1" ]; }; then
+  if [ ! -x "$BIN_DIR/dashboard-control-server" ]; then
+    warn "This setup choice needs the current Dash-Go helper. Enabling Update the app first; your existing settings and calendars will be kept."
+    DO_FILES=1
+  fi
+fi
 
 # A detected Demo Mode is actionable only after the user has chosen an actual
 # installer workflow. Health, tour, Exit, notifications, and terminal actions
@@ -5042,6 +5319,7 @@ if [ "$REMOVE_MODE" = "1" ]; then
   exit $?
 fi
 run_interactive_preflight
+installer_build_stage_plan
 
 # Full install also installs packages + fonts; presets assume those exist.
 [ "$MODE" = "$OPT_FULL" ] && DO_PKGS=1
@@ -5063,7 +5341,21 @@ if [ "${RESTORE_FROM_BACKUP:-0}" = "1" ]; then
 fi
 
 echo
-read -rp "Continue? [y/N] " proceed; [ "$proceed" = "y" ] || [ "$proceed" = "Y" ] || exit 0
+if [ "$EXPRESS_MODE" = "1" ]; then
+  ok "Continuing with Express setup. You can change any default later in Dashboard Control."
+else
+  selected_count="$(installer_selected_tasks | wc -l | tr -d ' ')"
+  echo "The following $selected_count safe, re-runnable task(s) will run:"
+  installer_selected_tasks | sed 's/^/  • /'
+  if [ "$DO_SYSTEM" = "1" ]; then
+    read -rp "Run these $selected_count tasks now? This includes a system update. [y/N] " proceed
+  else
+    read -rp "Run these $selected_count tasks now? [Y/n] " proceed
+  fi
+  case "$(normalize_menu_choice "$proceed")" in
+    n|N|q|Q|quit|exit) ok "Nothing was changed — run ~/install.sh again anytime."; exit 0;;
+  esac
+fi
 
 APP_FILES_OK=0
 DEMO_MODE_OK=0
@@ -5168,6 +5460,7 @@ SYSCTL
 
 # ---------------------------------------------------------------------
 if [ "$DO_SYSTEM" = "1" ]; then
+installer_stage "Preparing the operating system"
 say "System update / platform trim"
 echo "Detected platform: $PLATFORM_LABEL"
 echo
@@ -5237,6 +5530,7 @@ fi
 
 # ---------------------------------------------------------------------
 if [ "$DO_PKGS" = "1" ]; then
+  installer_stage "Installing dashboard components"
   install_runtime_packages
 fi  # end DO_PKGS
 
@@ -5247,6 +5541,7 @@ cd "$DASH" || { warn "cannot enter $DASH"; exit 1; }
 
 # ---------------------------------------------------------------------
 if [ "$DO_FILES" = "1" ]; then
+installer_stage "Installing Dash-Go"
 say "Downloading app files"
 if download_app_files; then
   APP_FILES_OK=1
@@ -5293,6 +5588,7 @@ fi
 # scripts and settings defaults are available. This supports archives created by
 # --repair, --remove, and Dashboard Control config-backup ZIPs.
 if [ "${RESTORE_FROM_BACKUP:-0}" = "1" ]; then
+  installer_stage "Restoring saved dashboard data"
   say "Restoring previous dashboard settings/calendars"
   if restore_previous_install_data "$RESTORE_ARCHIVE"; then
     ok "restore source applied"
@@ -5326,6 +5622,14 @@ valid_lat(){ printf '%s' "$1" | grep -qE '^-?([0-8]?[0-9](\.[0-9]+)?|90(\.0+)?)$
 valid_lon(){ printf '%s' "$1" | grep -qE '^-?(1[0-7][0-9]|[0-9]?[0-9])(\.[0-9]+)?$|^-?180(\.0+)?$'; }
 # MM-DD: month 01-12, day 01-31 (calendar-light; doesn't reject e.g. 02-30).
 valid_mmdd(){ printf '%s' "$1" | grep -qE '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'; }
+# API keys and endpoint values are pasted often. Trim harmless surrounding
+# whitespace before persisting them, while retaining the previous saved value
+# when the user presses Enter.
+store_optional_trimmed(){
+  local target="$1" value
+  value="$(trim_input "$2")"
+  [ -n "$value" ] && printf -v "$target" '%s' "$value"
+}
 json_escape(){ printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 write_radar_env(){
@@ -5346,28 +5650,11 @@ write_radar_env(){
 
 write_radar_settings_only(){
   mkdir -p "$CONFIG_DIR"
-  if [ ! -f "$CONFIG_DIR/config.local.js" ]; then
-    cat > "$CONFIG_DIR/config.local.js" <<'EOFRADARCFG'
-window.DASHBOARD_LOCAL = { lat: 0, lon: 0, radarProvider: "rainviewer", birthdays: [] };
-EOFRADARCFG
-  fi
-  CONFIG_FILE="$CONFIG_DIR/config.local.js" RADAR_PROVIDER="${RADAR_PROVIDER:-rainviewer}" RADAR_CUSTOM_TILES="${RADAR_CUSTOM_TILES:-}" python3 - <<'PYRADARCFG'
-import json, os, re
-path=os.environ['CONFIG_FILE']; text=open(path,encoding='utf-8').read()
-def set_field(src,key,value):
-    pat=re.compile(r'(?m)^(\s*)'+re.escape(key)+r'\s*:\s*.*?(,?)\s*$')
-    repl=r'\1%s: %s,'%(key,value)
-    new,n=pat.subn(repl,src,count=1)
-    if n: return new
-    m=re.search(r'(?m)^\s*birthdays\s*:',new) or re.search(r'(?m)^\s*};\s*$',new)
-    ins='  %s: %s,\n'%(key,value)
-    return new[:m.start()]+ins+new[m.start():] if m else new.rstrip()+"\n"+ins
-fields=[('radarProvider',json.dumps(os.environ.get('RADAR_PROVIDER') or 'rainviewer'))]
-custom=os.environ.get('RADAR_CUSTOM_TILES','').strip()
-if custom: fields.append(('radarCustomTiles',json.dumps(custom)))
-for k,v in fields: text=set_field(text,k,v)
-tmp=path+'.tmp'; open(tmp,'w',encoding='utf-8').write(text); os.replace(tmp,path)
-PYRADARCFG
+  installer_cli --installer-config-local --file "$CONFIG_DIR/config.local.js" --mode radar \
+    --provider "${RADAR_PROVIDER:-rainviewer}" --custom-tiles "${RADAR_CUSTOM_TILES:-}" || {
+      warn "Could not save radar settings. Run ~/install.sh again to retry this step."
+      return 1
+    }
   ok "wrote radar settings to config/config.local.js"
 }
 
@@ -5400,10 +5687,10 @@ prompt_radar_provider(){
     2) RADAR_PROVIDER="nws";; 3) RADAR_PROVIDER="tomorrow";; 4) RADAR_PROVIDER="weatherbit";; 5) RADAR_PROVIDER="xweather";; 6) RADAR_PROVIDER="custom_xyz";; 1|"") :;; *) warn "unknown radar choice; keeping ${RADAR_PROVIDER}";;
   esac
   case "$RADAR_PROVIDER" in
-    tomorrow) read -rp "  Tomorrow.io radar key [$([ -n "$key_radar_tomorrow" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_radar_tomorrow="$ans";;
-    weatherbit) read -rp "  Weatherbit Maps key [$([ -n "$key_radar_weatherbit" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_radar_weatherbit="$ans";;
-    xweather) read -rp "  Xweather client ID [$([ -n "$key_radar_xweather_id" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_radar_xweather_id="$ans"; read -rp "  Xweather client secret [$([ -n "$key_radar_xweather_secret" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_radar_xweather_secret="$ans";;
-    custom_xyz) read -rp "  HTTPS XYZ template (use {z}/{x}/{y}): " ans; [ -n "$ans" ] && RADAR_CUSTOM_TILES="$ans";;
+    tomorrow) read -rp "  Tomorrow.io radar key [$([ -n "$key_radar_tomorrow" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_radar_tomorrow "$ans";;
+    weatherbit) read -rp "  Weatherbit Maps key [$([ -n "$key_radar_weatherbit" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_radar_weatherbit "$ans";;
+    xweather) read -rp "  Xweather client ID [$([ -n "$key_radar_xweather_id" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_radar_xweather_id "$ans"; read -rp "  Xweather client secret [$([ -n "$key_radar_xweather_secret" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_radar_xweather_secret "$ans";;
+    custom_xyz) read -rp "  HTTPS XYZ template (use {z}/{x}/{y}): " ans; store_optional_trimmed RADAR_CUSTOM_TILES "$ans";;
   esac
   if [ "$RADAR_PROVIDER" = "tomorrow" ] && [ -z "$key_radar_tomorrow" ]; then warn "Tomorrow.io has no saved key; RainViewer will be used until a key is added."; fi
   if [ "$RADAR_PROVIDER" = "weatherbit" ] && [ -z "$key_radar_weatherbit" ]; then warn "Weatherbit Maps has no saved key; RainViewer will be used until a key is added."; fi
@@ -5459,7 +5746,7 @@ prompt_message_api_keys(){
   echo "  Optional. Leave blank to use only key-free providers plus local fallback."
   echo "  Currently supported keyed provider family: API Ninjas."
   read -rp "  API Ninjas key [$([ -n "$key_api_ninjas" ] && echo saved || echo blank)]: " ans
-  [ -n "$ans" ] && key_api_ninjas="$ans"
+  store_optional_trimmed key_api_ninjas "$ans"
   write_message_env
 }
 
@@ -5483,25 +5770,7 @@ prompt_weather_sources(){
 
   existing="openmeteo"
   if [ -f "$CONFIG_DIR/config.local.js" ]; then
-    existing="$(CONFIG_FILE="$CONFIG_DIR/config.local.js" python3 - <<'PYWXEXIST'
-import json, os, re
-path=os.environ.get('CONFIG_FILE')
-text=open(path,encoding='utf-8').read() if path and os.path.exists(path) else ''
-m=re.search(r'(?ms)\bweatherProviders\s*:\s*(\[[^\]]*\])', text)
-try:
-    vals=json.loads(m.group(1)) if m else []
-except Exception:
-    vals=[]
-repl={'metno':'weatherbit','meteosource':'weatherbit'}
-supported={'openmeteo','nws','weatherapi','openweather','googleweather','tomorrow','visualcrossing','weatherbit','pirateweather','accuweather','xweather','openmeteo-custom'}
-out=[]
-for v in vals or ['openmeteo']:
-    v=repl.get(str(v).strip().lower(), str(v).strip().lower())
-    if v and v in supported and v not in out:
-        out.append(v)
-print(' '.join(out or ['openmeteo']))
-PYWXEXIST
-)"
+    existing="$(installer_cli --installer-weather-providers "$CONFIG_DIR/config.local.js" 2>/dev/null || printf 'openmeteo')"
   fi
 
   sel_openmeteo=0; sel_nws=0; sel_weatherapi=0; sel_openweather=0; sel_googleweather=0; sel_tomorrow=0; sel_visualcrossing=0; sel_weatherbit=0; sel_pirateweather=0; sel_accuweather=0; sel_xweather=0; sel_custom=0
@@ -5650,19 +5919,21 @@ PYWXEXIST
 
   echo
   echo "Weather API keys — press Enter to keep a saved key or leave blank."
-  if [ "$sel_weatherapi" = "1" ]; then read -rp "  WeatherAPI.com key [$([ -n "$key_weatherapi" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_weatherapi="$ans"; fi
-  if [ "$sel_openweather" = "1" ]; then read -rp "  OpenWeather key [$([ -n "$key_openweather" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_openweather="$ans"; fi
-  if [ "$sel_googleweather" = "1" ]; then read -rp "  Google Weather API key [$([ -n "$key_googleweather" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_googleweather="$ans"; fi
-  if [ "$sel_tomorrow" = "1" ]; then read -rp "  Tomorrow.io key [$([ -n "$key_tomorrow" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_tomorrow="$ans"; fi
-  if [ "$sel_visualcrossing" = "1" ]; then read -rp "  Visual Crossing key [$([ -n "$key_visualcrossing" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_visualcrossing="$ans"; fi
-  if [ "$sel_weatherbit" = "1" ]; then read -rp "  Weatherbit key [$([ -n "$key_weatherbit" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_weatherbit="$ans"; fi
-  if [ "$sel_pirateweather" = "1" ]; then read -rp "  Pirate Weather key [$([ -n "$key_pirateweather" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_pirateweather="$ans"; fi
-  if [ "$sel_accuweather" = "1" ]; then read -rp "  AccuWeather key [$([ -n "$key_accuweather" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_accuweather="$ans"; fi
-  if [ "$sel_xweather" = "1" ]; then read -rp "  Xweather client_id:client_secret [$([ -n "$key_xweather" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_xweather="$ans"; fi
+  if [ "$sel_weatherapi" = "1" ]; then read -rp "  WeatherAPI.com key [$([ -n "$key_weatherapi" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_weatherapi "$ans"; fi
+  if [ "$sel_openweather" = "1" ]; then read -rp "  OpenWeather key [$([ -n "$key_openweather" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_openweather "$ans"; fi
+  if [ "$sel_googleweather" = "1" ]; then read -rp "  Google Weather API key [$([ -n "$key_googleweather" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_googleweather "$ans"; fi
+  if [ "$sel_tomorrow" = "1" ]; then read -rp "  Tomorrow.io key [$([ -n "$key_tomorrow" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_tomorrow "$ans"; fi
+  if [ "$sel_visualcrossing" = "1" ]; then read -rp "  Visual Crossing key [$([ -n "$key_visualcrossing" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_visualcrossing "$ans"; fi
+  if [ "$sel_weatherbit" = "1" ]; then read -rp "  Weatherbit key [$([ -n "$key_weatherbit" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_weatherbit "$ans"; fi
+  if [ "$sel_pirateweather" = "1" ]; then read -rp "  Pirate Weather key [$([ -n "$key_pirateweather" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_pirateweather "$ans"; fi
+  if [ "$sel_accuweather" = "1" ]; then read -rp "  AccuWeather key [$([ -n "$key_accuweather" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_accuweather "$ans"; fi
+  if [ "$sel_xweather" = "1" ]; then read -rp "  Xweather client_id:client_secret [$([ -n "$key_xweather" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_xweather "$ans"; fi
   if [ "$sel_custom" = "1" ]; then
     read -rp "  Weather API base [https://api.open-meteo.com]: " WXAPI
+    WXAPI="$(trim_input "$WXAPI")"
     read -rp "  Air-quality base [https://air-quality-api.open-meteo.com]: " AQAPI
-    read -rp "  Open-Meteo-compatible API key [$([ -n "$key_openmeteocustom" ] && echo saved || echo blank)]: " ans; [ -n "$ans" ] && key_openmeteocustom="$ans"
+    AQAPI="$(trim_input "$AQAPI")"
+    read -rp "  Open-Meteo-compatible API key [$([ -n "$key_openmeteocustom" ] && echo saved || echo blank)]: " ans; store_optional_trimmed key_openmeteocustom "$ans"
     APIKEY="$key_openmeteocustom"
   fi
   auto_disable_keyless_weather_sources
@@ -5678,177 +5949,33 @@ PYWXEXIST
 
 write_weather_sources_only(){
   mkdir -p "$CONFIG_DIR"
-  if [ ! -f "$CONFIG_DIR/config.local.js" ]; then
-    cat > "$CONFIG_DIR/config.local.js" <<EOFWEATHERCFG
-// Generated by install.sh on $(date). Re-run the installer to change.
-window.DASHBOARD_LOCAL = {
-  lat: 0,
-  lon: 0,
-  tempUnit: "fahrenheit",
-  windUnit: "mph",
-  theme: "basic",
-  weatherProviders: ["openmeteo"],
-  birthdays: []
-};
-EOFWEATHERCFG
-  fi
-  CONFIG_FILE="$CONFIG_DIR/config.local.js" WEATHER_PROVIDERS="$WEATHER_PROVIDERS" WEATHER_KEYS_JS="$WEATHER_KEYS_JS" WXAPI="$WXAPI" AQAPI="$AQAPI" APIKEY="$APIKEY" python3 - <<'PYWEATHERCFG'
-import json, os, re
-path=os.environ['CONFIG_FILE']
-text=open(path,encoding='utf-8').read()
-providers=[x for x in (os.environ.get('WEATHER_PROVIDERS') or 'openmeteo').split() if x]
-keys=json.loads(os.environ.get('WEATHER_KEYS_JS') or '{}')
-fields=[
- ('weatherProviders', json.dumps(providers)),
-]
-for key,env in [('wxApi','WXAPI'),('aqApi','AQAPI')]:
-    val=os.environ.get(env) or ''
-    if val:
-        fields.append((key, json.dumps(val.rstrip('/'))))
-# Remove old key fields from config.local.js; keys now live in ~/.dashboard-weather.env.
-for old_key in ('weatherProviderKeys','apiKey'):
-    text=re.sub(r'(?m)^\s*'+re.escape(old_key)+r'\s*:\s*.*?,?\s*$', '', text)
-def set_field(src,key,value):
-    pat=re.compile(r'(?m)^(\s*)'+re.escape(key)+r'\s*:\s*.*?(,?)\s*$')
-    repl=r'\1%s: %s,'%(key,value)
-    new,n=pat.subn(repl,src,count=1)
-    if n: return new
-    m=re.search(r'(?m)^\s*birthdays\s*:',new) or re.search(r'(?m)^\s*};\s*$',new)
-    ins='  %s: %s,\n'%(key,value)
-    return new[:m.start()]+ins+new[m.start():] if m else new.rstrip()+"\n"+ins
-for key,value in fields:
-    text=set_field(text,key,value)
-tmp=path+'.tmp'
-open(tmp,'w',encoding='utf-8').write(text)
-os.replace(tmp,path)
-PYWEATHERCFG
-  ok "wrote weather source settings to config/config.local.js"
-}
-
-
-read_config_scalar(){
-  local key="$1" fallback="$2" file="$CONFIG_DIR/config.local.js"
-  [ -f "$file" ] || { printf '%s\n' "$fallback"; return 0; }
-  local val
-  val="$(sed -nE 's/.*'"$key"'[[:space:]]*:[[:space:]]*"?([^",} ]+)"?.*/\1/p' "$file" 2>/dev/null | head -1)"
-  printf '%s\n' "${val:-$fallback}"
-}
-
-read_config_string(){
-  local key="$1" fallback="$2" file="$CONFIG_DIR/config.local.js"
-  [ -f "$file" ] || { printf '%s\n' "$fallback"; return 0; }
-  local val
-  val="$(sed -nE 's/.*'"$key"'[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' "$file" 2>/dev/null | head -1)"
-  printf '%s\n' "${val:-$fallback}"
-}
-
-
-prompt_weather_display(){
-  local skip_units="${1:-0}" ans
-  WEATHERDAYS="${WEATHERDAYS:-$(read_config_scalar weatherDays 14)}"
-  WXREFRESH="${WXREFRESH:-$(read_config_scalar refreshWxMinutes 30)}"
-  ALERTREFRESH="${ALERTREFRESH:-$(sed -nE 's/.*weatherAlerts.*refreshMinutes[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "$CONFIG_DIR/config.local.js" 2>/dev/null | head -1)}"
-  ALERTREFRESH="${ALERTREFRESH:-5}"
-  ALERTMIN="${ALERTMIN:-$(sed -nE 's/.*weatherAlerts.*minSeverity[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$CONFIG_DIR/config.local.js" 2>/dev/null | head -1)}"
-  ALERTMIN="${ALERTMIN:-moderate}"
-  TEMPU="${TEMPU:-$(read_config_scalar tempUnit fahrenheit)}"
-  WINDU="${WINDU:-$(read_config_scalar windUnit mph)}"
-  echo
-  echo "Weather display behavior:"
-  if [ "$skip_units" != "1" ]; then
-    echo "  1) Fahrenheit / mph"
-    echo "  2) Celsius / km/h"
-    read -rp "  Units [1/2, Enter=current ${TEMPU}/${WINDU}]: " ans
-    case "$ans" in 2) TEMPU="celsius"; WINDU="kmh";; 1) TEMPU="fahrenheit"; WINDU="mph";; esac
-  fi
-  read -rp "  Forecast days to show [$WEATHERDAYS]: " ans
-  [ -n "$ans" ] && printf '%s' "$ans" | grep -qE '^[0-9]+$' && WEATHERDAYS="$ans"
-  read -rp "  Weather refresh minutes [$WXREFRESH]: " ans
-  [ -n "$ans" ] && printf '%s' "$ans" | grep -qE '^[0-9]+$' && WXREFRESH="$ans"
-  read -rp "  Alert refresh minutes [$ALERTREFRESH]: " ans
-  [ -n "$ans" ] && printf '%s' "$ans" | grep -qE '^[0-9]+$' && ALERTREFRESH="$ans"
-  echo "  Alert severity threshold: minor, moderate, severe, extreme"
-  read -rp "  Show alerts at or above [$ALERTMIN]: " ans
-  case "$ans" in minor|moderate|severe|extreme) ALERTMIN="$ans";; "") :;; *) warn "unknown alert threshold; keeping $ALERTMIN";; esac
-  ok "weather display: ${WEATHERDAYS}d, refresh ${WXREFRESH}m, alerts ${ALERTREFRESH}m/${ALERTMIN}, units ${TEMPU}/${WINDU}"
+  installer_cli --installer-config-local --file "$CONFIG_DIR/config.local.js" --mode weather \
+    --providers "${WEATHER_PROVIDERS:-openmeteo}" --wx-api "${WXAPI:-}" --aq-api "${AQAPI:-}" || {
+      warn "Could not save weather sources. Run ~/install.sh again to retry this step."
+      return 1
+    }
+  write_weather_env
+  ok "weather sources saved"
 }
 
 write_weather_display_only(){
   mkdir -p "$CONFIG_DIR"
-  if [ ! -f "$CONFIG_DIR/config.local.js" ]; then
-    cat > "$CONFIG_DIR/config.local.js" <<EOFDISPLAYCFG
-// Generated by install.sh on $(date). Re-run the installer to change.
-window.DASHBOARD_LOCAL = {
-  lat: 0,
-  lon: 0,
-  tempUnit: "${TEMPU:-fahrenheit}",
-  windUnit: "${WINDU:-mph}",
-  theme: "basic",
-  weatherDays: ${WEATHERDAYS:-14},
-  refreshWxMinutes: ${WXREFRESH:-30},
-  weatherAlerts: { enabled: true, refreshMinutes: ${ALERTREFRESH:-5}, minSeverity: "${ALERTMIN:-moderate}" },
-  birthdays: []
-};
-EOFDISPLAYCFG
-  fi
-  CONFIG_FILE="$CONFIG_DIR/config.local.js" TEMPU="$TEMPU" WINDU="$WINDU" WEATHERDAYS="$WEATHERDAYS" WXREFRESH="$WXREFRESH" ALERTREFRESH="$ALERTREFRESH" ALERTMIN="$ALERTMIN" python3 - <<'PYDISPLAYCFG'
-import json, os, re
-path=os.environ['CONFIG_FILE']
-text=open(path,encoding='utf-8').read()
-fields=[
- ('tempUnit', json.dumps(os.environ.get('TEMPU') or 'fahrenheit')),
- ('windUnit', json.dumps(os.environ.get('WINDU') or 'mph')),
- ('weatherDays', str(int(os.environ.get('WEATHERDAYS') or 14))),
- ('refreshWxMinutes', str(int(os.environ.get('WXREFRESH') or 30))),
- ('weatherAlerts', '{ enabled: true, refreshMinutes: %s, minSeverity: %s }' % (int(os.environ.get('ALERTREFRESH') or 5), json.dumps(os.environ.get('ALERTMIN') or 'moderate'))),
-]
-def set_field(src,key,value):
-    pat=re.compile(r'(?m)^(\s*)'+re.escape(key)+r'\s*:\s*.*?(,?)\s*$')
-    repl=r'\1%s: %s,'%(key,value)
-    new,n=pat.subn(repl,src,count=1)
-    if n: return new
-    m=re.search(r'(?m)^\s*birthdays\s*:',new) or re.search(r'(?m)^\s*};\s*$',new)
-    ins='  %s: %s,\n'%(key,value)
-    return new[:m.start()]+ins+new[m.start():] if m else new.rstrip()+"\n"+ins
-for key,value in fields:
-    text=set_field(text,key,value)
-tmp=path+'.tmp'
-open(tmp,'w',encoding='utf-8').write(text)
-os.replace(tmp,path)
-PYDISPLAYCFG
-  ok "wrote weather display settings to config/config.local.js"
+  installer_cli --installer-config-local --file "$CONFIG_DIR/config.local.js" --mode display \
+    --temp-unit "${TEMPU:-fahrenheit}" --wind-unit "${WINDU:-mph}" \
+    --weather-days "${WEATHERDAYS:-14}" --refresh-wx "${WXREFRESH:-30}" \
+    --alert-refresh "${ALERTREFRESH:-5}" --alert-min "${ALERTMIN:-moderate}" || {
+      warn "Could not save weather display settings. Run ~/install.sh again to retry this step."
+      return 1
+    }
+  ok "weather display settings saved"
 }
 
 ensure_message_data_files(){
   mkdir -p "$CONFIG_DIR"
-  CONFIG_DIR="$CONFIG_DIR" python3 - <<'PYMSGFILES'
-import json, os
-config=os.environ['CONFIG_DIR']
-os.makedirs(config, exist_ok=True)
-def ensure(name, default, want_type):
-    path=os.path.join(config,name)
-    try:
-        with open(path,encoding='utf-8') as f:
-            data=json.load(f)
-        if not isinstance(data, want_type):
-            raise ValueError(name)
-    except Exception:
-        tmp=path+'.tmp'
-        with open(tmp,'w',encoding='utf-8') as f:
-            json.dump(default,f,indent=1,ensure_ascii=False)
-            f.write('\n')
-        os.replace(tmp,path)
-ensure('compliments.json', {'messages': [], 'defaultsCleared': False, 'defaultsSeeded': False, 'removedDefaults': [], 'defaultEdits': {}, 'version': 4}, dict)
-ensure('message-sources.json', {'enabled': [], 'updatedAt': 0}, dict)
-ensure('message-cache.json', {'items': [
-    {'id':'example-welcome-01','text':'Example: Pick Message sources to add quotes, jokes, and facts here.','source':'example','nsfw':False,'weight':1,'edited':False},
-    {'id':'example-welcome-02','text':'Example: Deleted or edited pulled items will stay that way after refresh.','source':'example','nsfw':False,'weight':1,'edited':False},
-    {'id':'example-welcome-03','text':'Example: Enable sources, then tap Refresh now to replace examples with fresh items.','source':'example','nsfw':False,'weight':1,'edited':False}
-], 'generatedAt': 0, 'sources': ['example'], 'enabled': []}, dict)
-ensure('message-cache-overrides.json', {'removed': [], 'edits': {}}, dict)
-ensure('temp-messages.json', [], list)
-ensure('scheduled-messages.json', [], list)
-PYMSGFILES
+  installer_cli --installer-message-files --dir "$CONFIG_DIR" || {
+    warn "Could not prepare message data files. Run ~/install.sh again to retry this step."
+    return 1
+  }
   if [ -f "$CACHE_DIR/demo-mode.json" ]; then
     : # Demo Mode owns message-cache.json; do not replace sample messages.
   elif [ -x "$BIN_DIR/dashboard-control-server" ]; then
@@ -5968,45 +6095,43 @@ echo "Weather location — enter a place name to look up, or coordinates directl
 # Geocode a place name via Open-Meteo's free geocoding API (no key). Sets
 # globals LAT, LON, LOCNAME on success; returns 1 if nothing usable found.
 geocode(){
-  local q="$1"
-  # The lookup service matches CITY NAMES only — "Chicago, IL" finds
-  # nothing while "Chicago" works. Strip anything after a comma so
-  # people can type it either way.
-  q="${q%%,*}"
-  q="$(printf '%s' "$q" | sed 's/^ *//; s/ *$//')"   # trim stray spaces
-  local enc; enc="$(printf '%s' "$q" | sed 's/ /+/g')"
-  local url="https://geocoding-api.open-meteo.com/v1/search?name=${enc}&count=5&language=en&format=json"
-  local json; json="$(curl -fsSL -A "Mozilla/5.0" --max-time 20 "$url" 2>/dev/null)"
-  [ -z "$json" ] && return 1
-  # Parse results with python3 (present on Pi OS). Prints "lat|lon|label" lines.
-  local results; results="$(printf '%s' "$json" | python3 -c '
-import sys,json
-try: d=json.load(sys.stdin)
-except Exception: sys.exit(1)
-for r in d.get("results",[]):
-    parts=[r.get("name"),r.get("admin1"),r.get("country")]
-    label=", ".join(str(x) for x in parts if x)
-    la=r.get("latitude"); lo=r.get("longitude")
-    print(str(la)+"|"+str(lo)+"|"+label)
-' 2>/dev/null)"
-  [ -z "$results" ] && return 1
-  # Show numbered matches, let the user pick.
+  local q="$1" results rc errfile i=1 la lo lab pick
+  q="${q%%,*}"; q="$(trim_input "$q")"
+  [ -n "$q" ] || return 1
+  errfile="$(mktemp "${TMPDIR:-/tmp}/dash-go-geocode.XXXXXX")" || return 1
+  results="$(installer_cli --geocode --name "$q" 2>"$errfile")"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    warn "Dash-Go could not reach the city lookup service. Check the network and try again, or enter latitude and longitude."
+    rm -f "$errfile"; return 1
+  fi
+  rm -f "$errfile"
+  if [ -z "$results" ]; then
+    warn "Dash-Go could not find that city. Check the spelling, try a nearby city, or enter latitude and longitude."
+    return 1
+  fi
   echo "  Matches:"
-  local i=1; declare -a GLAT GLON GLAB
+  local -a GLAT=() GLON=() GLAB=()
   while IFS='|' read -r la lo lab; do
-    [ -z "$la" ] && continue
-    echo "    $i) $lab  ($la, $lo)"
+    [ -n "$la" ] || continue
+    printf '    %d) %s  (%s, %s)\n' "$i" "$lab" "$la" "$lo"
     GLAT[$i]="$la"; GLON[$i]="$lo"; GLAB[$i]="$lab"; i=$((i+1))
-  done <<< "$results"
-  [ "$i" -eq 1 ] && return 1
-  local pick
-  read -rp "  Choose a match [1-$((i-1))], or 0 to search again: " pick
-  # numeric only — anything else re-prompts the search
-  printf '%s' "$pick" | grep -qE '^[0-9]+$' || return 1
-  [ "$pick" = "0" ] && return 2
-  [ -z "${GLAT[$pick]:-}" ] && return 1
-  LAT="${GLAT[$pick]}"; LON="${GLON[$pick]}"; LOCNAME="${GLAB[$pick]}"
-  return 0
+  done <<EOFGEORESULTS
+$results
+EOFGEORESULTS
+  [ "$i" -gt 1 ] || return 1
+  while :; do
+    read -rp "  Choose a match [1-$((i-1)), b=back]: " pick
+    pick="$(trim_input "$pick")"; pick="${pick%)}"
+    case "$pick" in
+      b|B|0) return 2 ;;
+      ''|*[!0-9]*) warn "Choose one listed number, or b to search again."; continue ;;
+    esac
+    if [ -n "${GLAT[$pick]:-}" ]; then
+      LAT="${GLAT[$pick]}"; LON="${GLON[$pick]}"; LOCNAME="${GLAB[$pick]}"
+      return 0
+    fi
+    warn "Choose one listed number, or b to search again."
+  done
 }
 
 # --- Device performance profile ----------------------------------------
@@ -6087,13 +6212,17 @@ echo "  3) Enhanced  2.2+ GB capable device    — richer display + maps"
 echo
 echo "   Recommended preset details:"
 profile_summary
-read -rp "  Choose profile [1-3, Enter=$GDEF recommended]: " PROFSEL
-PROFSEL="${PROFSEL:-$GDEF}"
-case "$PROFSEL" in
-  1) set_profile_defaults lite;;
-  3) set_profile_defaults enhanced;;
-  *) set_profile_defaults balanced;;
-esac
+while :; do
+  read -rp "  Choose profile [1-3, Enter=$GDEF recommended, q=cancel]: " PROFSEL || return 2
+  PROFSEL="$(trim_input "${PROFSEL:-$GDEF}")"
+  case "$PROFSEL" in
+    q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;;
+    1) set_profile_defaults lite; break;;
+    2) set_profile_defaults balanced; break;;
+    3) set_profile_defaults enhanced; break;;
+    *) warn "Choose 1, 2, or 3. Your current setup answers are still waiting.";;
+  esac
+done
 echo
 echo "   Selected preset: $PROFILE_LABEL"
 profile_summary
@@ -6176,12 +6305,14 @@ while true; do
   echo "  2) Enter latitude/longitude manually"
   if [ "$CURRENT_LOCATION_READY" = "1" ]; then
     read -rp "  Choose [0/1/2, Enter=0]: " locmode
-    locmode="${locmode:-0}"
+    locmode="$(trim_input "${locmode:-0}")"
   else
     read -rp "  Choose [1/2, Enter=1]: " locmode
-    locmode="${locmode:-1}"
+    locmode="$(trim_input "${locmode:-1}")"
   fi
   case "$locmode" in
+    q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;;
+    b|B) warn "This is the first location step. Choose a location method, or q to cancel."; continue;;
     0)
       if [ "$CURRENT_LOCATION_READY" != "1" ]; then
         warn "  No current location is available. Choose 1 or 2."
@@ -6192,7 +6323,9 @@ while true; do
       break
       ;;
     1)
-      read -rp "  City name: " PLACE
+      read -rp "  City name [b=back, q=cancel]: " PLACE
+      PLACE="$(trim_input "$PLACE")"
+      case "$PLACE" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; b|B) continue;; esac
       geocode "$PLACE"
       geocode_status=$?
       if [ "$geocode_status" = "0" ]; then
@@ -6223,13 +6356,17 @@ done
 echo "Units:"
 echo "  1) Fahrenheit / mph  (US)"
 echo "  2) Celsius / km/h"
-read -rp "  Choose [1/2, Enter=current ${TEMPU}/${WINDU}]: " U
-case "$U" in
-  2) TEMPU="celsius"; WINDU="kmh";;
-  1) TEMPU="fahrenheit"; WINDU="mph";;
-  "") :;;
-  *) warn "unrecognized choice — keeping ${TEMPU}/${WINDU}";;
-esac
+while :; do
+  read -rp "  Choose [1/2, Enter=current ${TEMPU}/${WINDU}, q=cancel]: " U || return 2
+  U="$(trim_input "$U")"
+  case "$U" in
+    q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;;
+    2) TEMPU="celsius"; WINDU="kmh"; break;;
+    1) TEMPU="fahrenheit"; WINDU="mph"; break;;
+    "") break;;
+    *) warn "Choose 1 or 2, or press Enter to keep ${TEMPU}/${WINDU}.";;
+  esac
+done
 if [ "$DO_WEATHER_DISPLAY" = "1" ]; then
   prompt_weather_display 1
 fi
@@ -6255,20 +6392,28 @@ for t in "${THEME_OPTIONS[@]}"; do
 done
 NTHEMES=$((i-1))
 [ $(( NTHEMES % 4 )) -ne 0 ] && echo
-read -rp "  Choose [1-$NTHEMES, Enter=1 basic]: " THM
-THM="${THM:-1}"
-if printf '%s' "$THM" | grep -qE '^[0-9]+$'; then
-  THEME="${THEME_OPTIONS[$((THM-1))]:-}"
-else
-  THEME=""
-fi
-[ -z "$THEME" ] && { THEME="basic"; warn "unrecognized choice — using basic"; }
+while :; do
+  read -rp "  Choose [1-$NTHEMES, Enter=1 basic, q=cancel]: " THM || return 2
+  THM="$(trim_input "${THM:-1}")"
+  case "$THM" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; esac
+  if printf '%s' "$THM" | grep -qE '^[0-9]+$'; then
+    THEME="${THEME_OPTIONS[$((THM-1))]:-}"
+  else
+    THEME=""
+  fi
+  [ -n "$THEME" ] && break
+  warn "Choose a listed theme number."
+done
 
 echo
 echo "Primary user (for compliments)."
-read -rp "  Your name: " PNAME
+read -rp "  Your name [blank=skip, q=cancel]: " PNAME || return 2
+PNAME="$(trim_input "$PNAME")"
+case "$PNAME" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; esac
 while true; do
-  read -rp "  Your birthday (MM-DD, e.g. 01-25), blank to skip: " PBDAY
+  read -rp "  Your birthday (MM-DD, e.g. 01-25, blank=skip, q=cancel): " PBDAY || return 2
+  PBDAY="$(trim_input "$PBDAY")"
+  case "$PBDAY" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; esac
   [ -z "$PBDAY" ] && break
   valid_mmdd "$PBDAY" && break; warn "    Use MM-DD format, e.g. 01-25."
 done
@@ -6287,10 +6432,14 @@ add_bday "$PNAME" "$PBDAY"
 echo
 echo "Add other noteworthy people + birthdays (blank name when done)."
 while true; do
-  read -rp "  Name (blank to finish): " ONAME
+  read -rp "  Name (blank=finish, q=cancel): " ONAME || return 2
+  ONAME="$(trim_input "$ONAME")"
+  case "$ONAME" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; esac
   [ -z "$ONAME" ] && break
   while true; do
-    read -rp "  $ONAME's birthday (MM-DD): " ODATE
+    read -rp "  $ONAME's birthday (MM-DD, blank=skip, q=cancel): " ODATE || return 2
+    ODATE="$(trim_input "$ODATE")"
+    case "$ODATE" in q|Q) warn "Customization cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;; esac
     [ -z "$ODATE" ] && break
     valid_mmdd "$ODATE" && break; warn "    Use MM-DD format, e.g. 10-04."
   done
@@ -6349,11 +6498,7 @@ say "Writing per-device settings (config.local.js)"
   echo "  pixelShift: ${PIXELSHIFT:-2},"
   echo "  weatherAlerts: { enabled: true, refreshMinutes: ${ALERTREFRESH:-5}, minSeverity: \"moderate\" },"
   if [ -n "${WEATHER_PROVIDERS:-}" ]; then
-    providers_json="$(WEATHER_PROVIDERS="$WEATHER_PROVIDERS" python3 - <<'PYPROVIDERS'
-import json, os
-print(json.dumps([x for x in (os.environ.get('WEATHER_PROVIDERS') or 'openmeteo').split() if x]))
-PYPROVIDERS
-)"
+    providers_json="$(json_string_array_words "$WEATHER_PROVIDERS")"
     echo "  weatherProviders: ${providers_json},"
   fi
   [ -n "${WXAPI:-}" ]  && echo "  wxApi: \"${WXAPI%/}\","
@@ -6367,8 +6512,151 @@ return 0
 done
 }
 
+# Express setup deliberately asks only for a usable weather location. It writes
+# a small, valid local override and leaves every richer preference at the
+# application defaults, where Dashboard Control can change it later.
+run_express_customization(){
+  local place results pick count lat lon label profile tmp rc geocode_err temp_unit wind_unit country
+  say "Express dashboard setup"
+  echo "Only one detail is needed now: where this dashboard lives."
+  echo "You can change the theme, units, calendars, weather sources, and everything else later in Dashboard Control."
+
+  while :; do
+    echo
+    echo "  1) Search by city or town"
+    echo "  2) Enter latitude and longitude"
+    echo "  b) Back to the installer menu"
+    read -rp "  Choose [1/2, Enter=1]: " pick
+    pick="${pick:-1}"
+    case "$pick" in
+      b|B)
+        warn "Express setup cancelled before settings were written. Run ~/install.sh again when you are ready."
+        return 2
+        ;;
+      1)
+        read -rp "  City or town (for example, Chicago): " place
+        place="$(trim_input "$place")"
+        case "$place" in
+          '' ) warn "Enter a city or choose b to leave Express setup."; continue;;
+          b|B|q|Q) warn "Express setup cancelled before settings were written. Run ~/install.sh again when you are ready."; return 2;;
+        esac
+        local geocode_err
+        geocode_err="$(mktemp "${TMPDIR:-/tmp}/dash-go-express-geocode.XXXXXX")" || return 1
+        results="$(installer_cli --geocode --name "$place" 2>"$geocode_err")"; rc=$?
+        if [ "$rc" -ne 0 ]; then
+          warn "Dash-Go could not reach the city lookup service. Check the network and try again, or choose latitude/longitude."
+          rm -f "$geocode_err"; continue
+        fi
+        rm -f "$geocode_err"
+        if [ -z "$results" ]; then
+          warn "Dash-Go could not find that city. Check the spelling, try a nearby city, or choose latitude/longitude."
+          continue
+        fi
+        echo "  Matches:"
+        count=0
+        while IFS='|' read -r lat lon label; do
+          [ -n "$lat" ] || continue
+          count=$((count + 1))
+          printf '    %d) %s (%s, %s)\n' "$count" "$label" "$lat" "$lon"
+        done <<EOFEXPRESSMATCHES
+$results
+EOFEXPRESSMATCHES
+        while :; do
+          read -rp "  Choose a match [1-$count, b=back]: " pick
+          pick="$(trim_input "$pick")"; pick="${pick%)}"
+          case "$pick" in
+            b|B|0) break;;
+            *[!0-9]*|'') warn "Choose one listed number or b to search again.";;
+            *)
+              if [ "$pick" -ge 1 ] 2>/dev/null && [ "$pick" -le "$count" ] 2>/dev/null; then
+                IFS='|' read -r lat lon label <<< "$(printf '%s\n' "$results" | sed -n "${pick}p")"
+                break 2
+              fi
+              warn "Choose one listed number or b to search again."
+              ;;
+          esac
+        done
+        ;;
+      2)
+        while :; do
+          read -rp "  Latitude [b=back]: " lat
+          [ "$lat" = b ] || [ "$lat" = B ] && break
+          valid_lat "$lat" && break
+          warn "Latitude must be a number from -90 to 90."
+        done
+        [ "$lat" = b ] || [ "$lat" = B ] && continue
+        while :; do
+          read -rp "  Longitude [b=back]: " lon
+          [ "$lon" = b ] || [ "$lon" = B ] && break
+          valid_lon "$lon" && break
+          warn "Longitude must be a number from -180 to 180."
+        done
+        [ "$lon" = b ] || [ "$lon" = B ] && continue
+        read -rp "  Location name for the screen [optional]: " label
+        label="${label:-$lat, $lon}"
+        break
+        ;;
+      *) warn "Choose 1, 2, or b.";;
+    esac
+  done
+
+  profile="$(bootstrap_classify_device_profile)"
+  case "$profile" in lite|balanced|enhanced) :;; *) profile="balanced";; esac
+  country="${label##*, }"
+  if [ "$country" = "United States" ]; then
+    temp_unit="fahrenheit"; wind_unit="mph"
+  else
+    temp_unit="celsius"; wind_unit="kmh"
+  fi
+  echo "Using $([ "$temp_unit" = fahrenheit ] && printf '°F and mph' || printf '°C and km/h') for ${country:-this location} — change anytime in Dashboard Control."
+  mkdir -p "$CONFIG_DIR"
+  tmp="$(mktemp "$CONFIG_DIR/config.local.js.express.XXXXXX")" || { warn "Could not prepare your dashboard settings. Run ~/install.sh again."; return 1; }
+  cat >"$tmp" <<EOFEXPRESSCONFIG
+// Generated by Dash-Go Express setup on $(date). Change any setting later in Dashboard Control.
+window.DASHBOARD_LOCAL = {
+  lat: ${lat},
+  lon: ${lon},
+  locationName: "$(json_escape "$label")",
+  tempUnit: "${temp_unit}",
+  windUnit: "${wind_unit}",
+  theme: "basic",
+  profile: "${profile}",
+  showSeconds: true,
+  weatherProviders: ["openmeteo"],
+  birthdays: []
+};
+EOFEXPRESSCONFIG
+  chmod 600 "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$CONFIG_DIR/config.local.js" || { rm -f "$tmp"; warn "Could not save your dashboard settings. Run ~/install.sh again."; return 1; }
+  ok "Location saved: $label. Safe defaults are ready; change anything later in Dashboard Control."
+  return 0
+}
+
 if [ "$DO_CUSTOM" = "1" ]; then
-  run_customization
+  installer_stage "Setting up this dashboard"
+  if [ "$EXPRESS_MODE" = "1" ]; then
+    if run_express_customization; then
+      :
+    else
+      rc=$?
+      if [ "$rc" -eq 2 ]; then
+        ok "Express setup was cancelled before settings were written. Returning to the installer menu."
+        exec bash "$0" "${INSTALLER_ORIGINAL_ARGS[@]}"
+      fi
+      mark_install_step_failed "Express dashboard setup" "settings were not written; run ~/install.sh again to retry this step"
+    fi
+  else
+    if run_customization; then
+      :
+    else
+      rc=$?
+      if [ "$rc" -eq 2 ]; then
+        ok "Customization was cancelled before settings were written. Returning to the installer menu."
+        exec bash "$0" "${INSTALLER_ORIGINAL_ARGS[@]}"
+      fi
+      mark_install_step_failed "Dashboard customization" "settings were not written; run ~/install.sh again to retry this step"
+    fi
+  fi
 fi
 
 if [ "$DO_WEATHER_DISPLAY" = "1" ] && [ "$DO_CUSTOM" != "1" ]; then
@@ -6435,6 +6723,7 @@ ok "calendars.json initialized (add your own .ics files, see README)"
 
 
 if [ "$DO_ICAL" = "1" ]; then
+  installer_stage "Adding public calendars"
   say "iCal URL calendar setup"
   if [ -x "$BIN_DIR/setup-ical-urls.sh" ]; then
     "$BIN_DIR/setup-ical-urls.sh"
@@ -6444,7 +6733,9 @@ if [ "$DO_ICAL" = "1" ]; then
 fi
 
 if [ "$DO_VDIR" = "1" ]; then
+  installer_stage "Connecting private calendars"
   say "Private calendar/vdirsyncer setup"
+  echo "Private calendar setup will verify the selected provider only; it does not test unrelated weather services."
   if [ -x "$BIN_DIR/setup-vdirsyncer.sh" ]; then
     "$BIN_DIR/setup-vdirsyncer.sh"
   else
@@ -6453,6 +6744,7 @@ if [ "$DO_VDIR" = "1" ]; then
 fi
 
 if [ "$DO_CALENDARS" = "1" ]; then
+installer_stage "Setting up built-in calendars"
 say "Built-in/default calendars"
 CALCFG="$HOME/.dashboard-default-calendars"
 CELECFG="$HOME/.dashboard-celebrations"
@@ -6707,6 +6999,7 @@ fi
 
 # ---------------------------------------------------------------------
 if [ "$DO_SERVICE" = "1" ]; then
+installer_stage "Starting Dashboard Control"
 say "Web server service (dashboard-server.service, localhost:8090)"
 if ! provision_dashboard_service; then
   warn "dashboard-server service wiring was not fully provisioned"
@@ -6861,21 +7154,25 @@ fi  # end DO_SERVICE
 
 # ---------------------------------------------------------------------
 if [ "$DO_PIN" = "1" ]; then
+  installer_stage "Setting the dashboard PIN"
   configure_control_pin
 fi
 
 # ---------------------------------------------------------------------
 if [ "$DO_AUTOLOGIN" = "1" ]; then
+  installer_stage "Preparing automatic sign-in"
   provision_dashboard_autologin interactive || warn "graphical autologin was not fully configured"
 fi  # end DO_AUTOLOGIN
 
 # ---------------------------------------------------------------------
 if [ "$DO_AUTOSTART" = "1" ]; then
+  installer_stage "Preparing automatic startup"
   provision_dashboard_autostart_cron interactive || warn "autostart or canonical scheduler was not fully configured"
 fi  # end DO_AUTOSTART
 
 # ---------------------------------------------------------------------
 if [ "$DO_SSH" = "1" ]; then
+installer_stage "Preparing remote access"
 say "Enabling SSH for remote (headless) administration"
 # Install + enable the SSH server.
 $SUDO apt-get install -y openssh-server >/dev/null 2>&1
@@ -6983,7 +7280,70 @@ if [ "$APP_FILES_OK" = "1" ] || [ "$DO_CUSTOM" = "1" ] || [ "$DO_WEATHER" = "1" 
   restart_kiosk
 fi
 
+# Offer the risky Pi display configuration as an explicit, reversible choice.
+# It is never applied silently, including Express setup.
+offer_display_config(){
+  local cfg backup tmp existing
+  [ "$IS_PI" = "1" ] || return 0
+  cfg="/boot/firmware/config.txt"; [ -f "$cfg" ] || cfg="/boot/config.txt"
+  [ -f "$cfg" ] || { warn "Raspberry Pi display configuration file was not found. Leave display settings unchanged and run ~/install.sh again after checking the boot partition."; return 0; }
+  echo
+  echo "Optional Raspberry Pi display setup"
+  echo "Dash-Go can set the tested FKMS driver and 32 MB GPU memory split. This can help the kiosk display, but a wrong display setting can cause a black screen after reboot."
+  echo "Current relevant lines in $cfg:"
+  grep -E '^[[:space:]]*(dtoverlay=vc4-|gpu_mem=)' "$cfg" 2>/dev/null || echo "  (none found)"
+  read -rp "Apply this reversible display configuration now? [y/N] " existing
+  case "$(normalize_menu_choice "$existing")" in
+    y|Y) : ;;
+    *) echo "Left display firmware settings unchanged."; return 0;;
+  esac
+  backup="${cfg}.dash-go.bak"
+  if [ ! -f "$backup" ]; then
+    $SUDO cp -p "$cfg" "$backup" || { warn "Could not save $backup. Leave display settings unchanged and run ~/install.sh again after checking sudo access."; return 1; }
+  fi
+  tmp="$(mktemp "${TMPDIR:-/tmp}/dash-go-display.XXXXXX")" || return 1
+  awk '
+    /^[[:space:]]*dtoverlay=vc4-(fkms|kms)-v3d([,[:space:]]|$)/ { next }
+    /^[[:space:]]*gpu_mem=[0-9]+([[:space:]]|$)/ { next }
+    { print }
+  ' "$cfg" > "$tmp" || { rm -f "$tmp"; return 1; }
+  {
+    printf '\n# Managed by Dash-Go display setup. Original: %s\n' "$backup"
+    printf 'dtoverlay=vc4-fkms-v3d\n'
+    printf 'gpu_mem=32\n'
+  } >> "$tmp"
+  if $SUDO install -m 0644 "$tmp" "$cfg"; then
+    ok "Saved a backup at $backup and prepared the Pi display configuration."
+    echo "If the screen is black after reboot, use another computer or the SD card to restore $backup over $cfg, then reboot."
+  else
+    warn "Could not write $cfg. Leave display settings unchanged and run ~/install.sh again after checking sudo access."
+    rm -f "$tmp"; return 1
+  fi
+  rm -f "$tmp"
+}
+
+dashboard_access_note(){
+  local ip
+  echo "Dashboard on this device: http://localhost:8090"
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if ss -ltn 2>/dev/null | awk '$4 ~ /(^|:)8090$/ && $4 !~ /127\.0\.0\.1:8090$/ && $4 !~ /\[::1\]:8090$/ {found=1} END{exit !found}'; then
+    echo "Dashboard from your network: http://${ip:-<device-ip>}:8090"
+  else
+    echo "From phones and other computers: currently OFF (private by default)."
+    echo "Use Dashboard Control on the display, or set up an explicit secure proxy if you need remote administration."
+  fi
+}
+
+if [ "$MODE" = "$OPT_FULL" ] && [ "$IS_PI" = "1" ]; then
+  offer_display_config || mark_install_step_failed "Optional Pi display configuration" "the existing display settings were left unchanged"
+fi
+
 # ---------------------------------------------------------------------
+INSTALLER_FINAL_READY=1
+if ! installer_final_dashboard_check; then
+  INSTALLER_FINAL_READY=0
+fi
+
 if [ "${#INSTALL_STEP_FAILURES[@]}" -gt 0 ]; then
   echo
   warn "Installer completed with ${#INSTALL_STEP_FAILURES[@]} skipped or failed step(s):"
@@ -6992,7 +7352,13 @@ if [ "${#INSTALL_STEP_FAILURES[@]}" -gt 0 ]; then
   done
   warn "Re-run ~/install.sh and choose the named option after resolving the warning."
 fi
-say "All done."
+if [ "$INSTALLER_FINAL_READY" = "1" ] && [ "${#INSTALL_STEP_FAILURES[@]}" -eq 0 ]; then
+  say "All done."
+  dashboard_access_note
+else
+  say "Dash-Go needs one more check"
+  warn "The installer did not claim success. Review the named action above, then run ~/install.sh again."
+fi
 # A short, tailored recap of what just happened and what (if anything) to do.
 if [ "$DO_FILES" = "1" ] && [ "$APP_FILES_OK" = "1" ]; then
   echo "   * App files updated. The screen itself refreshes at the next browser restart (tonight, or via the panel)."
@@ -7028,30 +7394,25 @@ if [ "$IS_PI" = "1" ]; then
 cat <<NOTE
 
 WHAT YOU SHOULD SEE: after a reboot the screen boots straight into the
-dashboard, fullscreen, no desktop. To check it from another computer on
-your network, open:  http://${IP_NOW:-<device-ip>}:8090  (only if you change the
-service bind from 127.0.0.1) — on the device itself it's http://localhost:8090
+dashboard, fullscreen, no desktop.
 
-NEXT STEPS FOR RASPBERRY PI (system-level, not automated here because they
-vary by image and carry display risk — do these manually and reboot after):
+  On the device: http://localhost:8090
+  From phones/other computers: the dashboard stays private by default.
+  Add calendars from Dashboard Control, or re-run ~/install.sh and choose
+  Connect a personal calendar / Add a calendar link when you are ready.
 
-  1) DISPLAY DRIVER — in /boot/firmware/config.txt ensure:
-        dtoverlay=vc4-fkms-v3d
-        gpu_mem=32
-     (32 is the field-tested stable split for the 512 MB Pi Zero 2 W at
-      1080p. Raise it only on larger-memory boards with real GPU pressure.
-      fkms is the known-good driver for the original Pi target. Do NOT use
-      vc4-kms-v3d on hardware that black-screens with it.)
+NEXT STEPS FOR RASPBERRY PI:
+
+  1) DISPLAY DRIVER — the installer offered a reversible display setup above.
+     If the screen is black after reboot, restore config.txt.dash-go.bak from
+     another computer or the SD card, then reboot.
 
   2) CURSOR HIDE — sudo apt install unclutter-xfixes
 
   3) Optional memory/SD tuning: re-run the installer and choose System update
-     / optional platform trim, then opt into its zram-tools + swappiness=10
-     setup. It leaves root-mount options unchanged.
+     / optional platform trim, then opt into its zram-tools + swappiness=10.
 
-  4) Add your calendars: drop .ics files in $CAL_DIR named like
-        work.green.ics   family.blue.ics   holidays.blue.holiday.ics
-     then run:  $BIN_DIR/gen-calendars.sh   (kiosk.sh also runs it at boot)
+  4) Add calendars: use Dashboard Control or re-run ~/install.sh.
 
 IF SOMETHING LOOKS WRONG:
   * Black screen at boot      -> check step 1 above (display driver)
@@ -7088,4 +7449,11 @@ IF SOMETHING LOOKS WRONG:
 Then reboot (sudo reboot). The dashboard should come up fullscreen.
 NOTE
 fi
+fi
+
+# A failed final readiness check or a recorded optional-stage failure must not
+# be reported as a successful installation. The global EXIT reminder names the
+# exact high-level stage for easy recovery.
+if [ "$INSTALLER_FINAL_READY" != "1" ] || [ "${#INSTALL_STEP_FAILURES[@]}" -gt 0 ]; then
+  exit 1
 fi

@@ -166,7 +166,13 @@ Maintainers build release assets locally, verify `SHA256SUMS` and GitHub-reporte
 
 ## First dashboard setup
 
-The installer guides the first configuration. Afterwards, open **Apps** from the dashboard footer, then choose **Dashboard Control**.
+The installer begins with a short device checklist before it asks any questions. Run it as the normal Linux user you created in Raspberry Pi Imager, never as `root` or through `sudo`.
+
+For most homes, choose **Express setup**. It uses safe defaults and asks only for the details Dash-Go cannot infer, such as your location and an optional PIN. Choose **Custom setup** only when you deliberately want to change kiosk, network, calendar, or system details during installation; all routine settings remain available later in **Dashboard Control**.
+
+If installation is interrupted or a check fails, Dash-Go leaves the existing dashboard and personal settings safe. The terminal tells you the next action, and rerunning `~/install.sh` resumes through the normal safe path.
+
+Afterwards, open **Apps** from the dashboard footer, then choose **Dashboard Control**.
 
 - **Status / Control** — performance profile, quick actions, system and power actions.
 - **Calendars** — calendar visibility, health, management, start day, week numbers, and event text.
@@ -239,9 +245,13 @@ Apps load only when opened and use the shared Dash-Go overlay, theme, touch cont
 
 ### Private calendars
 
-Choose **Add private calendar** from the installer’s calendar-sync menu for iCloud, Nextcloud, Fastmail, Radicale, another standard CalDAV service, or Google Calendar. Dash-Go keeps account credentials outside the served dashboard tree and synchronizes the chosen remote collection into a local Dash-Go calendar. Private calendar sync installs a Dash-Go-owned, pipx-isolated `vdirsyncer[google]` **0.20.0** environment; `pipx` itself is installed through APT on Debian/Raspberry Pi OS when needed. Dash-Go never runs a pipx upgrade automatically. Calendar setup does not use an unrelated weather endpoint as a generic internet test; it verifies the selected package source or provider only when that actual operation begins.
+Choose **Connect a private calendar account** from the installer’s calendar-sync menu for Google, Apple iCloud, Nextcloud, Fastmail, Radicale, or another standard CalDAV service. Dash-Go keeps account credentials outside the served dashboard tree and synchronizes only the remote calendars you deliberately select.
 
-Connect Google, iCloud, or another CalDAV account first, then use **Dashboard Control → Calendars → Discover available calendars**. Discovery is review-only: it does not activate, display, synchronize, edit, hide, or delete anything. Add each wanted remote calendar deliberately as either **display-only** or **editable**. Every selected collection receives its own exact local vdir mapping and its own Dashboard source, so two calendars with the same display name remain distinct.
+The guided Google route asks for one Google **Desktop app** credential, then uses a temporary SSH bridge for an automatic computer-browser sign-in or a clearly explained kiosk-QR/paste-back phone fallback. The guided iCloud route uses the fixed Apple CalDAV service and asks only for the Apple Account email plus an app-specific password; normal iCloud setup never asks for a server URL or collection identifier. Both providers discover human-readable calendars before asking about colors or optional edits. A new connection becomes active only after its first sync succeeds.
+
+Private-calendar tooling first reuses a healthy Dash-Go-managed `vdirsyncer[google]` **0.20.0** environment. When needed, Dash-Go uses working `pipx`, repairs it only when it is actually unavailable, can create an isolated private virtual environment, and offers an explicitly confirmed user-level pip compatibility fallback only as a last resort. It never runs `sudo pip`, changes the system Python, or upgrades pipx automatically.
+
+Selected calendars are display-only by default. You can deliberately enable edits per exact selected calendar. Every selected collection receives its own exact local vdir mapping and Dashboard source, so two calendars with the same display name remain distinct.
 
 For an editable selected collection, Dash-Go writes a supported event to the local vdir first, refreshes its local dashboard mirror, and queues synchronization only for that collection. Choosing **Add & enable edits**, or later enabling a selected calendar, also turns on the master **Dashboard calendar edits** guard and refreshes local event actions. A supported one-time event shows **Manage event**; a full-day popup shows **+ Add event**; deletion remains PIN-gated. A recurring event shows **Manage recurring event**, which separates one-occurrence changes from a constrained whole-series edit and retains **Skip this occurrence**. When an occurrence already has a custom override, use **Edit this occurrence** instead of Skip. Dash-Go keeps advanced repeat patterns, attendee/organizer events, and ambiguous existing exception sets provider-managed, with an on-screen explanation rather than an unsafe edit control. In the selected-calendar row, you can later switch between display-only and editable without reconnecting the provider.
 

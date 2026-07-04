@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -43,9 +42,9 @@ func (a *app) runGoogleOAuthCLI(args []string) int {
 	fs.StringVar(&options.clientID, "client-id", "", "OAuth client ID")
 	fs.StringVar(&options.clientSecretFile, "client-secret-file", "", "owner-only OAuth client-secret file")
 	fs.StringVar(&options.tokenFile, "token-file", "", "owner-only vdirsyncer Google token file")
-	fs.BoolVar(&options.qr, "qr", false, "render the authorization URL as a QR code when qrencode is installed")
-	fs.StringVar(&options.relayDir, "relay-dir", "", "owner-only OAuth relay spool directory for an automatic web callback")
-	fs.StringVar(&options.redirectURI, "redirect-uri", "", "exact registered HTTPS callback URI for a web OAuth client")
+	fs.BoolVar(&options.qr, "qr", false, "render the authorization URL as a terminal QR code when qrencode is installed")
+	fs.BoolVar(&options.loopback, "loopback", false, "wait for the temporary 127.0.0.1:8433 Desktop-app callback")
+	fs.StringVar(&options.displayDir, "display-dir", "", "owner-only kiosk QR presentation directory")
 	fs.BoolVar(&options.noDisplay, "no-display", false, "do not show the authorization QR code on the dashboard display")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 1
@@ -60,10 +59,6 @@ func (a *app) runGoogleOAuthCLI(args []string) int {
 	}
 	switch mode {
 	case "authorize":
-		if err := googleOAuthValidateRelayOptions(options); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
 		return googleOAuthAuthorize(options)
 	case "check":
 		return googleOAuthCheck(options)
@@ -71,37 +66,6 @@ func (a *app) runGoogleOAuthCLI(args []string) int {
 		fmt.Fprintf(os.Stderr, "unknown google-oauth mode %q\n", mode)
 		return 1
 	}
-}
-
-func googleOAuthMaybeQR(authorizationURL string, stderr io.Writer) {
-	qrencode, err := exec.LookPath("qrencode")
-	if err != nil {
-		return
-	}
-	encoded, err := exec.Command(qrencode, "-t", "ANSIUTF8", authorizationURL).Output()
-	if err != nil || len(encoded) == 0 {
-		return
-	}
-	fmt.Fprintf(stderr, "\nOr scan this with your phone:\n\n%s\n", encoded)
-	if rows := googleOAuthTerminalRows(); rows > 0 && strings.Count(string(encoded), "\n") > rows {
-		fmt.Fprintln(stderr, "The terminal QR is taller than this window; enlarge it or use the printed link instead.")
-	}
-}
-
-func googleOAuthTerminalRows() int {
-	output, err := exec.Command("stty", "size").Output()
-	if err != nil {
-		return 0
-	}
-	fields := strings.Fields(string(output))
-	if len(fields) != 2 {
-		return 0
-	}
-	rows, err := strconv.Atoi(fields[0])
-	if err != nil || rows <= 0 {
-		return 0
-	}
-	return rows
 }
 
 // googleOAuthParsePasteback accepts a full callback URL, a callback URL pasted
@@ -287,29 +251,37 @@ func googleOAuthAuthorizeWith(options googleOAuthOptions, input io.Reader, stdou
 	}
 	redirectURI := googleOAuthRedirectURI(options)
 	authorizationURL := googleOAuthAuthorizationURLFor(options, state, verifier, redirectURI)
-	fmt.Fprintln(stderr, "\nOpen this Google sign-in link on any device — a phone or laptop is fine:")
+	fmt.Fprintln(stderr, "\nOpen this Google sign-in link in the browser selected by setup:")
 	fmt.Fprintln(stdout, authorizationURL)
 	if options.qr {
 		googleOAuthMaybeQR(authorizationURL, stderr)
 	}
 
 	var code string
-	if strings.TrimSpace(options.relayDir) != "" {
-		if !options.noDisplay {
-			if _, qrErr := exec.LookPath("qrencode"); qrErr == nil {
-				fmt.Fprintln(stderr, "The QR is now showing on the dashboard display. Scan it with your phone to finish Google sign-in.")
-			}
-		}
-		code, err = googleOAuthRelayWait(options.relayDir, state, googleOAuthConnectionLabel(options.tokenFile), authorizationURL, !options.noDisplay)
+	if options.loopback {
+		code, err = googleOAuthLoopbackWait(state, options.displayDir, googleOAuthConnectionLabel(options.tokenFile), authorizationURL, !options.noDisplay)
 		if errors.Is(err, errGoogleOAuthInterrupted) {
 			fmt.Fprintln(stderr, "Authorization cancelled. This calendar remains skipped until it is authorized; re-run setup-vdirsyncer.sh --authorize.")
 			return 2
 		}
 		if err == nil && code != "" {
-			fmt.Fprintln(stderr, "Google sign-in was received from the dashboard callback.")
+			fmt.Fprintln(stderr, "Google sign-in was received automatically through the temporary local connection.")
 		} else if err != nil {
-			fmt.Fprintf(stderr, "Automatic web callback did not complete: %v\nFalling back to paste-back.\n", err)
+			fmt.Fprintf(stderr, "Automatic sign-in did not complete: %v\nFalling back to paste-back.\n", err)
 		}
+	}
+	var displayCleanup func()
+	if code == "" && !options.loopback && strings.TrimSpace(options.displayDir) != "" && !options.noDisplay {
+		paths := newOAuthDisplayPaths(options.displayDir)
+		if googleOAuthDisplayOnly(paths, state, googleOAuthConnectionLabel(options.tokenFile), authorizationURL, time.Now()) {
+			displayCleanup = func() { cleanupOAuthDisplay(paths) }
+			fmt.Fprintln(stderr, "The QR is now showing on the dashboard display. Scan it with your phone, then paste the final browser address here.")
+		} else if _, qrErr := execLookPath("qrencode"); qrErr != nil {
+			fmt.Fprintln(stderr, "QR is unavailable on this device (qrencode is not installed). Open the link above on your phone by typing it, or install qrencode and retry.")
+		}
+	}
+	if displayCleanup != nil {
+		defer displayCleanup()
 	}
 	if code == "" {
 		code, err = googleOAuthPromptPasteback(input, stderr, state)
@@ -329,7 +301,7 @@ func googleOAuthAuthorizeWith(options googleOAuthOptions, input io.Reader, stdou
 	if err != nil {
 		fmt.Fprintf(stderr, "Google rejected the authorization code exchange: %v\n", err)
 		if strings.Contains(strings.ToLower(err.Error()), "invalid_grant") {
-			fmt.Fprintln(stderr, "Authorization codes expire quickly and can be used only once. Start authorization again and paste the new callback promptly.")
+			fmt.Fprintln(stderr, "Authorization codes expire quickly and can be used only once. Start authorization again and use the new link promptly.")
 		}
 		return 3
 	}

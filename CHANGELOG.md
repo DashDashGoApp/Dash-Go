@@ -2,18 +2,27 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.8-beta.1] — 2026-07-04
+## [1.5.8-beta.2] — 2026-07-04
 
-### Private calendar OAuth and setup clarity
+### Guided private calendar accounts
 
-- Moved Google private-calendar authorization out of vdirsyncer’s interactive browser prompt and into a Go-native `dashboard-control-server --google-oauth` helper. The helper uses PKCE, verifies a one-time state, atomically writes the owner-only token mapping vdirsyncer refreshes, and adds a focused `setup-vdirsyncer.sh --authorize` recovery path.
-- Added two explicit Google client paths: the universal Desktop-app paste-back flow with an optional terminal QR code, and a one-shot Web-app HTTPS callback flow that can show the authorization QR on the kiosk display and complete automatically. The callback is state-bound, time-limited, one-shot, and absent when not armed; its owner-only relay/display files are removed after success, timeout, cancellation, or error.
-- Added the Raspberry Pi OS / Debian Bullseye APT recovery path for `pipx` and `python3-venv` from `bullseye-backports`, while retaining Dash-Go’s isolated pinned `vdirsyncer[google]` pipx environment.
-- Clearly separated installer option 9’s read-only public iCalendar feed from option 10’s private vdirsyncer connection for Google OAuth, iCloud, and compatible CalDAV. Dashboard Control’s calendar messages now point to the same current options.
+- Reworked private calendar setup around accounts and discovered calendar names instead of raw provider fields. Google and iCloud credentials are staged privately, calendars are discovered before color/writeback questions, and a successful first sync is required before a new account becomes active.
+- Simplified Google setup to one ordinary instruction: create a Google **Desktop app** OAuth client. The recommended computer-browser route prints a temporary SSH bridge and receives the local callback automatically. The phone/tablet path shows a kiosk QR and truthfully explains the required paste-back address; no ordinary user sees a desktop/web architecture choice.
+- Made Apple iCloud a first-class guided provider with the fixed iCloud CalDAV endpoint, Apple Account email and app-specific-password prompts, per-calendar read-only defaults, clear recovery wording, and no normal server-URL or collection-UUID fields.
+- Added a safer private-calendar tool ladder: reuse healthy managed vdirsyncer, use working pipx, repair/install pipx with Bullseye backports support when needed, use an isolated Dash-Go virtual-environment fallback, then offer an explicitly approved user-level pip fallback only as a last resort. Unsafe system-pip operations remain forbidden.
+- Hardened every private-calendar retry path: invalid credentials, calendar selections, colors, and duplicate-account choices re-prompt only the affected answer instead of discarding completed authorization. Headless SSH sessions now default to the phone/QR paste-back route, all blocking discovery and first-sync phases are bounded, and cancellation removes staged drafts without touching active calendars.
+- Added provider-aware credential guidance: Google trims and checks pasted credentials without logging them; iCloud trims pasted app-specific passwords, warns when the shape looks wrong, and turns iCloud authorization failures into a clear fresh-app-password or account/2FA next action.
+- Clarified the phone QR route as a short-lived display-only paste-back aid and removed the unused HTTPS/LAN callback path, so setup never suggests an automatic completion mode it cannot offer.
 
-### Health wording
+### Friendlier first installation and recovery
 
-- Named failed, rolled-back, and post-update health warnings as **Dash-Go application updates**, with a direct pointer to the Dashboard update log rather than the ambiguous “update is failing” wording.
+- Added a visible preflight before interactive questions: supported device and architecture, normal-user/sudo safety, clock sanity, free space, DNS, and the actual release host. Failed checks now state the corrective action before Dash-Go changes anything.
+- Added an **Express setup** lane that applies safe defaults and asks only for a location and optional PIN. The existing detailed path remains available for intentional customization.
+- Added bounded installer step labels, safer re-prompts for PIN and restore input, clearer destructive-confirmation guidance, an interruption reassurance message, and a final local readiness verification that runs Doctor rather than claiming success when the dashboard is unavailable.
+- Removed installer-authored Python calls. Installer JSON edits, PIN hashing, and both location-search paths now use the shipped Go helper with bounded network behavior and correct international URL encoding.
+- Refined first and later launches: non-US Express installs choose metric defaults, location and menu typos stay on the current question, installed devices describe the recommended lane as an update, Custom mode summarizes selected tasks before running them, and final access notes distinguish localhost-only service from an intentionally enabled LAN listener.
+- Added an explicit, reversible Pi display-configuration helper with backup and black-screen recovery instructions; Express never applies it silently.
+- Hardened menu and Custom-session recovery: harmless typos re-prompt, every interactive restart preserves original launcher arguments, and the defensive dispatcher returns safely to the menu instead of ending the installer.
 
 ## [1.5.7] — 2026-07-03
 

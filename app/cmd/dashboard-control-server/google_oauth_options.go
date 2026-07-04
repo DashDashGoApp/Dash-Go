@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,8 +15,8 @@ type googleOAuthOptions struct {
 	clientSecretFile string
 	tokenFile        string
 	qr               bool
-	relayDir         string
-	redirectURI      string
+	loopback         bool
+	displayDir       string
 	noDisplay        bool
 }
 
@@ -69,31 +68,10 @@ func googleOAuthAuthorizationURLFor(options googleOAuthOptions, state, verifier,
 	return googleOAuthBuildAuthorizationURL(options, state, base64.RawURLEncoding.EncodeToString(sum[:]), redirectURI)
 }
 
-func googleOAuthRedirectURI(options googleOAuthOptions) string {
-	if strings.TrimSpace(options.relayDir) != "" && strings.TrimSpace(options.redirectURI) != "" {
-		return strings.TrimSpace(options.redirectURI)
-	}
+func googleOAuthRedirectURI(_ googleOAuthOptions) string {
+	// Dash-Go supports only Google's Desktop-app localhost redirect. The phone
+	// route is an explicit paste-back fallback, not a server callback.
 	return googleOAuthPastebackRedirectURI
-}
-
-// Google permits HTTP redirect URIs only for a local machine. A phone-to-kiosk
-// callback must therefore use an exact HTTPS URI published by an administrator
-// (normally a local reverse proxy); Dash-Go keeps its control server loopback
-// only and accepts the proxied callback through this narrow, armed route.
-func googleOAuthValidateRelayOptions(options googleOAuthOptions) error {
-	relayDir := strings.TrimSpace(options.relayDir)
-	redirectURI := strings.TrimSpace(options.redirectURI)
-	if (relayDir == "") != (redirectURI == "") {
-		return errors.New("relay-dir and redirect-uri must be supplied together for automatic web authorization")
-	}
-	if relayDir == "" {
-		return nil
-	}
-	callback, err := url.Parse(redirectURI)
-	if err != nil || callback.Scheme != "https" || callback.Host == "" || callback.User != nil || callback.RawQuery != "" || callback.Fragment != "" || callback.Path != "/oauth/google/callback" {
-		return errors.New("web authorization needs an exact HTTPS redirect URI ending in /oauth/google/callback; use Desktop paste-back when no HTTPS callback is configured")
-	}
-	return nil
 }
 
 func googleOAuthConnectionLabel(tokenFile string) string {

@@ -14,10 +14,10 @@
 
 ## Current beta source handoff
 
-- **Version:** `1.5.8-beta.1`
+- **Version:** `1.5.8-beta.2`
 - **Track:** beta
 - **Minimum upgrade version:** `1.4.0`
-- **Scope:** Go-native, PKCE-protected Google OAuth for vdirsyncer: Desktop paste-back with an optional terminal QR, plus a one-shot exact-HTTPS Web callback that can show a kiosk-display QR and complete automatically. Also includes Bullseye pipx/venv recovery, clear public-versus-private calendar setup wording, and named Dash-Go application-update health warnings.
+- **Scope:** Guided account-first private-calendar setup. Google uses one clearly named Desktop-app credential path with a temporary SSH bridge for automatic computer-browser completion and a truthful kiosk-QR/paste-back phone fallback; Dash-Go does not publish a LAN OAuth callback route, headless SSH defaults to the phone route, and a typo never repeats completed authorization. Apple iCloud is now a first-class app-specific-password flow with fixed endpoint, discovery before selection, provider-specific recovery wording, and read-only defaults. Tool recovery distinguishes healthy pipx from the Dash-Go tool and adds isolated-venv and explicit last-resort user-pip fallbacks. The installer now starts with a visible device preflight, offers an Express lane with locale-aware units and safe defaults, contains no installer-authored Python calls, reports bounded step progress and a verified readiness outcome, and gives interruption/failure recovery directions instead of ambiguous terminal errors. First and later menu launches re-prompt on typos, summarize Custom tasks before execution, and state accurately whether access is local-only or deliberately available on the LAN.
 - **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
 
 ## 1.5.7 stable scope

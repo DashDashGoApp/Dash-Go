@@ -72,6 +72,23 @@ awk '/^valid_microsoft_client_id\(\)/{take=1} /^validate_download\(\)/{take=0} t
 warn(){ printf 'WARN: %s\n' "$*" >&2; }
 ok(){ printf 'OK: %s\n' "$*"; }
 say(){ printf '== %s ==\n' "$*"; }
+# The runtime helper is Go-owned. Keep this Azure transaction fixture offline;
+# Go unit tests cover the real JSON writer.
+installer_cli(){
+  [ "${1:-}" = "--installer-todo-settings" ] || return 64
+  shift
+  local file="" mode="" client_id=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --file) file="$2"; shift 2;;
+      --mode) mode="$2"; shift 2;;
+      --client-id) client_id="$2"; shift 2;;
+      *) return 64;;
+    esac
+  done
+  mkdir -p "$(dirname "$file")"
+  printf '{"todo":{"source":"local","syncMode":"%s","clientId":"%s","map":{"todo":"local-todo","grocery":"local-grocery"}}}\n' "$mode" "$client_id" > "$file"
+}
 source "$TMP/app-setup-functions.sh"
 export HOME="$TMP/home" SETTINGS_FILE="$TMP/home/settings.json" PATH="$TMP/fakebin:$PATH" SUDO="$TMP/fakebin/sudo" OS_CODENAME=trixie
 export TODO_AZURE_CLI_KEYRING="$TMP/etc/apt/keyrings/dash-go-azure-cli.gpg" TODO_AZURE_CLI_SOURCE_FILE="$TMP/etc/apt/sources.list.d/dash-go-azure-cli.sources"

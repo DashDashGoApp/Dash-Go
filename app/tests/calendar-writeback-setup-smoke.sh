@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=${1:-.}
-script="$root/bin/setup-vdirsyncer.sh"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+script="${1:-$ROOT}/bin/setup-vdirsyncer.sh"
 bash -n "$script"
-grep -q 'Broad discovered mirrors stay read-only' "$script"
-grep -q 'Allow Dashboard add/edit/skip for this one collection' "$script"
+grep -q 'Allow Dash-Go to add, edit, or skip events in' "$script"
 grep -q 'exact="\$collection/\$local_id"' "$script"
-grep -q 'calendar writeback registry written (Dashboard edits start disabled)' "$script"
 grep -qF 'LOCK_DIR="\$VDIR_HOME/sync.lock"' "$script"
-echo 'calendar writeback setup smoke: syntax, explicit remote-to-local collection mapping, and shared lock contract hold'
+grep -q 'private_choose_and_activate' "$script"
+grep -q 'private_cleanup_transaction' "$script"
+echo 'calendar writeback setup smoke: staged exact collection selection and shared lock contract hold'

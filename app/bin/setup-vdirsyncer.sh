@@ -21,7 +21,10 @@ VDIR_PAIRS="$VDIR_HOME/pairs"
 VDIR_PASSWORDS="$VDIR_HOME/passwords"
 GOOGLE_TOKENS="$VDIR_HOME/google-tokens"
 VDIR_OAUTH_MODE="$VDIR_HOME/oauth-mode"
-OAUTH_RELAY="$VDIR_HOME/oauth-relay"
+OAUTH_DISPLAY_DIR="$VDIR_HOME/oauth-display"
+VDIR_PENDING="$VDIR_HOME/pending-connections"
+VDIR_INSTALL_METHOD="$VDIR_HOME/install-method"
+VDIR_VENV="$VDIR_HOME/pip-fallback-venv"
 # Dash-Go owns one isolated, pinned vdirsyncer environment. Keep the tool and
 # its Python dependencies outside ~/dashboard with the private vdir state.
 VDIR_PIPX_HOME="${DASH_VDIR_PIPX_HOME:-$VDIR_HOME/pipx}"
@@ -55,8 +58,8 @@ Usage: setup-vdirsyncer.sh [--refresh|--authorize]
 Without arguments, add a private CalDAV or Google calendar interactively.
 --refresh regenerates Dash-Go-managed configuration from saved private state
 without contacting a provider or changing selected calendars.
---authorize re-runs one-time Google authorization for saved connections, then
-performs their normal one-time discovery without adding calendars or syncing.
+--authorize reconnects saved Google accounts, then lists their discovered
+calendars without asking for names, colors, or new calendar selections.
 USAGE
     exit 0
     ;;
@@ -67,11 +70,12 @@ say(){ printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 warn(){ printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 ok(){ printf '\033[1;32m   %s\033[0m\n' "$*"; }
 have(){ command -v "$1" >/dev/null 2>&1; }
-cleanup_oauth_relay(){ rm -f "$OAUTH_RELAY/pending" "$OAUTH_RELAY/result" "$OAUTH_RELAY/display.json" "$OAUTH_RELAY/qr.png" 2>/dev/null || true; }
-trap cleanup_oauth_relay EXIT HUP INT TERM
+cleanup_oauth_display(){ rm -f "$OAUTH_DISPLAY_DIR/pending" "$OAUTH_DISPLAY_DIR/display.json" "$OAUTH_DISPLAY_DIR/qr.png" 2>/dev/null || true; }
+cleanup_setup_artifacts(){ private_cleanup_transaction 2>/dev/null || true; cleanup_oauth_display; [ -z "${PRIVATE_DRAFT:-}" ] || rm -rf "$PRIVATE_DRAFT" 2>/dev/null || true; PRIVATE_DRAFT=""; }
+trap cleanup_setup_artifacts EXIT HUP INT TERM
 
-mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$CONFIG_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_RELAY" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
-chmod 700 "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_RELAY" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
+mkdir -p "$DASH" "$BIN_DIR" "$CAL_DIR" "$CONFIG_DIR" "$LOG_DIR" "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_DISPLAY_DIR" "$VDIR_PENDING" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
+chmod 700 "$VDIR_HOME" "$VDIR_STATUS" "$VDIR_COLLECTIONS" "$VDIR_PASSWORDS" "$GOOGLE_TOKENS" "$VDIR_OAUTH_MODE" "$OAUTH_DISPLAY_DIR" "$VDIR_PENDING" "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
 touch "$MAP" "$VDIR_PAIRS"
 chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
 
@@ -102,23 +106,6 @@ valid_local_collection_key(){
 }
 valid_client_id(){
   [ -n "$1" ] && valid_single_line "$1" && printf '%s' "$1" | grep -qE '^[A-Za-z0-9._-]+$'
-}
-valid_oauth_redirect_uri(){
-  valid_single_line "$1" && printf '%s' "$1" | grep -qE '^https://[^[:space:]/?#]+(?::[0-9]{1,5})?/oauth/google/callback$'
-}
-oauth_mode_for_ref(){
-  local ref="$1" mode
-  mode="$(cat "$VDIR_OAUTH_MODE/$ref" 2>/dev/null || true)"
-  case "$mode" in web|desktop) printf '%s\n' "$mode";; *) printf 'desktop\n';; esac
-}
-oauth_redirect_for_ref(){
-  local ref="$1" uri
-  uri="$(cat "$VDIR_OAUTH_MODE/$ref.redirect-uri" 2>/dev/null || true)"
-  valid_oauth_redirect_uri "$uri" && printf '%s\n' "$uri"
-}
-oauth_web_callback_ready(){
-  have curl || return 1
-  curl --connect-timeout 2 --max-time 4 -fsS "${DASH_OAUTH_CONTROL_URL:-http://127.0.0.1:8090}/api/ready" >/dev/null 2>&1
 }
 toml_quote(){
   # We reject line breaks in values before persisting. Quote remaining TOML
@@ -155,7 +142,7 @@ remove_own_calendar(){
   while IFS='|' read -r name color tag pair collection _; do
     [ -n "$name" ] || continue
     rm -rf "$collection" 2>/dev/null || true
-    rm -f "$VDIR_PASSWORDS/$name" "$VDIR_PASSWORDS/$name.google-client-secret" "$GOOGLE_TOKENS/$name.json" "$VDIR_OAUTH_MODE/$name" "$VDIR_OAUTH_MODE/$name.redirect-uri" 2>/dev/null || true
+    rm -f "$VDIR_PASSWORDS/$name" "$VDIR_PASSWORDS/$name.google-client-secret" "$GOOGLE_TOKENS/$name.json" "$VDIR_OAUTH_MODE/$name" 2>/dev/null || true
     if [ -n "$tag" ]; then rm -f "$CAL_DIR/$name.$color.$tag.ics"; else rm -f "$CAL_DIR/$name.$color.ics"; fi
   done < "$old"
   rm -f "$old"
@@ -166,132 +153,200 @@ remove_own_calendar(){
   chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
 }
 
+managed_vdirsyncer_path(){
+  if [ -n "${DASH_VDIRSYNCER_BIN:-}" ]; then
+    printf '%s\n' "$DASH_VDIRSYNCER_BIN"
+    return 0
+  fi
+  local method user_base
+  method="$(cat "$VDIR_INSTALL_METHOD" 2>/dev/null || true)"
+  case "$method" in
+    venv)
+      printf '%s\n' "$VDIR_VENV/bin/vdirsyncer"
+      return 0
+      ;;
+    user-pip)
+      user_base="$(python3 -m site --user-base 2>/dev/null || true)"
+      [ -n "$user_base" ] && printf '%s\n' "$user_base/bin/vdirsyncer"
+      return 0
+      ;;
+  esac
+  printf '%s\n' "$VDIR_PIPX_BIN/vdirsyncer"
+}
+refresh_vdirsyncer_bin(){ VDIRSYNCER_BIN="$(managed_vdirsyncer_path)"; export DASH_VDIRSYNCER_BIN="$VDIRSYNCER_BIN"; }
 vdirsyncer_version(){
+  refresh_vdirsyncer_bin
   [ -x "$VDIRSYNCER_BIN" ] || return 1
   "$VDIRSYNCER_BIN" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
 }
-vdirsyncer_is_pinned(){
-  [ "$(vdirsyncer_version 2>/dev/null || true)" = "$VDIRSYNCER_VERSION" ]
-}
-pipx_run(){
-  PIPX_HOME="$VDIR_PIPX_HOME" PIPX_BIN_DIR="$VDIR_PIPX_BIN" pipx "$@"
-}
+vdirsyncer_is_pinned(){ [ "$(vdirsyncer_version 2>/dev/null || true)" = "$VDIRSYNCER_VERSION" ]; }
+pipx_run(){ PIPX_HOME="$VDIR_PIPX_HOME" PIPX_BIN_DIR="$VDIR_PIPX_BIN" pipx "$@"; }
+pipx_works(){ have pipx && pipx_run --version >/dev/null 2>&1; }
+python_venv_works(){ have python3 && python3 -c 'import venv' >/dev/null 2>&1; }
+python_pip_works(){ have python3 && python3 -m pip --version >/dev/null 2>&1; }
 apt_codename(){
   local os_release
-  if [ -n "${DASH_VDIR_APT_CODENAME:-}" ]; then
-    printf '%s\n' "$DASH_VDIR_APT_CODENAME"
-    return 0
-  fi
+  if [ -n "${DASH_VDIR_APT_CODENAME:-}" ]; then printf '%s\n' "$DASH_VDIR_APT_CODENAME"; return 0; fi
   os_release="${DASH_VDIR_OS_RELEASE:-/etc/os-release}"
   [ -r "$os_release" ] || return 0
   sed -nE 's/^VERSION_CODENAME=//p; s/^DEBIAN_CODENAME=//p' "$os_release" | head -n1 | tr -d '"'
 }
-ensure_pipx(){
+install_pipx_apt(){
   local codename
-  if have pipx; then return 0; fi
-  if ! have apt-get; then
-    warn "pipx is required for Dash-Go private calendar sync. Install pipx with this system's native package manager, then re-run setup."
-    return 1
-  fi
-  echo "  Dash-Go installs pipx through APT, then keeps vdirsyncer isolated under $VDIR_HOME."
-  read -rp "  Install pipx now? [Y/n]: " install_pipx
-  case "${install_pipx:-y}" in n|N|no|NO) warn "pipx is required before private calendar sync can be configured"; return 1;; esac
-  have sudo || { warn "sudo is required to install pipx with APT"; return 1; }
+  have apt-get || return 1
+  have sudo || { warn "sudo is required to install the missing private-calendar tools"; return 1; }
   codename="$(apt_codename)"
   if [ "$codename" = "bullseye" ]; then
-    echo "  Debian Bullseye uses pipx and python3-venv from bullseye-backports."
-    sudo apt-get update && sudo apt-get install -y -t bullseye-backports pipx python3-venv || { warn "could not install pipx and python3-venv from bullseye-backports"; return 1; }
+    echo "  This Bullseye device uses pipx and Python virtual-environment support from bullseye-backports."
+    sudo apt-get update && sudo apt-get install -y -t bullseye-backports pipx python3-venv || return 1
   else
-    sudo apt-get update && sudo apt-get install -y pipx python3-venv || { warn "could not install pipx and python3-venv through APT"; return 1; }
+    sudo apt-get update && sudo apt-get install -y pipx python3-venv || return 1
   fi
-  have pipx || { warn "pipx was installed but is not available on PATH; re-open the terminal and re-run setup"; return 1; }
-  have qrencode || echo "  Optional: install qrencode to show a Google sign-in QR code on the dashboard display."
+  pipx_works
 }
-install_pinned_vdirsyncer(){
-  mkdir -p "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"
-  chmod 700 "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
+offer_optional_qrencode(){
+  local answer
+  have qrencode && return 0
+  [ -e "$VDIR_HOME/qrencode-prompted" ] && return 0
+  have apt-get && have sudo || return 0
+  echo "  Optional: install qrencode so Google setup can show a scannable QR code on the dashboard display."
+  read -rp "  Install the optional QR helper now? [Y/n]: " answer || return 0
+  : > "$VDIR_HOME/qrencode-prompted"; chmod 600 "$VDIR_HOME/qrencode-prompted" 2>/dev/null || true
+  case "${answer:-y}" in
+    n|N|no|NO) echo "  QR setup will still work by showing a link to type on your phone."; return 0;;
+  esac
+  if sudo apt-get install -y qrencode; then
+    ok "optional QR helper installed"
+  else
+    warn "qrencode could not be installed. Google setup will show a link to type on your phone instead."
+  fi
+}
+ensure_pipx(){
+  if pipx_works; then return 0; fi
+  if have pipx; then warn "pipx was found but could not run successfully."; else warn "pipx is not installed on this device."; fi
+  have apt-get || return 1
+  read -rp "  Install or repair the private-calendar tools now? [Y/n]: " answer
+  case "${answer:-y}" in n|N|no|NO) return 1;; esac
+  install_pipx_apt || { warn "Dash-Go could not prepare pipx through APT."; return 1; }
+  ok "pipx is installed and working"
+}
+write_install_method(){ printf '%s\n' "$1" > "$VDIR_INSTALL_METHOD" && chmod 600 "$VDIR_INSTALL_METHOD"; }
+install_pinned_vdirsyncer_pipx(){
+  mkdir -p "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN"; chmod 700 "$VDIR_PIPX_HOME" "$VDIR_PIPX_BIN" 2>/dev/null || true
   pipx_run install --force "vdirsyncer[google]==$VDIRSYNCER_VERSION" || { warn "pipx could not install vdirsyncer $VDIRSYNCER_VERSION"; return 1; }
-  # pipx never upgrades applications unless asked. Pin where the installed pipx
-  # supports it as a second explicit guard; an older pipx still retains the exact
-  # version because Dash-Go never runs an automatic upgrade command.
-  pipx_run pin vdirsyncer >/dev/null 2>&1 || warn "this pipx cannot record an explicit pin; Dash-Go still keeps vdirsyncer at the exact installed version and never auto-upgrades it"
-  vdirsyncer_is_pinned || { warn "Dash-Go requires vdirsyncer $VDIRSYNCER_VERSION at $VDIRSYNCER_BIN"; return 1; }
+  pipx_run pin vdirsyncer >/dev/null 2>&1 || warn "this pipx cannot record an explicit pin; Dash-Go still keeps the exact installed version"
+  write_install_method pipx || return 1
+  refresh_vdirsyncer_bin
+  vdirsyncer_is_pinned || { warn "Dash-Go requires vdirsyncer $VDIRSYNCER_VERSION"; return 1; }
 }
-
-# vdirsyncer's Google storage lives behind the optional [google] extra
-# (aiohttp-oauthlib). Probe the interpreter that actually runs the known
-# Dash-Go-managed executable, not an unrelated system vdirsyncer on PATH.
-vdirsyncer_python(){
-  if [ -n "${DASH_VDIRSYNCER_PYTHON:-}" ]; then
-    [ -x "$DASH_VDIRSYNCER_PYTHON" ] && printf '%s\n' "$DASH_VDIRSYNCER_PYTHON"
-    return
+install_pinned_vdirsyncer_venv(){
+  python_venv_works || { warn "Python virtual-environment support is unavailable."; return 1; }
+  rm -rf "$VDIR_VENV"
+  python3 -m venv "$VDIR_VENV" || return 1
+  "$VDIR_VENV/bin/python" -m pip install --disable-pip-version-check --no-input "vdirsyncer[google]==$VDIRSYNCER_VERSION" || return 1
+  write_install_method venv || return 1
+  refresh_vdirsyncer_bin
+  vdirsyncer_is_pinned
+}
+install_pinned_vdirsyncer_user_pip(){
+  local user_base existing
+  python_pip_works || { warn "Python's user-level pip is unavailable."; return 1; }
+  user_base="$(python3 -m site --user-base 2>/dev/null || true)"
+  [ -n "$user_base" ] || return 1
+  existing="$user_base/bin/vdirsyncer"
+  if [ -e "$existing" ]; then
+    echo "  A user-level vdirsyncer already exists at $existing."
+    read -rp "  Replace it with Dash-Go's pinned calendar tool? [y/N]: " replace
+    case "$replace" in y|Y|yes|YES) ;; *) return 1;; esac
   fi
-  # Resolve the interpreter that owns the installed vdirsyncer package. A
-  # pipx/venv launcher usually names Python directly, while distro wrappers
-  # often use `#!/usr/bin/env python3` (or `env -S python3`). The latter must
-  # resolve the requested interpreter, not /usr/bin/env itself.
-  local script shebang index
-  local -a words
-  script="$VDIRSYNCER_BIN"
-  [ -x "$script" ] || return 1
+  python3 -m pip install --user --disable-pip-version-check --no-input --upgrade "vdirsyncer[google]==$VDIRSYNCER_VERSION" || return 1
+  write_install_method user-pip || return 1
+  refresh_vdirsyncer_bin
+  vdirsyncer_is_pinned
+}
+# vdirsyncer's Google storage lives behind the optional [google] extra. Probe
+# the interpreter that owns the selected Dash-Go-managed executable, not an
+# unrelated system vdirsyncer on PATH.
+vdirsyncer_python(){
+  if [ -n "${DASH_VDIRSYNCER_PYTHON:-}" ]; then [ -x "$DASH_VDIRSYNCER_PYTHON" ] && printf '%s\n' "$DASH_VDIRSYNCER_PYTHON"; return; fi
+  local script shebang index; local -a words
+  refresh_vdirsyncer_bin; script="$VDIRSYNCER_BIN"; [ -x "$script" ] || return 1
   shebang="$(head -n1 "$script" 2>/dev/null)"
   case "$shebang" in
     '#!'*)
       read -r -a words <<< "${shebang#\#!}"
       case "${words[0]:-}" in
         */env)
-          index=1
-          [ "${words[$index]:-}" = "-S" ] && index=$((index + 1))
+          index=1; [ "${words[$index]:-}" = "-S" ] && index=$((index + 1))
           while [ "$index" -lt "${#words[@]}" ] && [[ "${words[$index]}" = -* ]]; do index=$((index + 1)); done
           [ "$index" -lt "${#words[@]}" ] && command -v "${words[$index]}" || return 1
           ;;
-        *python*)
-          [ -x "${words[0]}" ] && printf '%s\n' "${words[0]}" || command -v "${words[0]}"
-          ;;
+        *python*) [ -x "${words[0]}" ] && printf '%s\n' "${words[0]}" || command -v "${words[0]}" ;;
         *) command -v python3;;
       esac
       ;;
     *) command -v python3;;
   esac
 }
-google_support_present(){
-  local py
-  py="$(vdirsyncer_python)" || return 1
-  [ -x "$py" ] || return 1
-  "$py" -c 'import aiohttp_oauthlib' >/dev/null 2>&1
+google_support_present(){ local py; py="$(vdirsyncer_python)" || return 1; [ -x "$py" ] || return 1; "$py" -c 'import aiohttp_oauthlib' >/dev/null 2>&1; }
+private_tool_ready(){
+  local provider="$1"
+  vdirsyncer_is_pinned || return 1
+  [ "$provider" != "google" ] || google_support_present
+}
+install_private_calendar_tool(){
+  local provider="$1" answer
+  if pipx_works; then
+    ok "pipx is installed and working"
+    echo "  Dash-Go's private calendar component is not installed yet."
+    read -rp "  Install Dash-Go's isolated calendar component now? [Y/n]: " answer
+    case "${answer:-y}" in n|N|no|NO) return 1;; esac
+    install_pinned_vdirsyncer_pipx
+    return
+  fi
+  echo "  Dash-Go could not use pipx on this device."
+  if ensure_pipx && install_pinned_vdirsyncer_pipx; then return 0; fi
+  echo "  Dash-Go can instead create its own isolated fallback environment."
+  read -rp "  Use the isolated fallback now? [Y/n]: " answer
+  case "${answer:-y}" in
+    y|Y|yes|YES|'') install_pinned_vdirsyncer_venv && return 0;;
+  esac
+  echo "  Final fallback: install the pinned calendar tool only for this user."
+  echo "  This never uses sudo or changes the operating system Python."
+  read -rp "  Use this final user-level pip fallback? [y/N]: " answer
+  case "$answer" in y|Y|yes|YES) install_pinned_vdirsyncer_user_pip;; *) return 1;; esac
 }
 ensure_vdirsyncer(){
-  if vdirsyncer_is_pinned && google_support_present; then
-    ok "Dash-Go vdirsyncer $VDIRSYNCER_VERSION is ready: $VDIRSYNCER_BIN"
+  local provider="$1"
+  if private_tool_ready "$provider"; then
+    if pipx_works && [ "$(cat "$VDIR_INSTALL_METHOD" 2>/dev/null || true)" != "venv" ] && [ "$(cat "$VDIR_INSTALL_METHOD" 2>/dev/null || true)" != "user-pip" ]; then
+      ok "pipx is installed and working"
+    fi
+    ok "Dash-Go private calendar sync is ready (vdirsyncer $VDIRSYNCER_VERSION)"
     return 0
   fi
   if [ -n "${DASH_VDIRSYNCER_BIN:-}" ]; then
-    warn "The explicit DASH_VDIRSYNCER_BIN must be vdirsyncer $VDIRSYNCER_VERSION with the [google] extra."
+    warn "The explicitly selected vdirsyncer must be version $VDIRSYNCER_VERSION$( [ "$provider" = google ] && printf ' with Google support' )."
     return 1
   fi
+  say "Checking private calendar tools"
   if [ -x "$VDIRSYNCER_BIN" ]; then
-    warn "Dash-Go's vdirsyncer environment is missing Google support or is not the required $VDIRSYNCER_VERSION."
+    warn "Dash-Go's private calendar component needs repair or Google support."
   else
-    warn "Dash-Go private calendar sync uses a pinned vdirsyncer $VDIRSYNCER_VERSION environment managed by pipx."
+    echo "  Dash-Go needs one small private-calendar component."
   fi
-  ensure_pipx || return 1
-  read -rp "  Install or repair Dash-Go's pinned vdirsyncer now? [Y/n]: " install_choice
-  case "${install_choice:-y}" in n|N|no|NO) warn "private calendar sync was not changed"; return 1;; esac
-  install_pinned_vdirsyncer || return 1
-  google_support_present || { warn "vdirsyncer $VDIRSYNCER_VERSION installed but its Google OAuth support is unavailable"; return 1; }
-  ok "Dash-Go vdirsyncer $VDIRSYNCER_VERSION installed in its isolated pipx environment"
+  install_private_calendar_tool "$provider" || { warn "Private calendar setup was not changed."; return 1; }
+  private_tool_ready "$provider" || { warn "Dash-Go could not prepare the required vdirsyncer $VDIRSYNCER_VERSION environment."; return 1; }
+  ok "Dash-Go private calendar sync is ready"
 }
 ensure_google_support(){
-  if google_support_present; then
-    ok "vdirsyncer Google support found (aiohttp-oauthlib present)"
+  if private_tool_ready google; then
+    ok "Google Calendar support is ready"
+    offer_optional_qrencode
     return 0
   fi
-  [ -z "${DASH_VDIRSYNCER_BIN:-}" ] || { warn "The explicit vdirsyncer override lacks the required Google support"; return 1; }
-  warn "Dash-Go's pinned vdirsyncer environment is incomplete; repairing the same pinned [google] installation."
-  read -rp "  Repair Dash-Go's vdirsyncer now? [Y/n]: " repair_choice
-  case "${repair_choice:-y}" in n|N|no|NO) warn "Google Calendar setup needs vdirsyncer[google]"; return 1;; esac
-  ensure_pipx && install_pinned_vdirsyncer && google_support_present || { warn "could not restore Dash-Go's vdirsyncer Google support"; return 1; }
-  ok "vdirsyncer Google support restored"
+  ensure_vdirsyncer google || return 1
+  offer_optional_qrencode
 }
 write_vdirsyncer_config(){
   local temp name color tag pair ignored_path url username remote_id provider client_id display_name credential_ref local_id remote local_path coll_spec
@@ -683,6 +738,470 @@ install_vdir_cron(){
   return "$rc"
 }
 
+
+# Guided private-calendar setup keeps credentials in a private draft until a
+# real discovery and first exact-calendar sync have succeeded. The existing
+# Dashboard Control selection helper remains the single source of truth for
+# safe exact mappings, writeback metadata, and first-sync behavior.
+private_connection_ref(){
+  local prefix="$1" index=1 candidate
+  while :; do
+    candidate="$prefix"; [ "$index" -eq 1 ] || candidate="${prefix}_${index}"
+    grep -qE "^[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|${candidate}\|" "$VDIR_PAIRS" 2>/dev/null || { printf '%s\n' "$candidate"; return 0; }
+    index=$((index + 1))
+  done
+}
+private_connection_label(){
+  case "$1" in google) printf 'Google Calendar';; icloud) printf 'Apple iCloud Calendar';; *) printf 'CalDAV calendar account';; esac
+}
+private_provider_code(){ case "$1" in google) printf 'google\n';; *) printf 'caldav\n';; esac; }
+private_connection_prefix(){ case "$1" in google) printf 'google\n';; icloud) printf 'icloud\n';; *) printf 'caldav\n';; esac; }
+private_connection_draft(){ printf '%s/%s-%s' "$VDIR_PENDING" "$1" "$$"; }
+private_remove_draft(){ [ -n "${PRIVATE_DRAFT:-}" ] && rm -rf "$PRIVATE_DRAFT" 2>/dev/null || true; PRIVATE_DRAFT=""; }
+private_make_draft(){
+  PRIVATE_DRAFT="$(private_connection_draft "$1")" || return 1
+  mkdir -p "$PRIVATE_DRAFT/passwords" "$PRIVATE_DRAFT/google-tokens" "$PRIVATE_DRAFT/collections" "$PRIVATE_DRAFT/status" || return 1
+  chmod 700 "$PRIVATE_DRAFT" "$PRIVATE_DRAFT/passwords" "$PRIVATE_DRAFT/google-tokens" "$PRIVATE_DRAFT/collections" "$PRIVATE_DRAFT/status" 2>/dev/null || true
+}
+private_cleanup_transaction(){
+  local name color tag pair collection _
+  [ -n "${PRIVATE_TX:-}" ] || return 0
+  [ -r "$PRIVATE_TX/pairs.before" ] && cp "$PRIVATE_TX/pairs.before" "$VDIR_PAIRS"
+  [ -r "$PRIVATE_TX/map.before" ] && cp "$PRIVATE_TX/map.before" "$MAP"
+  [ -r "$PRIVATE_TX/config.before" ] && cp "$PRIVATE_TX/config.before" "$VDIR_CFG" || rm -f "$VDIR_CFG"
+  [ -r "$PRIVATE_TX/wrapper.before" ] && cp "$PRIVATE_TX/wrapper.before" "$BIN_DIR/sync-vdir.sh" || rm -f "$BIN_DIR/sync-vdir.sh"
+  [ -r "$PRIVATE_TX/registry.before" ] && cp "$PRIVATE_TX/registry.before" "$WRITEBACK_REGISTRY" || rm -f "$WRITEBACK_REGISTRY"
+  if [ -r "$PRIVATE_TX/new-names" ]; then
+    while IFS='|' read -r name color tag pair collection _; do
+      [ -n "$name" ] || continue
+      rm -rf "$collection" 2>/dev/null || true
+      rm -f "$CAL_DIR/$name".*.ics 2>/dev/null || true
+    done < "$PRIVATE_TX/new-names"
+  fi
+  [ -n "${PRIVATE_CONNECTION_REF:-}" ] && rm -f "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF" "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF.google-client-secret" "$GOOGLE_TOKENS/$PRIVATE_CONNECTION_REF.json" "$VDIR_OAUTH_MODE/$PRIVATE_CONNECTION_REF" 2>/dev/null || true
+  chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
+}
+private_begin_transaction(){
+  PRIVATE_TX="$PRIVATE_DRAFT/transaction"; mkdir -p "$PRIVATE_TX" || return 1
+  cp "$VDIR_PAIRS" "$PRIVATE_TX/pairs.before" || return 1
+  cp "$MAP" "$PRIVATE_TX/map.before" || return 1
+  [ ! -e "$VDIR_CFG" ] || cp "$VDIR_CFG" "$PRIVATE_TX/config.before"
+  [ ! -e "$BIN_DIR/sync-vdir.sh" ] || cp "$BIN_DIR/sync-vdir.sh" "$PRIVATE_TX/wrapper.before"
+  [ ! -e "$WRITEBACK_REGISTRY" ] || cp "$WRITEBACK_REGISTRY" "$PRIVATE_TX/registry.before"
+  : > "$PRIVATE_TX/new-names"; chmod 600 "$PRIVATE_TX"/* 2>/dev/null || true
+}
+private_commit_transaction(){ PRIVATE_TX=""; }
+private_stage_connection_row(){
+  local provider="$1" url="$2" username="$3" client_id="$4" label="$5" pair
+  pair="connect_${PRIVATE_CONNECTION_REF}"
+  PRIVATE_BASE_PAIR="$pair"
+  printf '%s|blue||%s|%s/collections/%s|%s|%s||%s|%s|%s|%s|\n' \
+    "$PRIVATE_CONNECTION_REF" "$pair" "$VDIR_HOME" "$PRIVATE_CONNECTION_REF" "$url" "$username" "$provider" "$client_id" "$label" "$PRIVATE_CONNECTION_REF" >> "$VDIR_PAIRS"
+  chmod 600 "$VDIR_PAIRS"
+}
+private_remove_base_pair(){
+  local temp
+  temp="$(mktemp "$VDIR_HOME/pairs.XXXXXX")" || return 1
+  awk -F'|' -v pair="$PRIVATE_BASE_PAIR" '$4 != pair {print}' "$VDIR_PAIRS" > "$temp" && mv "$temp" "$VDIR_PAIRS" || { rm -f "$temp"; return 1; }
+  chmod 600 "$VDIR_PAIRS" 2>/dev/null || true
+}
+private_stage_secret(){
+  local provider="$1" secret="$2"
+  if [ "$provider" = google ]; then
+    printf '%s' "$secret" > "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF.google-client-secret"
+    chmod 600 "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF.google-client-secret"
+  else
+    printf '%s' "$secret" > "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF"
+    chmod 600 "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF"
+  fi
+}
+private_input_trim(){
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+prompt_retry(){
+  # prompt_retry VAR "prompt" validator "specific corrective hint" [secret]
+  # Every typed field gets three focused retries. q cancels safely and never
+  # discards a completed authorization merely because a later field was mistyped.
+  local target="$1" prompt="$2" validator="$3" hint="$4" secret="${5:-0}" value attempt
+  for attempt in 1 2 3; do
+    if [ "$secret" = 1 ]; then
+      read -rsp "  ${prompt} [q=cancel]: " value || return 2
+      echo
+    else
+      read -rp "  ${prompt} [q=cancel]: " value || return 2
+    fi
+    value="$(private_input_trim "$value")"
+    case "$value" in q|Q) return 2;; esac
+    if "$validator" "$value"; then
+      printf -v "$target" '%s' "$value"
+      return 0
+    fi
+    warn "$hint"
+  done
+  warn "Too many attempts. No connection was added. Run $BIN_DIR/setup-vdirsyncer.sh again when you are ready."
+  return 1
+}
+valid_nonempty_single_line(){ [ -n "$1" ] && valid_single_line "$1"; }
+valid_google_client_id(){ valid_client_id "$1" && printf "%s" "$1" | grep -q "apps.googleusercontent.com$"; }
+valid_color_or_blank(){ [ -z "$1" ] || valid_color "$1"; }
+valid_icloud_email_input(){ valid_nonempty_single_line "$1"; }
+private_icloud_secret_shape(){ printf '%s' "$1" | grep -qE '^[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}$'; }
+private_google_secret_prompt(){
+  local choice
+  while :; do
+    prompt_retry PRIVATE_SECRET "Google Client Secret" valid_nonempty_single_line "Paste the Google Client Secret, not the Client ID or project ID." 1 || return $?
+    if [ "$PRIVATE_SECRET" = "$PRIVATE_CLIENT_ID" ]; then
+      warn "That is the same value as the Client ID. Paste the separate Google Client Secret instead."
+      continue
+    fi
+    if ! printf '%s' "$PRIVATE_SECRET" | grep -q '^GOCSPX-'; then
+      warn "Newer Google client secrets usually start with GOCSPX-. Double-check that you copied the Client Secret."
+      read -rp "  Press Enter to keep it, r to re-enter it, or q to cancel: " choice || return 2
+      case "$choice" in q|Q) return 2;; r|R) continue;; esac
+    fi
+    return 0
+  done
+}
+private_icloud_credentials_prompt(){
+  local choice
+  prompt_retry PRIVATE_USERNAME "Apple Account email" valid_icloud_email_input "Enter the email address used with your Apple Account." 0 || return $?
+  if ! printf '%s' "$PRIVATE_USERNAME" | grep -q '@'; then
+    warn "That does not look like an email address. Apple Account emails normally contain @."
+    read -rp "  Press Enter to keep it, r to re-enter it, or q to cancel: " choice || return 2
+    case "$choice" in q|Q) return 2;; r|R) private_icloud_credentials_prompt; return $?;; esac
+  fi
+  while :; do
+    prompt_retry PRIVATE_SECRET "Apple app-specific password" valid_nonempty_single_line "Paste the app-specific password Apple generated for Dash-Go." 1 || return $?
+    if ! private_icloud_secret_shape "$PRIVATE_SECRET"; then
+      warn "This does not look like an Apple app-specific password. They usually look like abcd-efgh-ijkl-mnop."
+      echo "  Generate one at account.apple.com → Sign-In and Security → App-Specific Passwords."
+      read -rp "  Press Enter to keep it, r to re-enter it, or q to cancel: " choice || return 2
+      case "$choice" in q|Q) return 2;; r|R) continue;; esac
+    fi
+    return 0
+  done
+}
+private_headless_ssh(){ [ -n "${SSH_CONNECTION:-}" ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; }
+private_google_signin_mode_prompt(){
+  local completion="" tunnel="" default="" mode_label=""
+  echo ""
+  echo "Step 2 of 4 — Choose where you will sign in"
+  if private_headless_ssh; then
+    echo "You are connected by SSH without a local screen. A phone or tablet is the easy path."
+    echo "  1) Phone or tablet — scan the dashboard QR, then paste the final browser address here (recommended)"
+    echo "  2) Browser on the computer you are typing on — uses one temporary SSH tunnel (advanced)"
+    default=1
+  else
+    echo "  1) Browser on this device — completes automatically"
+    echo "  2) Phone or tablet — scan the dashboard QR, then paste the final browser address here"
+    default=1
+  fi
+  while :; do
+    read -rp "  Choose [$default, q=cancel]: " completion || return 2
+    completion="$(private_input_trim "${completion:-$default}")"
+    case "$completion" in
+      q|Q) return 2;;
+      1)
+        if private_headless_ssh; then
+          PRIVATE_GOOGLE_MODE="phone"
+        else
+          PRIVATE_GOOGLE_MODE="loopback"
+          echo "Dash-Go will wait for the local browser callback on this device."
+        fi
+        return 0
+        ;;
+      2)
+        if private_headless_ssh; then
+          tunnel="$(private_tunnel_command || true)"
+          if [ -z "$tunnel" ]; then
+            warn "Dash-Go could not build the temporary SSH tunnel command. Choose the phone option instead."
+            continue
+          fi
+          echo ""
+          echo "Open a second terminal on the computer you are typing on and paste:"
+          echo "  $tunnel"
+          echo "Keep it open, then press Enter here. If the sign-in page never loads, choose the phone option instead."
+          read -rp "  Press Enter to continue, or q to cancel: " mode_label || return 2
+          mode_label="$(private_input_trim "$mode_label")"
+          case "$mode_label" in q|Q) return 2;; esac
+          PRIVATE_GOOGLE_MODE="loopback"
+        else
+          PRIVATE_GOOGLE_MODE="phone"
+        fi
+        return 0
+        ;;
+      *) warn "Choose 1 or 2. Your Google details are still waiting in this setup.";;
+    esac
+  done
+}
+private_google_prepare(){
+  local ready=""
+  ensure_google_support || return 1
+  echo ""
+  echo "Step 1 of 4 — Prepare Google Calendar"
+  echo "Google requires one small setup in your own Google Cloud account. You do this once for this Dash-Go device."
+  echo "  1. Enable Google Calendar API."
+  echo "  2. Configure the Google consent screen."
+  echo "  3. Create an OAuth Client ID."
+  echo "  4. Choose application type: Desktop app."
+  echo "Choose Desktop app exactly. Do not choose Web application."
+  echo "For unattended household sync, leave the consent screen In production when Google permits it."
+  read -rp "Press Enter when you are ready to paste the Client ID (q cancels): " ready || return 2
+  case "$ready" in q|Q) return 2;; esac
+  prompt_retry PRIVATE_CLIENT_ID "Google Client ID" valid_google_client_id "Paste the Google Desktop App Client ID ending in apps.googleusercontent.com." 0 || return $?
+  private_google_secret_prompt || return $?
+  private_google_signin_mode_prompt
+}
+private_icloud_prepare(){
+  local ready=""
+  echo ""
+  echo "Step 1 of 4 — Prepare Apple iCloud Calendar"
+  echo "You need the email address used with your Apple Account and a new app-specific password."
+  echo "Do not enter your normal Apple Account password."
+  echo "At account.apple.com: Sign-In and Security → App-Specific Passwords → Generate Password."
+  read -rp "Press Enter when you have an app-specific password (q cancels): " ready || return 2
+  case "$ready" in q|Q) return 2;; esac
+  private_icloud_credentials_prompt || return $?
+  PRIVATE_URL="https://caldav.icloud.com/"
+}
+private_caldav_prepare(){
+  echo ""
+  echo "Step 1 of 4 — Enter CalDAV account details"
+  prompt_retry PRIVATE_LABEL "Account label (letters, numbers, hyphen, underscore)" valid_name "Use only letters, numbers, hyphen, and underscore for an account label." 0 || return $?
+  prompt_retry PRIVATE_URL "CalDAV server URL" valid_caldav_url "Use a single-line http(s) CalDAV URL without spaces or | characters." 0 || return $?
+  prompt_retry PRIVATE_USERNAME "Account username" valid_nonempty_single_line "Enter a single-line account username." 0 || return $?
+  prompt_retry PRIVATE_SECRET "Account password or app-specific password" valid_nonempty_single_line "Paste the account password or app-specific password." 1 || return $?
+}
+private_discover_draft(){
+  local out="$PRIVATE_DRAFT/discovery.out" provider="$1" rc
+  if timeout 180 env DASH_VDIR_HOME="$PRIVATE_DRAFT" DASH_VDIR_PAIRS="$PRIVATE_DRAFT/pairs" DASH_VDIR_PASSWORDS="$PRIVATE_DRAFT/passwords" DASH_VDIR_GOOGLE_TOKENS="$PRIVATE_DRAFT/google-tokens" DASH_VDIRSYNCER_BIN="$VDIRSYNCER_BIN" "$BIN_DIR/private-calendar-discovery.sh" > "$out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  awk -F '\t' '$1=="calendar" && NF==7 {print}' "$out" > "$PRIVATE_DRAFT/candidates.tsv"
+  if [ "$rc" -eq 124 ]; then
+    warn "Calendar discovery took too long — check the network and try again; nothing was changed."
+    return 1
+  fi
+  if [ ! -s "$PRIVATE_DRAFT/candidates.tsv" ]; then
+    echo ""
+    warn "Dash-Go could not list calendars for this account. Existing dashboard calendars were not changed."
+    sed -n 's/^notice[[:space:]]*//p' "$out" | sed 's/^/  /' || true
+    return 1
+  fi
+}
+private_candidate_is_active(){
+  local remote="$1"
+  awk -F'|' -v remote="$remote" '$7==remote {found=1} END {exit found?0:1}' "$VDIR_PAIRS"
+}
+private_prompt_calendar_selection(){
+  local total="$1" answer="" index all_answer
+  while :; do
+    read -rp "Enter calendar numbers to add (space separated; Enter = all; q cancels): " answer || return 2
+    answer="$(private_input_trim "$answer")"
+    case "$answer" in q|Q) return 2;; esac
+    if [ -z "$answer" ]; then
+      read -rp "Add all $total calendars? [Y/n, q=cancel]: " all_answer || return 2
+      case "$all_answer" in q|Q) return 2;; n|N|no|NO) continue;; esac
+      answer="$(seq 1 "$total" | tr '\n' ' ')"
+    fi
+    for index in $answer; do
+      case "$index" in ''|*[!0-9]*) warn "Use calendar numbers separated by spaces."; continue 2;; esac
+      [ "$index" -ge 1 ] && [ "$index" -le "$total" ] || { warn "Calendar number $index is not in the list. Choose a number shown above."; continue 2; }
+    done
+    PRIVATE_SELECTION="$answer"
+    return 0
+  done
+}
+private_choose_and_activate(){
+  local provider="$1" total index pair remote display color editable selected=0 output source name line="" chosen_color="" edit_answer=""
+  total="$(wc -l < "$PRIVATE_DRAFT/candidates.tsv")"
+  echo ""
+  echo "Step 3 of 4 — Choose calendars"
+  index=0
+  while IFS=$'\t' read -r _ pair _ _ remote display color; do
+    index=$((index + 1))
+    if private_candidate_is_active "$remote"; then
+      printf '  [%s] %s (already selected)\n' "$index" "$display"
+    else
+      printf '  [%s] %s\n' "$index" "$display"
+    fi
+  done < "$PRIVATE_DRAFT/candidates.tsv"
+  private_prompt_calendar_selection "$total" || return $?
+  for index in $PRIVATE_SELECTION; do
+    line="$(sed -n "${index}p" "$PRIVATE_DRAFT/candidates.tsv")"
+    IFS=$'\t' read -r _ pair _ _ remote display color <<< "$line"
+    color="${color:-blue}"; valid_color "$color" || color="blue"
+    prompt_retry chosen_color "Display color for $display [$color]" valid_color_or_blank "Use a palette color or six-digit hex value." 0 || return $?
+    chosen_color="${chosen_color:-$color}"
+    while :; do
+      read -rp "  Allow Dash-Go to add, edit, or skip events in $display? [y/N, q=cancel]: " edit_answer || return 2
+      edit_answer="$(private_input_trim "$edit_answer")"
+      case "$edit_answer" in q|Q) return 2;; y|Y|yes|YES|' '| '') editable=0; case "$edit_answer" in y|Y|yes|YES) editable=1;; esac; break;; *) warn "Answer y for editable or press Enter to keep $display read-only.";; esac
+    done
+    output="$(DASH_VDIRSYNCER_BIN="$VDIRSYNCER_BIN" "$BIN_DIR/private-calendar-selection.sh" --activate "$PRIVATE_BASE_PAIR" "$remote" "$display" "$chosen_color" "$editable" 2>&1)" || { warn "Could not activate $display safely. Try again from Calendar Manager."; printf '%s\n' "$output" | sed 's/^/  /'; return 1; }
+    case "$output" in
+      activated$'\t'*)
+        IFS=$'\t' read -r _ source _ _ _ _ initial <<< "$output"
+        if [ "$initial" != ready ]; then warn "$display did not complete its first sync. No new calendars were activated. Re-run $BIN_DIR/setup-vdirsyncer.sh --authorize or retry from Calendar Manager."; return 1; fi
+        name="$(awk -F'|' -v source="$source" 'function sf(n,c,t){return t!=""?"calendars/"n"."c"."t".ics":"calendars/"n"."c".ics"} sf($1,$2,$3)==source{print $1"|"$2"|"$3"|"$4"|"$5; exit}' "$MAP")"
+        [ -n "$name" ] && printf '%s\n' "$name" >> "$PRIVATE_TX/new-names"
+        selected=$((selected + 1))
+        ;;
+      existing$'\t'*) warn "$display is already selected; it was left unchanged.";;
+      *) warn "Dash-Go received an unexpected calendar selection result for $display. Retry from Calendar Manager."; return 1;;
+    esac
+  done
+  [ "$selected" -gt 0 ] || { warn "No new calendars were selected. Existing calendars were left unchanged."; return 1; }
+}
+private_finish_connection(){
+  private_remove_base_pair || return 1
+  write_vdirsyncer_config || return 1
+  write_sync_wrapper || return 1
+  if ! timeout 180 "$BIN_DIR/sync-vdir.sh"; then warn "The final private-calendar sync did not finish. No new calendars were activated. Re-run $BIN_DIR/setup-vdirsyncer.sh --authorize or retry from Calendar Manager."; return 1; fi
+  write_writeback_registry || return 1
+  ok "first sync completed"
+}
+private_duplicate_connection_ref(){
+  local provider="$1" username="$2" client_id="$3"
+  awk -F'|' -v provider="$provider" -v username="$username" -v client_id="$client_id" '
+    $9==provider && provider=="google" && $10==client_id {print ($12!=""?$12:$1); exit}
+    $9=="caldav" && provider!="google" && $6=="https://caldav.icloud.com/" && $7==username {print ($12!=""?$12:$1); exit}
+  ' "$VDIR_PAIRS"
+}
+private_refresh_caldav_saved_ref(){
+  local credential_ref="$1" provider="$2" backup="" tmp
+  [ -n "$credential_ref" ] || return 1
+  backup="$VDIR_PASSWORDS/$credential_ref.backup.$$"
+  [ -f "$VDIR_PASSWORDS/$credential_ref" ] && cp -p "$VDIR_PASSWORDS/$credential_ref" "$backup" || true
+  printf '%s' "$PRIVATE_SECRET" > "$VDIR_PASSWORDS/$credential_ref" || { rm -f "$backup"; return 1; }
+  chmod 600 "$VDIR_PASSWORDS/$credential_ref"
+  if timeout 180 "$BIN_DIR/sync-vdir.sh"; then
+    rm -f "$backup"
+    ok "saved a fresh password for the existing $(private_connection_label "$provider") account"
+    return 0
+  fi
+  [ -f "$backup" ] && mv -f "$backup" "$VDIR_PASSWORDS/$credential_ref" || rm -f "$VDIR_PASSWORDS/$credential_ref"
+  warn "The new password did not complete a sync. Your previous private-calendar password was restored. Try again from Calendar Manager."
+  return 1
+}
+private_connect_account(){
+  local choice provider label duplicate reconnect rc
+  say "Connect a private calendar account"
+  echo "  1) Google Calendar"
+  echo "  2) Apple iCloud Calendar"
+  echo "  3) Another CalDAV account — Nextcloud, Fastmail, Radicale, and similar services"
+  while :; do
+    read -rp "Choose [1] (blank to finish, q cancels): " choice || return 2
+    choice="$(private_input_trim "$choice")"
+    case "$choice" in ''|q|Q) return 2;; 1) provider=google; break;; 2) provider=icloud; break;; 3) provider=caldav; break;; *) warn "Choose 1, 2, or 3.";; esac
+  done
+  ensure_vdirsyncer "$(private_provider_code "$provider")" || return 1
+  PRIVATE_SECRET=""; PRIVATE_USERNAME=""; PRIVATE_URL=""; PRIVATE_CLIENT_ID=""; PRIVATE_LABEL="$(private_connection_label "$provider")"
+  case "$provider" in google) private_google_prepare || return $?;; icloud) private_icloud_prepare || return $?;; caldav) private_caldav_prepare || return $?;; esac
+  duplicate="$(private_duplicate_connection_ref "$provider" "$PRIVATE_USERNAME" "$PRIVATE_CLIENT_ID")"
+  if [ -n "$duplicate" ]; then
+    echo "This account looks already connected as '$duplicate'."
+    read -rp "Reconnect it instead? [Y/n, q=cancel]: " reconnect || return 2
+    case "$reconnect" in q|Q) return 2;; n|N|no|NO) warn "Existing account was left unchanged."; return 2;; esac
+    if [ "$provider" = google ]; then
+      private_google_authorize_saved_ref "$duplicate" "$PRIVATE_CLIENT_ID"
+      return $?
+    fi
+    private_refresh_caldav_saved_ref "$duplicate" "$provider"
+    return $?
+  fi
+  PRIVATE_CONNECTION_REF="$(private_connection_ref "$(private_connection_prefix "$provider")")"
+  private_make_draft "$PRIVATE_CONNECTION_REF" || return 1
+  if [ "$provider" = google ]; then
+    printf '%s' "$PRIVATE_SECRET" > "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret"; chmod 600 "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret"
+    printf '%s\n' "$PRIVATE_CONNECTION_REF|blue||connect_$PRIVATE_CONNECTION_REF|$PRIVATE_DRAFT/collections/$PRIVATE_CONNECTION_REF||||google|$PRIVATE_CLIENT_ID|$PRIVATE_LABEL|$PRIVATE_CONNECTION_REF|" > "$PRIVATE_DRAFT/pairs"
+    chmod 600 "$PRIVATE_DRAFT/pairs"
+    say "Step 3 of 4 — Sign in to Google"
+    local oauth_args=(--google-oauth authorize -client-id "$PRIVATE_CLIENT_ID" -client-secret-file "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret" -token-file "$PRIVATE_DRAFT/google-tokens/$PRIVATE_CONNECTION_REF.json" -qr)
+    if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then oauth_args+=(-loopback); else oauth_args+=(-display-dir "$OAUTH_DISPLAY_DIR"); fi
+    [ -x "$CONTROL_SERVER_BIN" ] || { warn "dashboard control server is unavailable; no calendars were added. Re-run $BIN_DIR/setup-vdirsyncer.sh after Dashboard Control is repaired."; private_remove_draft; return 1; }
+    "$CONTROL_SERVER_BIN" "${oauth_args[@]}" || { rc=$?; warn "Google sign-in did not complete. No calendars were added. Re-run $BIN_DIR/setup-vdirsyncer.sh --authorize when ready."; private_remove_draft; return "$rc"; }
+    PRIVATE_URL=""; PRIVATE_USERNAME=""; label="Google Calendar"
+  else
+    label="$(private_connection_label "$provider")"
+    printf '%s' "$PRIVATE_SECRET" > "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF"; chmod 600 "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF"
+    printf '%s\n' "$PRIVATE_CONNECTION_REF|blue||connect_$PRIVATE_CONNECTION_REF|$PRIVATE_DRAFT/collections/$PRIVATE_CONNECTION_REF|$PRIVATE_URL|$PRIVATE_USERNAME||caldav||$PRIVATE_LABEL|$PRIVATE_CONNECTION_REF|" > "$PRIVATE_DRAFT/pairs"
+    chmod 600 "$PRIVATE_DRAFT/pairs"
+  fi
+  echo ""
+  echo "Checking this account and looking for calendars…"
+  private_discover_draft "$provider" || { private_remove_draft; return 1; }
+  private_begin_transaction || { private_remove_draft; return 1; }
+  if [ "$provider" = google ]; then
+    cp "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret" "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF.google-client-secret"; cp "$PRIVATE_DRAFT/google-tokens/$PRIVATE_CONNECTION_REF.json" "$GOOGLE_TOKENS/$PRIVATE_CONNECTION_REF.json"; chmod 600 "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF.google-client-secret" "$GOOGLE_TOKENS/$PRIVATE_CONNECTION_REF.json"; private_stage_connection_row google "" "" "$PRIVATE_CLIENT_ID" "$label"; printf 'desktop\n' > "$VDIR_OAUTH_MODE/$PRIVATE_CONNECTION_REF"; chmod 600 "$VDIR_OAUTH_MODE/$PRIVATE_CONNECTION_REF"
+  else
+    cp "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF" "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF"; chmod 600 "$VDIR_PASSWORDS/$PRIVATE_CONNECTION_REF"; private_stage_connection_row caldav "$PRIVATE_URL" "$PRIVATE_USERNAME" "" "$label"
+  fi
+  write_vdirsyncer_config || { private_cleanup_transaction; private_remove_draft; return 1; }
+  private_choose_and_activate "$provider"; rc=$?
+  if [ "$rc" -ne 0 ]; then private_cleanup_transaction; private_remove_draft; return "$rc"; fi
+  private_finish_connection || { private_cleanup_transaction; private_remove_draft; return 1; }
+  private_commit_transaction
+  private_remove_draft
+  say "Private calendar connection complete"
+  echo "  Selected calendars are now syncing every 15 minutes at low priority."
+  return 0
+}
+private_google_authorize_saved_ref(){
+  local credential_ref="$1" client_id="$2" args rc
+  [ -n "$credential_ref" ] && [ -n "$client_id" ] || return 1
+  [ -r "$VDIR_PASSWORDS/$credential_ref.google-client-secret" ] || { warn "Google connection '$credential_ref' is missing its private client secret. Reconnect it from Calendar Manager."; return 1; }
+  echo ""
+  echo "Reconnect Google Calendar: $credential_ref"
+  echo "Google requires the consent screen to remain In production for reliable unattended calendar sync."
+  private_google_signin_mode_prompt || return $?
+  args=(--google-oauth authorize -client-id "$client_id" -client-secret-file "$VDIR_PASSWORDS/$credential_ref.google-client-secret" -token-file "$GOOGLE_TOKENS/$credential_ref.json" -qr)
+  if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then args+=(-loopback); else args+=(-display-dir "$OAUTH_DISPLAY_DIR"); fi
+  [ -x "$CONTROL_SERVER_BIN" ] || { warn "dashboard control server is unavailable; '$credential_ref' was not changed. Repair Dashboard Control, then try again."; return 1; }
+  "$CONTROL_SERVER_BIN" "${args[@]}" || { rc=$?; return "$rc"; }
+}
+authorize_google_pairs(){
+  local name color tag pair collection writable remote_id provider client_id display_name credential_ref local_id _ seen="|" found=0 rc=0
+  while IFS='|' read -r name color tag pair collection writable remote_id provider client_id display_name credential_ref local_id _; do
+    [ "$provider" = google ] || continue
+    [ -n "$credential_ref" ] || credential_ref="$name"
+    [ -n "$client_id" ] || { warn "Google connection '$display_name' has no saved Client ID."; rc=1; continue; }
+    case "$seen" in *"|$credential_ref|"*) continue;; esac
+    seen="${seen}${credential_ref}|"; found=1
+    private_google_authorize_saved_ref "$credential_ref" "$client_id" || {
+      status=$?
+      [ "$status" -eq 2 ] && return 2
+      warn "Google authorization for '$display_name' did not complete; existing calendars were left unchanged."
+      rc=1
+    }
+  done < "$VDIR_PAIRS"
+  [ "$found" -eq 1 ] || { warn "no saved Google calendar connection exists"; return 1; }
+  return "$rc"
+}
+discover_private_pairs(){
+  local out
+  out="$(DASH_VDIRSYNCER_BIN="$VDIRSYNCER_BIN" "$BIN_DIR/private-calendar-discovery.sh" 2>&1 || true)"
+  if printf '%s\n' "$out" | grep -q $'^calendar\t'; then
+    printf '%s\n' "$out" | awk -F '\t' '$1=="calendar" {printf "  • %s\n", $6}'
+  else
+    printf '%s\n' "$out" | sed -n 's/^notice[[:space:]]*/  /p'
+  fi
+}
+legacy_icloud_notice(){
+  grep -Fq '|https://caldav.icloud.com/|' "$VDIR_PAIRS" 2>/dev/null || return 0
+  echo "  Existing iCloud connection found. It was kept exactly as it is."
+  echo "  New iCloud accounts use the guided Apple setup above."
+}
+# Tests can source the prompt helpers without entering the interactive setup.
+# Production execution never sets this flag.
+if [ "${DASHGO_TEST_LIBRARY_ONLY:-0}" = "1" ]; then
+  return 0 2>/dev/null || exit 0
+fi
 if [ "$REFRESH_ONLY" -eq 1 ]; then
   if ! grep -q '[^[:space:]]' "$VDIR_PAIRS"; then
     warn "no saved private calendar configuration exists"
@@ -695,272 +1214,55 @@ if [ "$REFRESH_ONLY" -eq 1 ]; then
   exit 0
 fi
 
-say "Private calendar sync via vdirsyncer"
-echo "Pull calendars directly onto this device from iCloud, Nextcloud, Fastmail,"
-echo "Radicale or another standard CalDAV server, or from Google Calendar via"
-echo "OAuth. Credentials remain outside the dashboard webroot in $VDIR_HOME"
-echo "(owner-only permissions)."
-ensure_vdirsyncer || exit 0
-
-added=0
-if [ "$AUTHORIZE_ONLY" -eq 0 ]; then
-while true; do
-  read -rp "  Calendar name (blank to finish): " name
-  [ -n "$name" ] || break
-  if ! valid_name "$name"; then
-    warn "    Use only letters, numbers, hyphen, and underscore."
-    continue
-  fi
-  if map_has_name "$name"; then
-    warn "    A Dash-Go private calendar connection named '$name' already exists."
-    read -rp "    Replace its saved CalDAV setup? [y/N]: " replace
-    case "$replace" in
-      y|Y) remove_own_calendar "$name" || { warn "    could not replace $name"; continue; };;
-      *) warn "    skipped $name"; continue;;
-    esac
-  elif calendar_file_exists "$name"; then
-    warn "    A different calendar file already uses '$name'. Choose a different name so this private calendar sync cannot overwrite it."
-    continue
-  fi
-
-  while true; do
-    read -rp "    Color [blue]: " color
-    color="${color:-blue}"
-    valid_color "$color" && break
-    warn "    Use a palette color or six-digit hex value."
-  done
-  read -rp "    Holiday calendar? [y/N]: " holiday
-  case "$holiday" in y|Y) tag="holiday";; *) tag="";; esac
-
-  echo "    Provider:"
-  echo "      1) CalDAV server — iCloud, Nextcloud, Fastmail, Radicale, Baïkal (default)"
-  echo "      2) Google Calendar — OAuth, needs your own OAuth client ID and secret"
-  read -rp "    Choose [1]: " provider_choice
-  provider="caldav"
-  case "${provider_choice:-1}" in 2) provider="google";; esac
-
-  url=""; username=""; client_id=""; google_oauth_mode="desktop"; google_redirect_uri=""
-  if [ "$provider" = "google" ]; then
-    ensure_google_support || continue
-    echo "    Google needs a one-time OAuth client from your own Google Cloud project."
-    echo "    Client type: Desktop app uses reliable paste-back with no public callback."
-    echo "    Web app enables automatic QR completion only through an exact HTTPS callback"
-    echo "    (normally a local reverse proxy to Dash-Go's loopback control server)."
-    read -rp "    OAuth client type [desktop/web, desktop]: " google_oauth_mode
-    google_oauth_mode="${google_oauth_mode:-desktop}"
-    case "$google_oauth_mode" in
-      desktop|Desktop|DESKTOP) google_oauth_mode="desktop";;
-      web|Web|WEB)
-        google_oauth_mode="web"
-        echo "    Register this exact HTTPS redirect URI before creating the Web client."
-        echo "    It must end in /oauth/google/callback and reach this Dash-Go device through your HTTPS proxy."
-        read -rp "    Exact HTTPS redirect URI [${DASH_OAUTH_WEB_REDIRECT_URI:-required}]: " google_redirect_uri
-        google_redirect_uri="${google_redirect_uri:-${DASH_OAUTH_WEB_REDIRECT_URI:-}}"
-        if ! valid_oauth_redirect_uri "$google_redirect_uri"; then warn "    web mode needs a single exact HTTPS callback ending in /oauth/google/callback; use desktop when none is configured"; continue; fi
-        echo "    Register exactly: $google_redirect_uri"
-        ;;
-      *) warn "    choose desktop or web"; continue;;
-    esac
-    echo "    Enable the Google Calendar API. Set the OAuth consent screen to In production"
-    echo "    for unattended calendar sync; test-only consent can expire before cron refreshes it."
-    read -rp "    OAuth client ID: " client_id
-    if ! valid_client_id "$client_id"; then warn "    no valid OAuth client ID given, skipping"; continue; fi
-    read -rsp "    OAuth client secret: " password; echo
-    if [ -z "$password" ] || ! valid_single_line "$password"; then warn "    no valid OAuth client secret given, skipping"; unset password; continue; fi
-    echo "    Optionally limit to one Calendar ID (blank = sync all discovered calendars)."
-    echo "    Your primary calendar's ID is your Gmail address; other calendars show"
-    echo "    their ID under Google Calendar settings → Integrate calendar."
-    read -rp "    Calendar ID [all]: " collection_id
-    if ! valid_collection_id "$collection_id"; then warn "    calendar ID must be one line and may not contain a pipe character."; unset password; continue; fi
-  else
-    echo "    CalDAV server base URL:"
-    echo "      iCloud:    https://caldav.icloud.com/   (default)"
-    echo "      Nextcloud: https://HOST/remote.php/dav/"
-    echo "      Fastmail:  https://caldav.fastmail.com/dav/"
-    read -rp "    URL [https://caldav.icloud.com/]: " url
-    url="${url:-https://caldav.icloud.com/}"
-    if ! valid_caldav_url "$url"; then warn "    Use a single-line http(s) CalDAV URL without spaces or | characters."; continue; fi
-    read -rp "    Username (for example, Apple ID email): " username
-    if [ -z "$username" ] || ! valid_single_line "$username"; then warn "    no valid username given, skipping"; continue; fi
-    read -rsp "    App-specific password: " password; echo
-    if [ -z "$password" ] || ! valid_single_line "$password"; then warn "    no valid password given, skipping"; unset password; continue; fi
-    echo "    Optionally limit to one collection UUID (blank = sync all discovered collections)."
-    read -rp "    Collection UUID [all]: " collection_id
-    if ! valid_collection_id "$collection_id"; then warn "    collection ID must be one line and may not contain a pipe character."; unset password; continue; fi
-  fi
-  writable=0
-  if [ -n "$collection_id" ]; then
-    read -rp "    Allow Dashboard add/edit/skip for this one collection? [y/N]: " writable_choice
-    case "${writable_choice:-n}" in y|Y|yes|YES) writable=1;; esac
-  else
-    echo "    Broad discovered mirrors stay read-only. Choose one exact collection UUID to enable Dashboard edits later."
-  fi
-
-  pair="dash_${name}"
-  collection_path="$VDIR_COLLECTIONS/$name"
-  # A legacy exact source used the remote ID as its local directory. Keep that
-  # behavior for compatibility when it is filesystem-safe; new selections use
-  # a generated local key instead.
-  local_id="$collection_id"
-  if [ -n "$local_id" ] && ! valid_local_collection_key "$local_id"; then
-    local_id="local_${name}"
-  fi
-  mkdir -p "$collection_path"
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$writable" "$collection_id" "$name" "$provider" "$name" "$local_id" >> "$MAP"
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$name" "$color" "$tag" "$pair" "$collection_path" "$url" "$username" "$collection_id" "$provider" "$client_id" "$name" "$name" "$local_id" >> "$VDIR_PAIRS"
-  if [ "$provider" = "google" ]; then
-    printf '%s' "$password" > "$VDIR_PASSWORDS/$name.google-client-secret"
-    printf '%s\n' "$google_oauth_mode" > "$VDIR_OAUTH_MODE/$name"
-    if [ "$google_oauth_mode" = "web" ]; then printf '%s\n' "$google_redirect_uri" > "$VDIR_OAUTH_MODE/$name.redirect-uri"; else rm -f "$VDIR_OAUTH_MODE/$name.redirect-uri"; fi
-    chmod 600 "$VDIR_PASSWORDS/$name.google-client-secret" "$VDIR_OAUTH_MODE/$name" "$VDIR_OAUTH_MODE/$name.redirect-uri" 2>/dev/null || true
-  else
-    printf '%s' "$password" > "$VDIR_PASSWORDS/$name"
-    chmod 600 "$VDIR_PASSWORDS/$name" 2>/dev/null || true
-  fi
-  chmod 600 "$MAP" "$VDIR_PAIRS" 2>/dev/null || true
-  unset password
-  added=$((added + 1))
-  ok "    queued $name"
-done
-fi
-
-if [ "$added" -eq 0 ] && ! grep -q '[^[:space:]]' "$VDIR_PAIRS"; then
-  warn "no private calendars are defined — re-run when ready"
-  exit 0
-fi
-[ "$added" -gt 0 ] || ok "no new private calendars; refreshing existing pipx-managed sync configuration"
-
-say "Writing private vdirsyncer configuration"
-if ! write_vdirsyncer_config; then
-  warn "could not safely write $VDIR_CFG"
-  exit 1
-fi
-ok "config written (credentials remain outside the dashboard webroot)"
-
-# Pair discovery is intentionally setup-time work. Routine syncs have exact,
-# already-configured pairs and must not repeatedly rediscover remote calendars.
-# This keeps the 15-minute job bounded and prevents provider discovery traffic
-# from competing with the kiosk during normal use.
-SETUP_DISCOVERED_PAIRS="|"
-mark_setup_discovered(){ SETUP_DISCOVERED_PAIRS="${SETUP_DISCOVERED_PAIRS}$1|"; }
-was_setup_discovered(){ case "$SETUP_DISCOVERED_PAIRS" in *"|$1|"*) return 0;; esac; return 1; }
-
-authorize_google_pairs(){
-  # The pairs file is read on its own descriptor so the authorization prompt
-  # below keeps reading the user's answers from stdin. Selected calendars may
-  # share a connection credential; prompt once for that shared token.
-  local gname gpair gprovider credential_ref client_id_for_ref answered any=0 mode redirect_uri
-  local -a oauth_args
-  local seen="|"
-  while IFS='|' read -r gname _ _ gpair _ _ _ _ gprovider _ _ credential_ref _ <&3; do
-    [ -n "$gname" ] || continue
-    [ "$gprovider" = "google" ] || continue
-    [ -n "$credential_ref" ] || credential_ref="$gname"
-    case "$seen" in *"|$credential_ref|"*) continue;; esac
-    seen="${seen}${credential_ref}|"
-    [ -s "$GOOGLE_TOKENS/$credential_ref.json" ] && continue
-    if [ "$any" -eq 0 ]; then
-      say "Google authorization (one time per connected account)"
-      echo "Desktop clients use paste-back: open the printed link on any phone or computer,"
-      echo "approve it, then paste the full 127.0.0.1 callback address here."
-      echo "Web clients can show a one-time QR on the dashboard display and finish automatically."
-      any=1
-    fi
-    read -rp "  Authorize Google connection '$credential_ref' now? [Y/n]: " answered
-    case "${answered:-y}" in
-      n|N) warn "  skipped; '$gname' stays read-only-idle until authorized (re-run: setup-vdirsyncer.sh --authorize)"; continue;;
-    esac
-    [ -x "$CONTROL_SERVER_BIN" ] || { warn "  dashboard control server is unavailable; cannot authorize '$credential_ref'"; continue; }
-    client_id_for_ref="$(awk -F'|' -v ref="$credential_ref" '$12==ref && $9=="google" {print $10; exit}' "$VDIR_PAIRS")"
-    if [ -z "$client_id_for_ref" ]; then
-      warn "  saved Google client ID for '$credential_ref' is unavailable; cannot authorize it"
-      continue
-    fi
-    oauth_args=(--google-oauth authorize -client-id "$client_id_for_ref" -client-secret-file "$VDIR_PASSWORDS/$credential_ref.google-client-secret" -token-file "$GOOGLE_TOKENS/$credential_ref.json" -qr)
-    mode="$(oauth_mode_for_ref "$credential_ref")"
-    if [ "$mode" = "web" ]; then
-      redirect_uri="$(oauth_redirect_for_ref "$credential_ref")"
-      if [ -z "$redirect_uri" ]; then
-        warn "  '$credential_ref' has no valid saved HTTPS callback; using Desktop paste-back"
-      elif ! oauth_web_callback_ready; then
-        warn "  dashboard control server is not ready on loopback; using Desktop paste-back"
-      else
-        oauth_args+=(-relay-dir "$OAUTH_RELAY" -redirect-uri "$redirect_uri")
-        echo "  The Google QR will appear on the dashboard display for up to five minutes."
-      fi
-    fi
-    if "$CONTROL_SERVER_BIN" "${oauth_args[@]}"; then
-      chmod 600 "$GOOGLE_TOKENS/$credential_ref.json" 2>/dev/null || true
-      ok "  Google connection '$credential_ref' authorized"
-    else
-      warn "  authorization for '$credential_ref' did not complete; it is skipped by sync until it does"
-    fi
-  done 3< "$VDIR_PAIRS"
-}
-
-discover_private_pairs(){
-  # Discovery may create local collection folders only when an administrator
-  # deliberately opens interactive setup. Routine sync and beta.7's Dashboard
-  # Control discovery use separate paths and never call this function.
-  local dname dpair dprovider credential_ref discovered=0 skipped=0
-  while IFS='|' read -r dname _ _ dpair _ _ _ _ dprovider _ _ credential_ref _ <&3; do
-    [ -n "$dname" ] || continue
-    [ -n "$dpair" ] || continue
-    [ -n "$credential_ref" ] || credential_ref="$dname"
-    if [ "$dprovider" = "google" ] && [ ! -s "$GOOGLE_TOKENS/$credential_ref.json" ]; then
-      warn "  '$dname' has no Google authorization yet; discovery is deferred until it is authorized"
-      skipped=$((skipped + 1)); continue
-    fi
-    if was_setup_discovered "$dpair"; then continue; fi
-    if yes | "$VDIRSYNCER_BIN" -c "$VDIR_CFG" discover "$dpair"; then
-      mark_setup_discovered "$dpair"; discovered=$((discovered + 1)); ok "  discovered private collection(s) for $dname"
-    else
-      warn "  discovery for '$dname' did not complete; the prior local mirror is preserved and sync will still try its known pair"
-    fi
-  done 3< "$VDIR_PAIRS"
-  [ "$discovered" -gt 0 ] && ok "discovered $discovered private pair(s)"
-  [ "$skipped" -gt 0 ] && warn "$skipped Google pair(s) await authorization"
-}
+say "Private calendar setup"
+echo "Connect calendars that need a sign-in: Google, Apple iCloud, or another CalDAV account."
+echo "For a public read-only .ics link, return to the installer and use option 9 instead."
+legacy_icloud_notice
 
 if [ "$AUTHORIZE_ONLY" -eq 1 ]; then
-  say "Google authorization"
+  ensure_vdirsyncer google || exit 0
+  say "Google authorization recovery"
   authorize_google_pairs
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    [ "$status" -eq 2 ] && { warn "Google authorization recovery cancelled. Existing calendars were left unchanged."; exit 0; }
+    warn "Google authorization recovery did not complete for every account. Existing calendars were left unchanged."
+    exit 1
+  fi
   say "Discovering authorized private calendar collections"
   discover_private_pairs
+  write_vdirsyncer_config || { warn "could not refresh $VDIR_CFG"; exit 1; }
   write_sync_wrapper || { warn "could not write $BIN_DIR/sync-vdir.sh"; exit 1; }
   write_writeback_registry || { warn "could not write calendar writeback registry"; exit 1; }
-  ok "Google authorization pass complete"
+  ok "Google authorization recovery complete"
   exit 0
 fi
 
-say "Discovering private calendar collections"
-authorize_google_pairs
-discover_private_pairs
+added=0
+while true; do
+  if private_connect_account; then
+    added=$((added + 1))
+  else
+    rc=$?
+    [ "$rc" -eq 2 ] && break
+  fi
+  read -rp "Connect another private calendar account? [y/N, q=finish]: " again
+  case "$again" in y|Y|yes|YES) ;; *) break;; esac
+done
+
+if [ "$added" -eq 0 ]; then
+  if grep -q '[^[:space:]]' "$VDIR_PAIRS"; then
+    ok "No new account was added. Existing private calendar configuration was left unchanged."
+  else
+    warn "No private calendar account was added."
+  fi
+  exit 0
+fi
 
 write_sync_wrapper || { warn "could not write $BIN_DIR/sync-vdir.sh"; exit 1; }
-ok "sync-vdir.sh written"
-
-say "Pulling private calendars now"
-if "$BIN_DIR/sync-vdir.sh"; then
-  ok "initial calendar sync completed"
-else
-  warn "initial private-calendar sync reported an issue; existing local calendar files were kept. See $SYNC_LOG"
-fi
-echo "Files in $CAL_DIR:"
-ls -1 "$CAL_DIR"/*.ics 2>/dev/null | sed 's/^/   /' || true
-
 write_writeback_registry || { warn "could not write calendar writeback registry"; exit 1; }
-ok "calendar writeback registry written (Dashboard edits start disabled)"
-
 say "Scheduling private calendar sync (every 15 minutes, low priority)"
-if install_vdir_cron; then
-  ok "cron installed"
-else
-  warn "cron was not installed; run $BIN_DIR/sync-vdir.sh manually or repair cron"
-fi
-
-say "Private calendar/vdirsyncer setup complete"
-echo "Private calendars sync every 15 minutes into $CAL_DIR/*.ics at gentle CPU/I/O priority."
-echo "Re-run setup-vdirsyncer.sh to add, replace, migrate, or discover newly created remote calendar collections."
-echo "vdirsyncer $VDIRSYNCER_VERSION runs only from the isolated pipx environment under $VDIR_HOME."
-echo "Credentials, tokens, vdir state, and the pinned tool environment remain only in $VDIR_HOME (owner-only)."
+if install_vdir_cron; then ok "automatic private-calendar sync is enabled"; else warn "cron was not installed; run $BIN_DIR/sync-vdir.sh manually or repair cron"; fi
+say "Private calendar setup complete"
+echo "Your selected private calendars sync every 15 minutes into $CAL_DIR at gentle CPU/I/O priority."
+echo "Credentials, tokens, drafts, and the pinned calendar tool remain only in $VDIR_HOME (owner-only)."

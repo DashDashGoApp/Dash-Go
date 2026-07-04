@@ -26,8 +26,8 @@ require 'r&&r.noUpdate===true' "$UPDATES"
 require 'Installed version is newer' "$UPDATES"
 require 'av.status==="installed-newer"' "$HEALTH"
 update_block="$(sed -n '/if \[ "$UPDATE_MODE" = "1" \]; then/,/# --- Pre-flight checks/p' "$INSTALLER")"
-plan_line="$(printf '%s\n' "$update_block" | grep -n -m1 'plan_normal_update_candidate' | cut -d: -f1)"
-log_line="$(printf '%s\n' "$update_block" | grep -n -m1 'start_update_logging' | cut -d: -f1)"
+plan_line="$(printf '%s\n' "$update_block" | awk '/plan_normal_update_candidate/{print NR; exit}')"
+log_line="$(printf '%s\n' "$update_block" | awk '/start_update_logging/{print NR; exit}')"
 [ -n "$plan_line" ] && [ -n "$log_line" ] && [ "$plan_line" -lt "$log_line" ] || { echo 'FAIL: no-op decision must precede update logging' >&2; exit 1; }
 preflight_block="$(sed -n '/run_interactive_preflight(){/,/^}/p' "$INSTALLER")"
 if printf '%s\n' "$preflight_block" | grep -Eq 'api\.open-meteo\.com|curl -fsSL.*open-meteo'; then

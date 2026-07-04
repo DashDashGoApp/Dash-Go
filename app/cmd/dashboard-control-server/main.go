@@ -148,6 +148,22 @@ func main() {
 			os.Exit(a.runJSONValidateCLI(os.Args[2:]))
 		case "--json-get":
 			os.Exit(a.runJSONGetCLI(os.Args[2:]))
+		case "--json-set":
+			os.Exit(a.runJSONSetCLI(os.Args[2:]))
+		case "--pin-hash":
+			os.Exit(a.runPinHashCLI(os.Args[2:]))
+		case "--installer-todo-settings":
+			os.Exit(a.runInstallerTodoSettingsCLI(os.Args[2:]))
+		case "--installer-normalize-app-visibility":
+			os.Exit(a.runInstallerNormalizeAppVisibilityCLI(os.Args[2:]))
+		case "--installer-message-files":
+			os.Exit(a.runInstallerMessageFilesCLI(os.Args[2:]))
+		case "--geocode":
+			os.Exit(a.runGeocodeCLI(os.Args[2:]))
+		case "--installer-config-local":
+			os.Exit(a.runInstallerConfigLocalCLI(os.Args[2:]))
+		case "--installer-weather-providers":
+			os.Exit(a.runInstallerWeatherProvidersCLI(os.Args[2:]))
 		case "--write-status":
 			os.Exit(a.runWriteStatusCLI(os.Args[2:]))
 		case "--update-status":

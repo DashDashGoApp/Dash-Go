@@ -66,7 +66,8 @@ assert.match(registry,/loadSyncOutcomesLocked/,'Calendar Manager status must saf
 assert.match(items,/RemoveDurable/,'deleting a vdir item must be durable');
 assert.match(ical,/single VEVENT document required/,'aggregate ICS files must not be edited');
 assert.match(ical,/TZID=/,'skip must retain the DTSTART timezone form');
-assert.match(setup,/Broad discovered mirrors stay read-only/,'broad CalDAV discovery must remain display-only');
+assert.match(setup,/Allow Dash-Go to add, edit, or skip events in/, 'guided private setup must make each discovered calendar read-only by default and ask before enabling edits');
+assert.match(setup,/editable=0/, 'guided private setup must seed selected discovered mirrors as read-only');
 assert.match(setup,/exact="\$collection\/\$local_id"/,'setup must register only one exact local vdir collection');
 assert.match(setup,/coll_spec=.*remote_id.*local_id/,'selected collections must preserve opaque remote IDs separately from local vdir keys');
 assert.doesNotMatch(setup,/conflict_resolution = "a wins"/,'new private calendar pairs must not silently prefer remote conflicts');

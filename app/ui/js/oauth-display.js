@@ -1,5 +1,5 @@
 // oauth-display.js — one-shot kiosk QR presentation for SSH-armed Google OAuth.
-// The server returns 404 unless a short-lived relay is armed. The dashboard only
+// The server returns 404 unless a short-lived phone sign-in display is armed. The dashboard only
 // polls a tiny loopback response; a one-second countdown runs while visible.
 let OAUTH_DISPLAY_POLL_TIMER=null;
 let OAUTH_DISPLAY_CLOCK_TIMER=null;
@@ -40,8 +40,8 @@ function oauthDisplayShow(meta){
   document.getElementById("oauthdisplay-connection").textContent=`Connect Google Calendar: ${meta.connection}`;
   const fallback=document.getElementById("oauthdisplay-fallback");
   if(fallback){
-    try{ fallback.textContent=`Scan the code, or use the Google sign-in link printed in the terminal (${new URL(meta.url).host}).`; }
-    catch(_){ fallback.textContent="Scan the code, or use the Google sign-in link printed in the terminal."; }
+    try{ fallback.textContent=`1. Scan this code. 2. Sign in to Google. 3. When your phone cannot open 127.0.0.1, copy the complete browser address and paste it into the setup terminal (${new URL(meta.url).host}).`; }
+    catch(_){ fallback.textContent="Scan this code, sign in to Google, then copy the complete failed browser address and paste it into the setup terminal."; }
   }
   const image=document.getElementById("oauthdisplay-qr");
   if(image&&changed){ image.src=`/api/oauth-display/qr.png?t=${encodeURIComponent(meta.expires_at)}`; image.hidden=false; }

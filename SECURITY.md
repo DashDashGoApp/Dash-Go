@@ -83,8 +83,16 @@ Use the repository's **Report a vulnerability** flow when it is visible. Otherwi
 
 For ordinary bugs, documentation corrections, feature requests, and support questions, use the appropriate public GitHub issue, discussion, or support channel.
 
-## One-shot Google OAuth callback and kiosk QR
+## Google OAuth, temporary local sign-in, and kiosk QR
 
-When a private Google Calendar connection is authorized with a Web OAuth client, Dash-Go exposes only a narrow one-shot callback route. The local owner’s authorization command first writes a random state value to an owner-only relay directory. The callback returns `404` unless that state is armed, unexpired, and an exact constant-time match; a successful callback records only the short-lived authorization code, removes the armed state, and then returns to `404`. The dashboard control server never receives the OAuth client secret and does not exchange or refresh tokens through this route. The CLI performs that exchange locally and writes the final token under the existing owner-only vdirsyncer home.
+The normal Google setup path uses a short-lived listener bound only to `127.0.0.1:8433` while the owner runs the Go authorization command. When setup is administered over SSH, the printed SSH bridge forwards only the administrator computer’s local callback port to that local listener. The dashboard control server does not expose the normal callback to the LAN or Internet, never receives the OAuth client secret through an HTTP route, and does not perform token exchange or refresh through its HTTP server. The CLI performs that exchange locally and writes the final token under the existing owner-only vdirsyncer home.
 
-The associated dashboard QR overlay is created only by an administrator actively authorizing a named connection, uses the same short armed window, and disappears when the flow completes, times out, or is cancelled. It carries the Google authorization URL but no client secret or token. A household member who scans it can authorize the Google account they select for that named connection, so administrators should arm it only while present; use the Desktop paste-back flow or the helper’s `-no-display` switch when that enrollment risk is not acceptable. Do not publish Dash-Go’s general loopback control API to a LAN or the Internet. A Web OAuth callback must be an administrator-managed exact HTTPS reverse-proxy route with only this one callback exposed.
+The phone/tablet QR presentation is **display-only**. It exists only while the owner has actively armed authorization, has a bounded ten-minute lifetime, contains the Google authorization URL but no secret or token, and is removed on success, timeout, cancellation, or error. Display-only QR state deliberately does not arm the public callback endpoint: that endpoint remains `404`, so phone fallback requires the administrator to paste the final browser address into the terminal.
+
+Dash-Go does not expose a public OAuth callback endpoint. The phone route is deliberately copy/paste based, so the running dashboard server never receives a Google authorization code from the LAN or Internet. Do not publish Dash-Go’s general loopback control API to a LAN or the Internet.
+
+## Private calendar drafts and app passwords
+
+Google client secrets, OAuth tokens, iCloud app-specific passwords, CalDAV passwords, QR images, and connection drafts remain under owner-only `~/.dashboard-vdirsyncer/` paths outside the dashboard webroot. Draft connections are used for account tests and discovery; a selected account is promoted only after its first exact-calendar sync succeeds. Cancellation or failure removes the draft and leaves active maps, cron state, existing connections, and dashboard mirrors unchanged.
+
+iCloud setup accepts app-specific passwords only as masked input. Dash-Go never puts an Apple or CalDAV password in a URL, normal log line, generated browser asset, or command-line argument.
