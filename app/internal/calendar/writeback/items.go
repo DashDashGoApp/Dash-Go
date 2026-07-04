@@ -152,6 +152,30 @@ func (s *Service) Delete(source, uid string) (Result, error) {
 	finalDelete := inspectErr == nil && len(remaining) == 0
 	return Result{Source: cal.Source, UID: uid, Action: "deleted", Collection: cal.Collection, Pair: cal.Pair, Provider: cal.Provider, FinalDelete: finalDelete}, nil
 }
+
+// FinalDeleteEligible rechecks the durable safety precondition for a
+// previously recorded final-event deletion. The server may recover this state
+// after a restart, so it never trusts persisted source, pair, or collection
+// values without resolving the current registry record and confirming the
+// collection is still empty.
+func (s *Service) FinalDeleteEligible(source, pair, collection string) (bool, error) {
+	cal, err := s.RegisteredCalendar(source)
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(pair) == "" || cal.Pair != strings.TrimSpace(pair) {
+		return false, errors.New("calendar sync pair no longer matches the registered calendar")
+	}
+	if filepath.Clean(cal.Collection) != filepath.Clean(collection) {
+		return false, errors.New("calendar collection no longer matches the registered calendar")
+	}
+	files, err := collectionFiles(cal.Collection)
+	if err != nil {
+		return false, err
+	}
+	return len(files) == 0, nil
+}
+
 func (s *Service) SkipOccurrence(source, uid string, occurrence time.Time) (Result, error) {
 	cal, err := s.Resolve(source)
 	if err != nil {

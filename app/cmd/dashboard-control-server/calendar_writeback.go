@@ -315,9 +315,15 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 	if refreshErr != nil {
 		message = "Saved locally; remote sync queued. Dashboard refresh will retry automatically."
 	}
-	service.Record(result.Source, "saved", message)
-	a.queueCalendarWritebackSync(result.Source, result.Pair, result.FinalDelete)
 	action := map[string]string{"created": "Add calendar event", "updated": "Manage calendar event", "occurrence-updated": "Edit calendar occurrence", "series-updated": "Edit recurring series", "deleted": "Delete calendar event", "skipped": "Skip calendar occurrence"}[result.Action]
+	if persistErr := a.recordCalendarWritebackMutation(result.Source, result.Pair, result.Collection, result.FinalDelete); persistErr != nil {
+		message = "Saved locally, but Dash-Go could not update its durable private-calendar sync authorization. Remote sync is paused for safety; review the calendar before retrying."
+		service.Record(result.Source, "attention", message)
+		a.recordAction("calendars", action, "warning", message, map[string]any{"source": result.Source, "uid": result.UID})
+		return map[string]any{"ok": true, "source": result.Source, "uid": result.UID, "action": result.Action, "sync": "attention", "warning": message}, nil
+	}
+	service.Record(result.Source, "saved", message)
+	a.queueCalendarWritebackSync(result.Source, result.Pair, true)
 	severity := "success"
 	if refreshErr != nil {
 		severity = "warning"

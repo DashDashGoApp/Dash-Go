@@ -37,58 +37,59 @@ import (
 // app holds process-wide runtime paths and the small mutable state that spans HTTP requests.
 // Domain behavior lives in focused companion files.
 type app struct {
-	dash                       string
-	home                       string
-	configDir                  string
-	calDir                     string
-	cacheDir                   string
-	logDir                     string
-	binDir                     string
-	settingsFile               string
-	configLocal                string
-	celebrationsFile           string
-	todoDir                    string
-	todoTokenFile              string
-	fontsDir                   string
-	authInitMu                 sync.Mutex
-	auth                       *controlauth.Service
-	settingsInitMu             sync.Mutex
-	settings                   *settingspkg.Service
-	weatherInitMu              sync.Mutex
-	weather                    *weatherpkg.Service
-	eventsInitMu               sync.Mutex
-	events                     *eventspkg.Service
-	calendarInitMu             sync.Mutex
-	calendar                   *calendarpkg.Service
-	writebackInitMu            sync.Mutex
-	writeback                  *writebackpkg.Service
-	writebackSyncMu            sync.Mutex
-	writebackSyncing           bool
-	writebackPending           map[string]writebackPendingSync
-	privateCalendarMu          sync.Mutex
-	privateCalendarDiscovering bool
-	mapsInitMu                 sync.Mutex
-	maps                       *mapspkg.Service
-	messagesInitMu             sync.Mutex
-	messages                   *messagespkg.Service
-	notifyInitMu               sync.Mutex
-	notify                     *notifypkg.Service
-	householdInitMu            sync.Mutex
-	household                  *householdpkg.Service
-	familyInitMu               sync.Mutex
-	family                     *familypkg.Service
-	choresInitMu               sync.Mutex
-	chores                     *chorepkg.Service
-	maintenanceInitMu          sync.Mutex
-	maintenance                *maintenancepkg.Service
-	routinesInitMu             sync.Mutex
-	routines                   *routinespkg.Service
-	updateMu                   sync.Mutex
-	updateAvailabilityMu       sync.Mutex
-	updateAvailabilityCache    map[string]any
-	updateAvailabilityAt       time.Time
-	platformInitMu             sync.Mutex
-	platform                   *platformpkg.Service
+	dash                        string
+	home                        string
+	configDir                   string
+	calDir                      string
+	cacheDir                    string
+	logDir                      string
+	binDir                      string
+	settingsFile                string
+	configLocal                 string
+	celebrationsFile            string
+	todoDir                     string
+	todoTokenFile               string
+	fontsDir                    string
+	authInitMu                  sync.Mutex
+	auth                        *controlauth.Service
+	settingsInitMu              sync.Mutex
+	settings                    *settingspkg.Service
+	weatherInitMu               sync.Mutex
+	weather                     *weatherpkg.Service
+	eventsInitMu                sync.Mutex
+	events                      *eventspkg.Service
+	calendarInitMu              sync.Mutex
+	calendar                    *calendarpkg.Service
+	writebackInitMu             sync.Mutex
+	writeback                   *writebackpkg.Service
+	writebackSyncMu             sync.Mutex
+	writebackSyncing            bool
+	writebackPending            map[string]writebackPendingSync
+	writebackFinalDeleteRetries map[string]bool
+	privateCalendarMu           sync.Mutex
+	privateCalendarDiscovering  bool
+	mapsInitMu                  sync.Mutex
+	maps                        *mapspkg.Service
+	messagesInitMu              sync.Mutex
+	messages                    *messagespkg.Service
+	notifyInitMu                sync.Mutex
+	notify                      *notifypkg.Service
+	householdInitMu             sync.Mutex
+	household                   *householdpkg.Service
+	familyInitMu                sync.Mutex
+	family                      *familypkg.Service
+	choresInitMu                sync.Mutex
+	chores                      *chorepkg.Service
+	maintenanceInitMu           sync.Mutex
+	maintenance                 *maintenancepkg.Service
+	routinesInitMu              sync.Mutex
+	routines                    *routinespkg.Service
+	updateMu                    sync.Mutex
+	updateAvailabilityMu        sync.Mutex
+	updateAvailabilityCache     map[string]any
+	updateAvailabilityAt        time.Time
+	platformInitMu              sync.Mutex
+	platform                    *platformpkg.Service
 	// The To Do service owns mutable sync, queue, auth, cache, migration, and
 	// Grocery Memory state. Core retains immutable paths plus the lazy service
 	// reference and HTTP/SSE adapter state only.
@@ -194,6 +195,10 @@ func main() {
 	a.startTodoArchiveJanitor()
 	a.startTodoInboundScheduler()
 	a.startAppriseNotifier()
+	// A final-event delete carries a narrowly scoped persisted authorization so
+	// an interrupted server does not silently fall back to an unarmed empty
+	// collection sync. Only the long-lived HTTP server resumes this work.
+	a.resumeCalendarWritebackFinalDeletes()
 	// settings.json is user-owned state. Do not create or reseed it at startup:
 	// config.local.js supplies fresh-install defaults and normal updates must not
 	// replace personal settings with profile defaults.
