@@ -2,6 +2,16 @@
 
 This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
+## [1.5.8-beta.7] — 2026-07-04
+
+### Installer selector integrity
+
+- Stopped the installer from rewriting an existing manifest-managed `bin/dashboard-control-server` selector after a verified payload commit, during ordinary update work, or while restoring a modern rollback target. A package-owned selector now remains byte-for-byte the selector validated by the release manifest.
+- Retained a deliberately narrow legacy fallback for installations that have compatible architecture binaries but no generic selector at all. It creates a selector only when the path is absent and never replaces an existing file.
+- Added an installed-tree manifest verification immediately after every payload commit and before generated-asset/runtime continuation. A changed managed file now triggers transactional rollback instead of a successful update that Doctor later has to block.
+- Added the same manifest verification after rollback, so restored payloads are verified as both generated-asset-valid and manifest-consistent before the kiosk is returned to service.
+- Added source smoke coverage proving selector preservation, missing-only legacy reconstruction, exact live-manifest verification arguments, and rollback verification.
+
 ## [1.5.8-beta.6] — 2026-07-04
 
 ### Doctor truthfulness and self-healing restraint

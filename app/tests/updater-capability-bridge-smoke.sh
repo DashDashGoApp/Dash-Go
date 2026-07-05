@@ -71,5 +71,5 @@ if CAP_QUERY_LOG="$TMP/cap-queries" CAP_MODE=legacy PATH="$TMP/fake-bin:$PATH" r
   echo 'FAIL: modern updater without release-manifest-v1 fell back instead of failing closed' >&2
   exit 1
 fi
-grep -Fq 'This version is too old to update automatically. Run --repair --system first, then update.' "$TMP/messages" || { echo 'FAIL: missing fail-closed capability diagnostic' >&2; exit 1; }
+grep -Fq 'This version is too old to update automatically. Run ~/install.sh --repair --system first, then update.' "$TMP/messages" || { echo 'FAIL: missing fail-closed capability diagnostic' >&2; exit 1; }
 echo 'PASS: legacy bridge is one-time, modern Go capability discovery is live, and incomplete modern updaters fail closed'

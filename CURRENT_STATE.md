@@ -14,10 +14,11 @@
 
 ## Current beta source handoff
 
-- **Version:** `1.5.8-beta.6`
+- **Version:** `1.5.8-beta.7`
 - **Track:** beta
 - **Minimum upgrade version:** `1.4.0`
 - **Scope:** Managed Debian security maintenance plus Doctor truthfulness repairs. Supported Debian and compatible 64-bit Raspberry Pi OS installations receive a codename-specific Debian Security source when needed, an inert backports source pinned at priority 100, and a Dash-Go-owned `unattended-upgrades` policy limited to Debian Security. Automatic reboot, unattended autoremove, automatic backports installation, broad feature upgrades, and Raspberry Pi firmware/kernel updates remain disabled or deliberate. Installer system/package stages and direct terminal updates repair drift when sudo is available; Dashboard Control updates defer privileged repair without failing the verified app update. Doctor reports healthy, repair-needed, unsupported-layout, and manual-review states, routing repair through `~/install.sh --repair --system`. Doctor now reads current root-level weather-cache coordinates without treating absent legacy fields as `0,0`, retains legacy nested-cache recognition only when coordinates are present, and treats a lock-owning kiosk process plus wrapper/child matches in the same process tree as one launcher. 32-bit Raspbian and unproven/nonstandard source layouts are never rewritten. Read-only root/overlayfs is intentionally out of scope.
+- **Selector-integrity correction:** beta.7 stops installer-owned rewriting of a present package selector, verifies the installed manifest after payload commit and after rollback, and retains only a missing-file legacy selector fallback. Devices updating from beta.6 need the supplied one-time updater bridge before their first beta.7 update, because beta.6 otherwise overwrites the newly installed selector after package verification.
 - **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
 
 ## 1.5.7 stable scope

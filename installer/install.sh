@@ -2692,10 +2692,18 @@ release_server_for_host(){
   printf '%s\n' "$bin"
 }
 
-ensure_go_selector_wrapper_installed(){
+# Compatibility recovery only: modern release payloads own this selector and
+# its manifest hash. Never rewrite an existing selector after payload commit,
+# rollback, or ordinary repair; doing so would make the installed bytes differ
+# from the signed release manifest. This fallback exists solely for a very old
+# installation which has architecture binaries but no generic selector at all.
+ensure_missing_go_selector_wrapper(){
+  local selector="$DASH/bin/dashboard-control-server" tmp
   [ -d "$DASH/bin" ] || return 0
+  [ -e "$selector" ] && return 0
   [ -x "$DASH/bin/dashboard-control-server-linux-armv7" ] || [ -x "$DASH/bin/dashboard-control-server-linux-amd64" ] || return 0
-  cat > "$DASH/bin/dashboard-control-server" <<'EOSERVERWRAP'
+  tmp="$selector.tmp.$$"
+  cat > "$tmp" <<'EOSERVERWRAP'
 #!/usr/bin/env sh
 set -eu
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -2714,7 +2722,33 @@ if [ ! -x "$BIN" ]; then
 fi
 exec "$BIN" "$@"
 EOSERVERWRAP
-  chmod +x "$DASH/bin/dashboard-control-server" 2>/dev/null || true
+  chmod 755 "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$selector"
+}
+
+# Verify the live managed tree only after a payload transaction has finished
+# replacing files. This closes the gap where a later installer helper could
+# mutate a manifest-managed file after staging validation had already passed.
+verify_installed_release_manifest(){
+  local version="$1" verifier arch target
+  [ -n "$version" ] || { warn "post-install package integrity check has no installed version"; return 1; }
+  [ -s "$DASH/manifest.json" ] || { warn "post-install package integrity check cannot find $DASH/manifest.json"; return 1; }
+  case "$(uname -m 2>/dev/null || true)" in
+    x86_64|amd64) arch="amd64" ;;
+    i?86) arch="386" ;;
+    aarch64|arm64) arch="arm64" ;;
+    armv6l) arch="armv6" ;;
+    armv7l|armv8l) arch="armv7" ;;
+    *) warn "post-install package integrity check does not support $(uname -m 2>/dev/null || echo unknown)"; return 1 ;;
+  esac
+  target="bin/dashboard-control-server-linux-$arch"
+  verifier="$(release_server_for_host "$DASH" 2>/dev/null || true)"
+  [ -n "$verifier" ] || { warn "post-install package integrity verifier is missing for $arch"; return 1; }
+  if ! "$verifier" --verify-release-manifest --manifest "$DASH/manifest.json" --root "$DASH" --version "$version" --target-bin "$target"; then
+    warn "post-install package integrity verification failed"
+    return 1
+  fi
+  return 0
 }
 
 service_unit_section_has_setting(){
@@ -2988,7 +3022,7 @@ install_release_payload(){
     rollback_release_transaction "$stage" "Could not remove stale managed source files after update" || true
     return 1
   fi
-  ensure_go_selector_wrapper_installed || true
+
   chmod +x "$DASH/bin"/*.sh "$DASH/bin"/dashboard-control-server* "$DASH/kiosk.sh" 2>/dev/null || true
   if ! restore_personal_settings "$personal"; then
     rollback_release_transaction "$stage" "Could not restore protected personal settings after update" || true
@@ -2998,6 +3032,10 @@ install_release_payload(){
   write_update_phase committing "Refreshing local updater" "Installing the matching release installer for future Dashboard Control and SSH updates."
   if ! install_canonical_installer "$canonical_installer"; then
     rollback_release_transaction "$stage" "Could not install the canonical Dash-Go updater" || true
+    return 1
+  fi
+  if ! verify_installed_release_manifest "$version"; then
+    rollback_release_transaction "$stage" "Post-install package integrity check failed" || true
     return 1
   fi
   local installed_verifier
@@ -3080,8 +3118,14 @@ rollback_update_payload(){
   fi
   restore_personal_settings "$stage/personal" || return 1
   restore_canonical_installer "$stage" || return 1
-  ensure_go_selector_wrapper_installed || true
+  # A very old rollback target may predate the packaged selector. Reconstruct
+  # only when it is entirely absent; never replace an existing manifest file.
+  ensure_missing_go_selector_wrapper || true
   chmod +x "$BIN_DIR"/*.sh "$BIN_DIR"/dashboard-control-server* "$DASH/kiosk.sh" 2>/dev/null || true
+  local restored_version
+  restored_version="$(cat "$DASH/VERSION" 2>/dev/null | head -1 || true)"
+  [ -n "$restored_version" ] || return 1
+  verify_installed_release_manifest "$restored_version" || return 1
   local rollback_verifier
   rollback_verifier="$(release_server_for_host "$DASH" 2>/dev/null || true)"
   [ -n "$rollback_verifier" ] || return 1
@@ -4021,6 +4065,9 @@ repair_scope_from_doctor(){
 
 provision_dashboard_service(){
   local svc=/etc/systemd/system/dashboard-server.service
+  # Bootstrap only pre-manifest legacy installations that lack this file.
+  # A present selector is always release-owned and is never overwritten.
+  ensure_missing_go_selector_wrapper || true
   [ -x "$BIN_DIR/dashboard-control-server" ] || { warn "dashboard-control-server is missing from $BIN_DIR"; return 1; }
   command -v systemctl >/dev/null 2>&1 || { warn "systemctl is unavailable; cannot provision dashboard-server.service"; return 1; }
   $SUDO mkdir -p /etc/systemd/system || return 1
@@ -4043,7 +4090,6 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 UNIT
-  ensure_go_selector_wrapper_installed || true
   ensure_dashboard_update_service || warn "dedicated Dashboard Control updater was not provisioned; run repair --system after confirming sudo access"
   $SUDO systemctl daemon-reload || return 1
   $SUDO systemctl enable dashboard-server.service || return 1
@@ -4894,7 +4940,7 @@ rollback_update_runtime_failure(){
     DASH_UPDATE_HEALTH_CHECKED=1 write_update_job failed "Runtime readiness failed" "The new release did not become ready and its retained rollback snapshot could not be restored." 1 || true
     return 1
   fi
-  ensure_go_selector_wrapper_installed || true
+
   restored_version="$(cat "$DASH/VERSION" 2>/dev/null | head -1 || true)"
   if [ -z "$restored_version" ] || ! restart_dashboard_server_for_update "$restored_version"; then
     resume_kiosk_after_runtime_transition
@@ -5026,7 +5072,7 @@ if [ "$UPDATE_MODE" = "1" ]; then
   ensure_dashboard_fonts || true
   write_update_status committing "Refreshing dashboard data" "Verified release installed; refreshing generated calendars and cached dashboard data before local runtime readiness is checked." 0 || true
   write_update_job committing "Refreshing dashboard data" "Verified release installed; refreshing generated calendars and cached dashboard data before local runtime readiness is checked." 0 || true
-  ensure_go_selector_wrapper_installed || true
+
   ensure_go_dashboard_service_unit || true
   [ -x "$BIN_DIR/update-holidays.sh" ] && "$BIN_DIR/update-holidays.sh" >/dev/null 2>&1 || true
   [ -x "$BIN_DIR/update-iss-passes.sh" ] && "$BIN_DIR/update-iss-passes.sh" >/dev/null 2>&1 || true
@@ -5865,11 +5911,11 @@ if download_app_files; then
 else
   warn "some downloads failed/failed validation — existing copies kept"
 fi
-# The web server runs from these files. Reassert the architecture selector before restart.
-# Restart only after a successful file commit so a failed manifest/download does
+# The web server runs from the verified, manifest-owned selector. Restart only
+# after a successful file commit so a failed manifest/download does
 # not misleadingly report that the new update is live.
 if [ "$APP_FILES_OK" = "1" ] && [ -f /etc/systemd/system/dashboard-server.service ] && command -v systemctl >/dev/null 2>&1; then
-  ensure_go_selector_wrapper_installed || true
+
   ensure_go_dashboard_service_unit || true
   if $SUDO systemctl restart dashboard-server.service 2>/dev/null; then
     ok "web server restarted — the update is live"

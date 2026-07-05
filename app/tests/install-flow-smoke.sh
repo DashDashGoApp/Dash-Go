@@ -31,7 +31,10 @@ require 'dash-go-update.service'
 require 'ensure_dashboard_update_service'
 require 'acquire_dashboard_update_lock'
 require 'rollback_release_transaction'
+require 'verify_installed_release_manifest'
+require 'ensure_missing_go_selector_wrapper'
 require 'restart_dashboard_server_for_update'
 require 'run_post_update_verifier'
+if grep -Fq 'ensure_go_selector_wrapper_installed' "$INSTALLER"; then echo 'FAIL: installer still rewrites the manifest-managed selector' >&2; exit 1; fi
 if grep -Fq 'systemd-run --user' "$INSTALLER"; then echo 'FAIL: installer still relies on per-user systemd-run for dashboard updates' >&2; exit 1; fi
 echo 'PASS: installer has numeric top-level choices, Go message-source flow, architecture-safe staging, dedicated updater provisioning, transactional rollback, and runtime readiness gates'

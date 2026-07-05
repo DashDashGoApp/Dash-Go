@@ -107,7 +107,7 @@ installer_duplicate_block="$(sed -n '/if ! acquire_dashboard_update_lock; then/,
 if printf '%s\n' "$installer_duplicate_block" | grep -Eq 'write_update_(status|job)'; then
   echo 'FAIL: rejected duplicate installer update must not overwrite the active transaction records' >&2; exit 1
 fi
-update_block="$(sed -n '/if \[ "$UPDATE_MODE" = "1" \]; then/,/# --- Pre-flight checks/p' "$INSTALLER")"
+update_block="$(sed -n '/if \[ "$UPDATE_MODE" = "1" \]; then/,/# --- Workflow-specific preflight/p' "$INSTALLER")"
 for token in 'acquire_dashboard_update_lock' 'pause_kiosk_for_runtime_transition' 'restart_dashboard_server_for_update' 'resume_kiosk_after_runtime_transition' 'restart_kiosk' 'run_post_update_verifier'; do
   printf '%s\n' "$update_block" | grep -Fq "$token" || { echo "FAIL: update path lacks $token" >&2; exit 1; }
 done

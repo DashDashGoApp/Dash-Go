@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALLER="${1:-$ROOT/../installer/install.sh}"
 [ -f "$INSTALLER" ] || { echo "installer not found: $INSTALLER" >&2; exit 1; }
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 DASH="$TMP/dashboard"
@@ -42,8 +43,13 @@ atomic_replace_file(){
 restore_personal_settings(){ return 0; }
 RESTORED_CANONICAL_INSTALLER=0
 restore_canonical_installer(){ RESTORED_CANONICAL_INSTALLER=1; return 0; }
-ensure_go_selector_wrapper_installed(){ return 0; }
+ensure_missing_go_selector_wrapper(){ return 0; }
+verify_installed_release_manifest(){
+  [ "${1:-}" = "$VERSION" ] || { echo "FAIL: rollback passed unexpected restored version ${1:-}" >&2; return 1; }
+  return 0
+}
 release_server_for_host(){ printf '%s\n' "$TMP/verifier"; }
+printf '%s\n' "$VERSION" > "$DASH/VERSION"
 rollback_update_payload "$STAGE"
 [ "$RESTORED_CANONICAL_INSTALLER" = 1 ] || { echo 'FAIL: rollback did not restore the canonical installer' >&2; exit 1; }
 [ "$(cat "$DASH/managed.txt")" = "old payload" ] || { echo "FAIL: old managed file was not restored" >&2; exit 1; }
