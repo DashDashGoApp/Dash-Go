@@ -44,6 +44,12 @@ Select the exact source handoff and allow the Builder to complete every gate. On
 
 A same-version beta rebuild is allowed only before publication, only with the Builder’s explicit `-Force` confirmation, and never as a way to bypass a failed validation. Stable releases are never rebuilt or overwritten at the same version.
 
+## Showcase Contract v1 beta rehearsal
+
+When a beta source handoff includes `app/release/showcase-contract.json`, it must complete the normal local Builder and GitHub beta-release process first. Then stage the **exact published GitHub Release asset** in Dash-Go Showcase Studio. Studio must detect `dashgo-showcase/v1`, launch Dash-Go with `DASHGO_RUNTIME_PROFILE=showcase`, seed its four disposable writable calendars, and require `/api/showcase/status` to report `ready: true`, a rebuilt cache, every declared fixture, and at least one writeback candidate per writable calendar.
+
+Do not treat a successful legacy-overlay build as Contract v1 proof. For this first beta, retain the Studio Stage and Windows installer proof with the candidate evidence. A missing or malformed contract declaration must fail closed; a release without the declaration is the only allowed legacy fallback.
+
 ## 3. Create the reviewed GitHub draft
 
 Use the GitHub Publisher from its established fixed folder:

@@ -1,5 +1,32 @@
 # Dash-Go Changelog
 
+## [1.5.9-beta.1] — 2026-07-05
+
+### Showcase Contract v1 beta rehearsal
+
+- Introduced the dormant-by-default native `dashgo-showcase/v1` runtime contract for Dash-Go Showcase Studio. Ordinary Dash-Go installs do not enter Showcase mode and retain their existing application and user-data paths.
+- Added strict isolated Showcase roots: the immutable Dash-Go application tree remains read-only to the scenario, while Studio supplies a separate disposable data root and a strict scenario manifest.
+- Made scenario calendars manifest-owned: Dash-Go validates the declared static ICS fixtures, writes their calendar manifest, registers the exact private writable collections, and rebuilds the bounded event cache before Studio opens.
+- Added the authoritative `GET /api/showcase/status` readiness report and `dashboard-control-server --showcase-contract` package-contract probe. Studio now uses these native surfaces when the packaged Dash-Go runtime declares Contract v1; older releases continue through the checked-in legacy bridge.
+- Added source coverage for ordinary-mode dormancy, strict manifest/path refusal, static scenario-data allowlisting, cache and writeback readiness, and the native status endpoint.
+
+### Mirror-aware Debian security-maintenance eligibility
+
+- Replaced hostname recognition with authenticated Debian Release-metadata checks. Enabled `.list` and Deb822 `.sources` entries can now use official country aliases, caching proxies, or properly mirrored local endpoints when the selected base and `trixie-security` suites carry current signatures from the Debian archive keyring and report the expected Debian identity.
+- Refused `trusted=yes`, `allow-insecure`, wrong-suite, missing-metadata, and Raspbian-incompatible layouts explicitly. Doctor now names the exact reason rather than describing a valid mirror as unofficial.
+- Made security-source creation opt-in: only `~/install.sh --repair --system`, and only after a verified base source exists while `trixie-security` is missing, may add Dash-Go’s canonical security source. The repair snapshots Dash-Go-owned files, refreshes APT, revalidates signed metadata, and rolls back its own changes on failure.
+- Added mirror/proxy, Deb822 and `.list`, wrong-suite, insecure-source, Raspbian, metadata-identity, and repair/rollback-contract smoke coverage.
+
+### Local calendar edit-popup labels
+
+- Corrected fixed local-calendar rows in existing-event, one-writable-calendar, and unavailable-calendar states. The calendar name and provider are now appended as nested DOM elements rather than passed to the text-only `el()` argument, so local events such as payday entries no longer show stringified markup or `[object HTMLSpanElement]`.
+- Added an executable DOM-structure smoke covering all three fixed states, including the unavailable-calendar safety message.
+
+### Release assurance
+
+- Added a release-gate smoke that runs the built control-server binary against the shipped Contract v1 declaration, so a source handoff cannot silently omit or misidentify the native Showcase contract.
+- Made the existing no-source weather fallback test deterministic with a local failing fixture. Production weather-provider behavior is unchanged.
+
 This changelog records stable Dash-Go milestones. During an active development cycle, concise beta notes may remain for release review; they are consolidated into one stable section at promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
 ## [1.5.8] — 2026-07-04

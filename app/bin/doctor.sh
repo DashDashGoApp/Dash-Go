@@ -1355,7 +1355,13 @@ check_security_maintenance(){
     return 0
   }
   if ! dashboard_security_maintenance_supported; then
-    info "managed Debian security maintenance is not applied: $(dashboard_security_maintenance_support_reason)"
+    issue="$(dashboard_security_maintenance_support_reason)"
+    if dashboard_security_security_repair_eligible; then
+      doctor_plan_add repair security-maintenance-source "Add the verified Debian security source" "$issue." "Backs up Dash-Go-owned APT policy, adds only Dash-Go's canonical ${DASHBOARD_SECURITY_CODENAME}-security source, refreshes APT metadata, verifies Debian signatures and release identity, then rolls back all Dash-Go-owned changes if validation fails. It never changes user-managed repositories or runs a general OS upgrade." "Existing APT sources, repository choices, Raspberry Pi firmware policy, and personal dashboard data."
+      warn "managed Debian security maintenance needs opt-in repair: $issue — run ~/install.sh --repair --system"
+    else
+      info "managed Debian security maintenance is not applied: $issue"
+    fi
     return 0
   fi
   if dashboard_security_later_origin_policy_present; then

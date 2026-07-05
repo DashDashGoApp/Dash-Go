@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,9 +17,14 @@ func writeShowcaseContractFixture(t *testing.T, dash string) {
 	if err := os.MkdirAll(filepath.Join(dash, "release"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile(filepath.Join("..", "..", "release", "showcase-contract.json"))
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not resolve Showcase contract test source path")
+	}
+	fixturePath := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", "..", "release", "showcase-contract.json"))
+	fixture, err := os.ReadFile(fixturePath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("read Showcase contract fixture %s: %v", fixturePath, err)
 	}
 	if err := os.WriteFile(filepath.Join(dash, "release", "showcase-contract.json"), fixture, 0644); err != nil {
 		t.Fatal(err)

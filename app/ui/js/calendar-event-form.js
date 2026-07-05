@@ -69,6 +69,14 @@ function calendarWritebackCalendarCopy(choice,detail){
   copy.appendChild(el("span","calendar-writeback-calendar-meta",meta));
   return copy;
 }
+function calendarWritebackFixedCalendarRow(choice,detail){
+  // el() accepts text only as its third argument. Keep the provider/name copy
+  // as a real nested node so fixed existing, single-choice, and unavailable
+  // calendars never stringify to "[object HTMLSpanElement]".
+  const row=el("div","calendar-writeback-calendar-fixed");
+  row.appendChild(calendarWritebackCalendarCopy(choice,detail));
+  return row;
+}
 function calendarWritebackPopupScrollRoot(){return document.getElementById("popbody");}
 function calendarWritebackFormTap(node,handler){
   return bindTap(node,handler,{scrollRoot:calendarWritebackPopupScrollRoot});
@@ -83,7 +91,7 @@ function calendarWritebackCalendarPicker(calendars,source,event){
   // and opening this form, and moving it would be an unsafe copy/delete action.
   if(!selected&&event){
     shell.classList.add("is-fixed","is-unavailable");
-    shell.appendChild(el("div","calendar-writeback-calendar-fixed",calendarWritebackCalendarCopy({name:"Calendar unavailable",provider:"Dashboard edits are no longer enabled",ordinal:0},"Return to the event and refresh Calendar Manager.")));
+    shell.appendChild(calendarWritebackFixedCalendarRow({name:"Calendar unavailable",provider:"Dashboard edits are no longer enabled",ordinal:0},"Return to the event and refresh Calendar Manager."));
     return {node:shell,selected:()=>null,unavailable:true};
   }
   selected=selected||choices[0]||null;
@@ -91,7 +99,7 @@ function calendarWritebackCalendarPicker(calendars,source,event){
   const fixed=!!event||choices.length===1;
   if(fixed){
     const detail=event?"This edit stays here":"Selected writable calendar";
-    shell.classList.add("is-fixed");shell.appendChild(el("div","calendar-writeback-calendar-fixed",calendarWritebackCalendarCopy(selected,detail)));
+    shell.classList.add("is-fixed");shell.appendChild(calendarWritebackFixedCalendarRow(selected,detail));
     return {node:shell,selected:()=>selected};
   }
   const optionsID="calendar-writeback-calendar-options";

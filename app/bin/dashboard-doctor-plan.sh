@@ -40,7 +40,7 @@ doctor_plan_has(){ [ -n "${DOCTOR_PLAN_FILE:-}" ] && [ -s "$DOCTOR_PLAN_FILE" ];
 
 doctor_plan_repair_command(){
   case "${1:-}" in
-    security-maintenance) printf '%s\n' '~/install.sh --repair --system' ;;
+    security-maintenance|security-maintenance-source) printf '%s\n' '~/install.sh --repair --system' ;;
     *) printf '%s\n' '~/install.sh --repair' ;;
   esac
 }

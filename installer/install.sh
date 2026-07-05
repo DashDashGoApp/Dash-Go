@@ -4202,7 +4202,7 @@ security_maintenance_apply_file(){
 }
 
 configure_security_maintenance(){
-  local reason="${1:-install}" stage backup kind target rc=0
+  local reason="${1:-install}" stage backup kind target rc=0 security_source_repair=0
   local -a kinds=(backports-pin auto-upgrades unattended-policy daily-timer upgrade-timer daily-service upgrade-service)
 
   source_security_maintenance_helper || {
@@ -4211,9 +4211,18 @@ configure_security_maintenance(){
     return 1
   }
   if ! dashboard_security_maintenance_supported; then
-    ok "managed Debian security maintenance not applied: $(dashboard_security_maintenance_support_reason)"
-    SECURITY_MAINTENANCE_RESULT=unsupported
-    return 0
+    # A missing security suite is the only source topology Dash-Go may repair,
+    # and only through the explicit system-repair path after the active base
+    # suite has already been proven by Debian-signed Release metadata. Normal
+    # installs and updates report the condition without rewriting APT sources.
+    if [ "$reason" = repair ] && dashboard_security_security_repair_eligible; then
+      security_source_repair=1
+      warn "a verified Debian base exists but ${DASHBOARD_SECURITY_CODENAME}-security is missing; applying the requested reversible security-source repair"
+    else
+      ok "managed Debian security maintenance not applied: $(dashboard_security_maintenance_support_reason)"
+      SECURITY_MAINTENANCE_RESULT=unsupported
+      return 0
+    fi
   fi
   if dashboard_security_later_origin_policy_present; then
     warn "a later unattended-upgrades origin policy exists; Dash-Go will not overwrite it. Review /etc/apt/apt.conf.d before enabling security-only maintenance."
@@ -4244,10 +4253,12 @@ configure_security_maintenance(){
   backup="$stage/backup"
   mkdir -p "$backup" || { rm -rf "$stage"; return 1; }
 
-  # Never duplicate a user/distribution source.  Create Dash-Go-owned source
-  # files only when the official archive is missing, or repair our own file.
+  # Never duplicate a user/distribution source. A canonical security source
+  # is written only for the explicit, verified-base repair path or to restore
+  # Dash-Go's own existing file. An authenticated administrator-owned source
+  # remains untouched.
   target="$(dashboard_security_managed_path security-source)"
-  if [ -e "$target" ] || ! dashboard_security_security_source_present; then
+  if [ "$security_source_repair" = 1 ] || [ -e "$target" ]; then
     kinds+=(security-source)
   fi
   target="$(dashboard_security_managed_path backports-source)"
@@ -4279,14 +4290,18 @@ configure_security_maintenance(){
       rc=1
     fi
   fi
-  if [ "$rc" = 0 ] && dashboard_security_managed_files_current && dashboard_security_package_installed && dashboard_security_timers_ready; then
+  if [ "$rc" = 0 ] && dashboard_security_maintenance_supported && dashboard_security_managed_files_current && dashboard_security_package_installed && dashboard_security_timers_ready; then
     rm -rf "$stage"
-    ok "managed Debian security maintenance enabled (security-only; no automatic reboot or backports installs)"
+    if [ "$security_source_repair" = 1 ]; then
+      ok "managed Debian security maintenance enabled after verified security-source repair (security-only; no automatic reboot or backports installs)"
+    else
+      ok "managed Debian security maintenance enabled (security-only; no automatic reboot or backports installs)"
+    fi
     SECURITY_MAINTENANCE_RESULT=enabled
     return 0
   fi
 
-  warn "managed Debian security maintenance could not be verified; restoring Dash-Go-owned policy files"
+  warn "managed Debian security maintenance could not be verified after APT metadata validation; restoring Dash-Go-owned policy files"
   for kind in "${kinds[@]}"; do
     target="$(dashboard_security_managed_path "$kind")" || continue
     if [ -s "$backup/$kind.state" ]; then
