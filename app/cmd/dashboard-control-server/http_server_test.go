@@ -19,6 +19,29 @@ func writeStaticTestFile(t *testing.T, root, rel, body string) {
 	}
 }
 
+func TestStaticURLRelativePathUsesURLSeparatorsAcrossHosts(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want string
+		ok   bool
+	}{
+		{name: "forward slashes", path: "/config/config.local.js", want: "config/config.local.js", ok: true},
+		{name: "Windows separators", path: `\config\config.local.js`, want: "config/config.local.js", ok: true},
+		{name: "mixed separators", path: `/calendars\family.green.ics`, want: "calendars/family.green.ics", ok: true},
+		{name: "relative traversal remains rooted", path: "/../config/config.local.js", want: "config/config.local.js", ok: true},
+		{name: "drive-qualified segment refused", path: "/C:/config/config.local.js", want: "", ok: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := staticURLRelativePath(tc.path)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("staticURLRelativePath(%q) = (%q, %v), want (%q, %v)", tc.path, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
 func TestStaticCachePolicy(t *testing.T) {
 	root := t.TempDir()
 	writeStaticTestFile(t, root, "index.html", "<!doctype html>")

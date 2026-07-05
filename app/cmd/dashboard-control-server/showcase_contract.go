@@ -245,7 +245,11 @@ func (a *app) showcaseStaticDataPath(relative string) (string, bool) {
 	if !a.showcaseMode() {
 		return "", false
 	}
-	relative = filepath.ToSlash(strings.TrimPrefix(filepath.Clean("/"+strings.TrimPrefix(relative, "/")), "/"))
+	var valid bool
+	relative, valid = staticURLRelativePath(relative)
+	if !valid {
+		return "", false
+	}
 	allowed := map[string]bool{
 		"config/config.local.js":         true,
 		"config/compliments.json":        true,

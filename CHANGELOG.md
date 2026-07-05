@@ -1,5 +1,14 @@
 # Dash-Go Changelog
 
+## [1.5.9-beta.3] — 2026-07-05
+
+### Native Showcase Windows static-data routing
+
+- Corrected Contract v1 static scenario-data routing on Windows. The server now normalizes HTTP request paths using URL slash semantics before native Showcase data-root allowlisting and filesystem conversion, so approved browser requests such as `/config/config.local.js` and manifest-declared `/calendars/*.ics` cannot be mistaken for backslash-prefixed paths.
+- Retained strict static allowlisting and no-store configuration behavior. Drive-qualified or ambiguous static URL segments are refused before filesystem conversion; ordinary Dash-Go static routing remains unchanged.
+- Added regression coverage for Windows-shaped separators, URL-path canonicalization, native config delivery from the disposable data root, and the four-calendar native allowlist.
+- This follows the beta.2 rehearsal result: immutable-release metadata, native Contract v1 selection, status readiness, cache evidence, and Stage Candidate proof passed; only the installed Windows self-test exposed the final static browser-route boundary before a Studio release or device update.
+
 ## [1.5.9-beta.2] — 2026-07-05
 
 ### Native Showcase Windows portability

@@ -155,11 +155,22 @@ func TestShowcaseStaticDataPathsStayAllowlisted(t *testing.T) {
 	if _, ok := a.showcaseStaticDataPath("calendars/family.green.ics"); !ok {
 		t.Fatal("manifest-declared Showcase calendar was not exposed")
 	}
+	windowsPath, ok := a.showcaseStaticDataPath(`\calendars\family.green.ics`)
+	if !ok {
+		t.Fatal("manifest-declared Showcase calendar was not exposed through Windows-shaped separators")
+	}
+	wantWindowsPath := filepath.Join(a.calDir, "family.green.ics")
+	if windowsPath != wantWindowsPath {
+		t.Fatalf("Windows-shaped Showcase calendar path = %q, want %q", windowsPath, wantWindowsPath)
+	}
 	if _, ok := a.showcaseStaticDataPath("config/family-board.json"); ok {
 		t.Fatal("private config file was exposed through the Showcase static allowlist")
 	}
 	if _, ok := a.showcaseStaticDataPath("../outside"); ok {
 		t.Fatal("path traversal was exposed through the Showcase static allowlist")
+	}
+	if _, ok := a.showcaseStaticDataPath("/C:/outside"); ok {
+		t.Fatal("drive-qualified path was exposed through the Showcase static allowlist")
 	}
 }
 
@@ -186,6 +197,16 @@ func TestShowcaseContractStatusEndpointAndStaticCalendar(t *testing.T) {
 	cache := status["cache"].(map[string]any)
 	if cache["rebuilt"] != true {
 		t.Fatalf("Showcase status endpoint did not report a rebuilt cache: %#v", cache)
+	}
+
+	if err := os.WriteFile(a.configLocal, []byte("// Generated for Dash-Go Showcase Studio.\nwindow.DASHBOARD_LOCAL={};\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	configRequest := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8090/config/config.local.js", nil)
+	configResponse := httptest.NewRecorder()
+	a.handle(configResponse, configRequest)
+	if configResponse.Code != http.StatusOK || !strings.Contains(configResponse.Body.String(), "Generated for Dash-Go Showcase Studio") {
+		t.Fatalf("Showcase static configuration was not served from the data root: %d %q", configResponse.Code, configResponse.Body.String())
 	}
 
 	calendarRequest := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8090/calendars/family.green.ics", nil)

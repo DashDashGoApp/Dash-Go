@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -262,18 +263,41 @@ func dashboardSecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func (a *app) static(w http.ResponseWriter, r *http.Request, path string) {
-	if path == "/" || path == "" {
-		path = "/index.html"
+// staticURLRelativePath normalizes an HTTP request path independently of the
+// host filesystem. URLs always use forward slashes; filepath.Clean converts
+// those slashes to backslashes in a Windows build, which can make an
+// allowlisted Showcase data route look like a different path. Normalizing here
+// keeps the static allowlist, cache policy, and immutable app-root join on one
+// stable URL-path representation.
+func staticURLRelativePath(requestPath string) (string, bool) {
+	requestPath = strings.ReplaceAll(requestPath, `\`, "/")
+	clean := path.Clean("/" + strings.TrimPrefix(requestPath, "/"))
+	rel := strings.TrimPrefix(clean, "/")
+	// Windows cannot represent a colon in a file name. Refuse a drive-qualified
+	// or otherwise ambiguous URL segment before converting it to a filesystem
+	// path, even though normal browser requests never need one.
+	if strings.Contains(rel, ":") {
+		return "", false
+	}
+	return rel, true
+}
+
+func (a *app) static(w http.ResponseWriter, r *http.Request, requestPath string) {
+	if requestPath == "/" || requestPath == "" {
+		requestPath = "/index.html"
 	}
 	aliases := map[string]string{"/dashboard.css": "/ui/dashboard.css", "/control-layout.css": "/ui/control-layout.css", "/dashboard.js": "/ui/js/app.bundle.js"}
 	aliased := false
-	if v, ok := aliases[path]; ok {
-		path, aliased = v, true
+	if v, ok := aliases[requestPath]; ok {
+		requestPath, aliased = v, true
 	}
-	clean := filepath.Clean("/" + strings.TrimPrefix(path, "/"))
-	rel := strings.TrimPrefix(clean, "/")
-	full := filepath.Join(a.dash, rel)
+	rel, valid := staticURLRelativePath(requestPath)
+	if !valid {
+		setNoStore(w)
+		http.NotFound(w, r)
+		return
+	}
+	full := filepath.Join(a.dash, filepath.FromSlash(rel))
 	dataPath, fromShowcaseData := a.showcaseStaticDataPath(rel)
 	if fromShowcaseData {
 		full = dataPath
