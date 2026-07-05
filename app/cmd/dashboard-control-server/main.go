@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	releasepkg "github.com/DashDashGoApp/Dash-Go/app/internal/release"
@@ -246,7 +245,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), runtimeTerminationSignals()...)
 	defer stop()
 	if err := serveHTTPUntilSignal(ctx, a.httpServer(addr), listener, 8*time.Second); err != nil {
 		log.Fatal(err)

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -136,7 +135,7 @@ func pidRunning(pid int) bool {
 	if err != nil {
 		return false
 	}
-	return p.Signal(syscall.Signal(0)) == nil
+	return runtimeProcessRunning(p)
 }
 
 func fileSize(p string) int64 {
@@ -187,7 +186,7 @@ func (a *app) startSystemUpdate() (map[string]any, error) {
 	cmd.Dir = a.dash
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	prepareDetachedRuntimeCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		initialStatus["state"] = "failed"
 		initialStatus["label"] = "System update could not start"

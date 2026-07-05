@@ -1,4 +1,4 @@
-# Dash-Go 1.5.9-beta.1 — Showcase Contract v1 Rehearsal
+# Dash-Go 1.5.9-beta.2 — Showcase Contract v1 Rehearsal
 
 This beta is the first Dash-Go source handoff that ships `dashgo-showcase/v1`.
 
@@ -11,3 +11,7 @@ The local Builder remains responsible for compiled binaries, generated browser a
 5. Studio refuses browser launch unless the status is ready, reports all four scenario calendars, and includes a writeback candidate for each writable calendar.
 
 A successful legacy overlay path is not proof for this beta. Legacy remains a fallback only for packaged releases that do not declare Contract v1.
+
+## Beta.2 portability correction
+
+The first immutable beta successfully reached native Contract v1 selection and validation in Studio, then stopped at the Windows engine cross-compile. This replacement beta moves the remaining Unix-only platform primitives behind Dash-Go-owned build-tagged helpers. A native Contract v1 release must now compile `cmd/dashboard-control-server` for `windows/amd64` before it is accepted by the Local Builder's Showcase package gate. The standalone generated-assets verifier stages both platform directory-sync helpers with its extracted `fileio` package, so the verifier remains self-contained under either platform selection.

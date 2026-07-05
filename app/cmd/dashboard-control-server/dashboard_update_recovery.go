@@ -1,12 +1,9 @@
 package main
 
 import (
-	"errors"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -23,23 +20,7 @@ const updateInterruptedGrace = 2 * time.Minute
 // deleting or renaming it would split lock ownership across inodes and could
 // permit overlapping update transactions.
 func (a *app) updateLockHeld() (bool, error) {
-	path := a.updateLockPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return false, err
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return true, nil
-		}
-		return false, err
-	}
-	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-	return false, nil
+	return runtimeLockHeld(a.updateLockPath())
 }
 
 func updateJobLastActivity(job map[string]any) int64 {

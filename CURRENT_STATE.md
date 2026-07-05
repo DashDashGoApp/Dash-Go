@@ -4,12 +4,13 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.9-beta.1`
+- **Version:** `1.5.9-beta.2`
 - **Track:** beta
 - **Purpose:** first controlled Dash-Go Showcase Contract v1 rehearsal. The beta carries the native isolated-runtime, scenario-manifest, calendar/writeback readiness, and status-endpoint surfaces consumed by the merged Studio handoff.
 - **Required candidate proof:** the exact published beta must be packaged by Showcase Studio through the native path, seed its four disposable writable calendars, and refuse browser launch unless `/api/showcase/status` reports a rebuilt cache and all declared writeback candidates.
 - **Compatibility:** ordinary Dash-Go operation remains dormant unless all three Showcase environment variables are supplied. Studio continues using its reviewed legacy bridge only for packaged Dash-Go releases that do not declare Contract v1.
 - **Security-maintenance eligibility:** Debian base and `trixie-security` sources are identified by enabled APT entry plus current Debian-signed Release metadata, not by hostname. Valid country mirrors, proxies, and mirrored local archives qualify; wrong-suite and insecure source flags do not. A missing security source is repairable only through the explicit `--repair --system` path after the base source is verified.
+- **Native Showcase Windows portability:** Contract v1 now keeps Linux-specific locks, signals, directory durability, disk-free reporting, and detached-process behavior behind build-tagged helpers. Windows Studio compilation uses conservative no-op behavior for unsupported appliance-management operations.
 - **Calendar writeback presentation:** fixed local-calendar labels in edit popups retain nested provider/name elements for existing events, a single writable calendar, and unavailable-calendar states.
 
 ## Current stable release
@@ -17,7 +18,7 @@
 - **Version:** `1.5.8`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.1 is the next beta source handoff for local-builder validation and controlled Studio rehearsal.
+- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.2 is the corrective native-Showcase Windows-portability beta source handoff. It supersedes the already-published 1.5.9-beta.1 rehearsal after Studio's Windows engine compile exposed remaining Unix-only primitives.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.

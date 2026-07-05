@@ -1,5 +1,14 @@
 # Dash-Go Changelog
 
+## [1.5.9-beta.2] — 2026-07-05
+
+### Native Showcase Windows portability
+
+- Moved Unix-only file-lock, process-liveness, process-detach, termination-signal, directory-sync, disk-free, and terminal-detach primitives behind explicit Dash-Go platform helpers. Linux behavior is unchanged; Windows Showcase builds use conservative no-op behavior for updater/process and device-storage operations that are not supported in the packaged Studio runtime.
+- Adds a Builder-owned Contract v1 Windows cross-compile gate so a Dash-Go source handoff that declares `dashgo-showcase/v1` cannot publish if `cmd/dashboard-control-server` fails to build for the Studio Windows payload.
+- This correction follows the first native Studio rehearsal: source, contract, assets, and native selection passed; the Windows engine compile exposed remaining Unix-only references before a Studio release or device update could occur.
+- Corrected the standalone generated-assets verifier fixture to stage both build-tagged directory-sync helpers alongside `fileio.go`; the self-contained verifier now compiles on its selected host platform instead of relying on an omitted package sibling.
+
 ## [1.5.9-beta.1] — 2026-07-05
 
 ### Showcase Contract v1 beta rehearsal

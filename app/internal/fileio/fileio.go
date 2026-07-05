@@ -3,30 +3,16 @@ package fileio
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // syncDirectory persists a completed rename's directory entry where the local
-// filesystem supports directory fsync. Unsupported platforms/filesystems keep
-// the successful atomic-replace behavior; other errors are reported so callers
-// never claim durability they did not receive.
+// filesystem supports directory fsync. The platform implementation remains
+// conservative on runtimes that do not expose POSIX directory synchronization.
 func syncDirectory(dir string) error {
-	handle, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer handle.Close()
-	if err := handle.Sync(); err != nil {
-		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EOPNOTSUPP) {
-			return nil
-		}
-		return err
-	}
-	return nil
+	return syncDirectoryPlatform(dir)
 }
 
 // WriteAtomic writes b through a same-directory temporary file and atomically

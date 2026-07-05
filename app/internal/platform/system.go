@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -170,12 +169,13 @@ func LoadAvg() string {
 	}
 	return strings.TrimSpace(string(b))
 }
+
+// DiskFreeMB reports available storage where the runtime platform supports a
+// safe local-filesystem query. Windows Studio packages do not expose device
+// storage repair controls, so their implementation intentionally returns zero
+// rather than guessing about an arbitrary mounted volume.
 func DiskFreeMB(path string) int {
-	var st syscall.Statfs_t
-	if syscall.Statfs(path, &st) != nil || st.Bsize <= 0 {
-		return 0
-	}
-	return int((st.Bavail * uint64(st.Bsize)) / 1024 / 1024)
+	return platformDiskFreeMB(path)
 }
 
 func PrimaryIP() string {

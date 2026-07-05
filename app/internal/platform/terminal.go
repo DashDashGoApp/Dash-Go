@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -177,7 +176,7 @@ func (s *Service) OpenTerminal() (map[string]any, error) {
 		cmd.Stdout = f
 		cmd.Stderr = f
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	prepareDetachedTerminalCommand(cmd)
 	if e := cmd.Start(); e != nil {
 		if f != nil {
 			_ = f.Close()

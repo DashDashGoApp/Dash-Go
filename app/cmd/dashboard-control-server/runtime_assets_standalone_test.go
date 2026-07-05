@@ -38,7 +38,7 @@ func TestRuntimeAssetsStandaloneVerifierRuns(t *testing.T) {
 	writeStandaloneFile(t, filepath.Join(work, "go.mod"), []byte("module github.com/DashDashGoApp/Dash-Go/app\n\ngo 1.26\n\ntoolchain go1.26.4\n"))
 	writeStandaloneFile(t, filepath.Join(work, "runtime_assets.go"), runtimeAssets)
 	writeStandaloneFile(t, filepath.Join(work, "verify_main.go"), []byte(standaloneRuntimeAssetsVerifyMain))
-	for _, rel := range []string{"internal/fileio/fileio.go", "internal/jsonutil/jsonutil.go"} {
+	for _, rel := range []string{"internal/fileio/fileio.go", "internal/fileio/directory_sync_unix.go", "internal/fileio/directory_sync_windows.go", "internal/jsonutil/jsonutil.go"} {
 		body, err := os.ReadFile(filepath.Join(projectRoot, rel))
 		if err != nil {
 			t.Fatalf("read standalone helper %s: %v", rel, err)

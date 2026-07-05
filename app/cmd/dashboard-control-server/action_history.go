@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -23,22 +22,7 @@ func actionHistoryLockPath(path string) string { return path + ".lock" }
 // server and the dedicated updater runner. The history itself is still written
 // through fileio.WriteJSON's same-directory atomic rename path.
 func withActionHistoryLock(path string, fn func() error) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	lock, err := os.OpenFile(actionHistoryLockPath(path), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer lock.Close()
-	if err := lock.Chmod(0600); err != nil {
-		return err
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-	return fn()
+	return withRuntimeFileLock(actionHistoryLockPath(path), fn)
 }
 
 func actionHistoryMaps(raw any) []map[string]any {

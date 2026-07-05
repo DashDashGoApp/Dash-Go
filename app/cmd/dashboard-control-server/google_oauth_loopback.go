@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -77,7 +76,7 @@ func googleOAuthLoopbackWaitWith(listener net.Listener, state, displayDir, conne
 	defer func() { _ = server.Close(); <-serveDone }()
 	if interrupt == nil {
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		signal.Notify(signals, runtimeTerminationSignals()...)
 		defer signal.Stop(signals)
 		interrupt = signals
 	}
