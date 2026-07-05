@@ -128,6 +128,15 @@ func (s *Service) eventURLToPath(url string) string {
 		return ""
 	}
 	u := strings.Split(strings.Split(url, "?")[0], "#")[0]
+	if strings.HasPrefix(filepath.ToSlash(u), "calendars/") {
+		rel := strings.TrimPrefix(filepath.ToSlash(u), "calendars/")
+		p := filepath.Clean(filepath.Join(s.calendarDir, filepath.FromSlash(rel)))
+		calendarClean := filepath.Clean(s.calendarDir)
+		if p != calendarClean && strings.HasPrefix(p, calendarClean+string(os.PathSeparator)) {
+			return p
+		}
+		return ""
+	}
 	p := filepath.Clean(filepath.Join(s.dashDir, u))
 	dashClean := filepath.Clean(s.dashDir)
 	if p != dashClean && strings.HasPrefix(p, dashClean+string(os.PathSeparator)) {

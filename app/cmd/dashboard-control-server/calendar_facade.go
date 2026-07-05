@@ -101,7 +101,7 @@ func writeICSFile(path, name string, events []calendarGenEvent) error {
 
 func icsEsc(value string) string { return calendarpkg.EscapeICS(value) }
 
-func (a *app) generateCalendarManifest() error { return a.calendarService().GenerateManifest() }
+func (a *app) generateCalendarManifest() error { return a.syncShowcaseCalendarManifest() }
 func (a *app) calendars() any                  { return a.calendarService().Calendars() }
 
 func (a *app) calendarManagementStatus() map[string]any {

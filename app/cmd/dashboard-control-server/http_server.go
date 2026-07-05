@@ -274,7 +274,11 @@ func (a *app) static(w http.ResponseWriter, r *http.Request, path string) {
 	clean := filepath.Clean("/" + strings.TrimPrefix(path, "/"))
 	rel := strings.TrimPrefix(clean, "/")
 	full := filepath.Join(a.dash, rel)
-	if !strings.HasPrefix(full, a.dash) || staticPrivatePath(rel) {
+	dataPath, fromShowcaseData := a.showcaseStaticDataPath(rel)
+	if fromShowcaseData {
+		full = dataPath
+	}
+	if (!fromShowcaseData && !strings.HasPrefix(full, a.dash)) || staticPrivatePath(rel) {
 		setNoStore(w)
 		http.NotFound(w, r)
 		return

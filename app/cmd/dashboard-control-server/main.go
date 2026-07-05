@@ -50,6 +50,8 @@ type app struct {
 	todoDir                     string
 	todoTokenFile               string
 	fontsDir                    string
+	showcase                    *showcaseRuntime
+	showcaseInitErr             error
 	authInitMu                  sync.Mutex
 	auth                        *controlauth.Service
 	settingsInitMu              sync.Mutex
@@ -105,9 +107,17 @@ type app struct {
 
 func main() {
 	a := newAppFromRuntime()
+	if a.showcaseInitErr != nil {
+		log.Fatal(a.showcaseInitErr)
+	}
 	a.ensureDirs()
+	if err := a.initializeShowcaseRuntime(); err != nil {
+		log.Fatal(err)
+	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "--showcase-contract":
+			os.Exit(a.runShowcaseContractCLI(os.Args[2:]))
 		case "--gen-events-cache":
 			os.Exit(a.runEventCacheCLI(os.Args[2:]))
 		case "--gen-calendars":
@@ -205,22 +215,27 @@ func main() {
 			}
 		}
 	}
-	// A server restart during an update can happen between writing the terminal
-	// job record and the runner finalizing Recent Actions. Repair that narrow
-	// window before the HTTP server accepts its first request.
-	a.reconcileInterruptedUpdateState()
-	a.reconcileUpdateActionHistory()
-	a.ensureSettingsSafeAtBoot()
-	if err := a.todoNormalizeInboundSyncSetting(); err != nil {
-		log.Printf("could not normalize retired Microsoft To Do cadence: %v", err)
+	// A Showcase runtime is a disposable local scenario. It must not start
+	// appliance maintenance, provider polling, notifications, or interrupted
+	// update recovery against a host device.
+	if !a.showcaseMode() {
+		// A server restart during an update can happen between writing the terminal
+		// job record and the runner finalizing Recent Actions. Repair that narrow
+		// window before the HTTP server accepts its first request.
+		a.reconcileInterruptedUpdateState()
+		a.reconcileUpdateActionHistory()
+		a.ensureSettingsSafeAtBoot()
+		if err := a.todoNormalizeInboundSyncSetting(); err != nil {
+			log.Printf("could not normalize retired Microsoft To Do cadence: %v", err)
+		}
+		a.startTodoArchiveJanitor()
+		a.startTodoInboundScheduler()
+		a.startAppriseNotifier()
+		// A final-event delete carries a narrowly scoped persisted authorization so
+		// an interrupted server does not silently fall back to an unarmed empty
+		// collection sync. Only the long-lived HTTP server resumes this work.
+		a.resumeCalendarWritebackFinalDeletes()
 	}
-	a.startTodoArchiveJanitor()
-	a.startTodoInboundScheduler()
-	a.startAppriseNotifier()
-	// A final-event delete carries a narrowly scoped persisted authorization so
-	// an interrupted server does not silently fall back to an unarmed empty
-	// collection sync. Only the long-lived HTTP server resumes this work.
-	a.resumeCalendarWritebackFinalDeletes()
 	// settings.json is user-owned state. Do not create or reseed it at startup:
 	// config.local.js supplies fresh-install defaults and normal updates must not
 	// replace personal settings with profile defaults.
@@ -247,7 +262,13 @@ func newAppFromRuntime() *app {
 		}
 	}
 	home, _ := os.UserHomeDir()
-	a := &app{dash: dash, home: home, configDir: filepath.Join(dash, "config"), calDir: filepath.Join(dash, "calendars"), cacheDir: filepath.Join(dash, "cache"), logDir: filepath.Join(dash, "logs"), binDir: filepath.Join(dash, "bin"), settingsFile: filepath.Join(dash, "config", "settings.json"), configLocal: filepath.Join(dash, "config", "config.local.js"), celebrationsFile: filepath.Join(home, ".dashboard-celebrations"), todoDir: filepath.Join(dash, "config", "todo"), todoTokenFile: filepath.Join(home, ".dashboard-todo.json"), fontsDir: filepath.Join(dash, "fonts"), todoStreams: map[chan []byte]bool{}, releaseVersion: fileio.ReadString(filepath.Join(dash, "VERSION"), "")}
+	showcase, showcaseErr := loadShowcaseRuntime(dash)
+	data := dash
+	if showcase != nil {
+		data = showcase.dataRoot
+		home = showcase.homeDir
+	}
+	a := &app{dash: dash, home: home, configDir: filepath.Join(data, "config"), calDir: filepath.Join(data, "calendars"), cacheDir: filepath.Join(data, "cache"), logDir: filepath.Join(data, "logs"), binDir: filepath.Join(dash, "bin"), settingsFile: filepath.Join(data, "config", "settings.json"), configLocal: filepath.Join(data, "config", "config.local.js"), celebrationsFile: filepath.Join(home, ".dashboard-celebrations"), todoDir: filepath.Join(data, "config", "todo"), todoTokenFile: filepath.Join(home, ".dashboard-todo.json"), fontsDir: filepath.Join(dash, "fonts"), showcase: showcase, showcaseInitErr: showcaseErr, todoStreams: map[chan []byte]bool{}, releaseVersion: fileio.ReadString(filepath.Join(dash, "VERSION"), "")}
 	a.settings = settingspkg.New(a.settingsConfig())
 	return a
 }
@@ -259,7 +280,7 @@ func envInt(k string, def, lo, hi int) int {
 	return n
 }
 func (a *app) ensureDirs() {
-	for _, d := range []string{a.configDir, a.calDir, a.cacheDir, a.logDir, a.todoDir, a.fontsDir} {
+	for _, d := range []string{a.home, a.configDir, a.calDir, a.cacheDir, a.logDir, a.todoDir, a.fontsDir} {
 		_ = os.MkdirAll(d, 0755)
 	}
 	// Calendar Trash is bounded user-recovery data. Purge it once per server

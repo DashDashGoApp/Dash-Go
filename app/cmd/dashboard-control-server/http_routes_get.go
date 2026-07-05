@@ -15,6 +15,9 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 		a.json(w, a.runtimeReady())
 		return
 	}
+	if path == "/api/showcase/status" && a.handleShowcaseStatus(w, r) {
+		return
+	}
 	if path == "/api/lock/status" {
 		a.json(w, a.pinStatus(r.Header.Get("X-Dashboard-Token")))
 		return
