@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Simulate a beta.6-shaped local tree: its old updater may have left a generic
-# selector that does not match the next manifest. beta.9 must first refresh the
-# updater through the local bridge, then replace the selector from the verified
+# selector that does not match the next manifest. The current release must first
+# refresh the updater through the local bridge, then replace the selector from the verified
 # release payload without rewriting it after the post-commit manifest check.
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 INSTALLER="${DASHGO_INSTALLER_UNDER_TEST:-$ROOT/../installer/install.sh}"
 [ -f "$INSTALLER" ] || { echo "FAIL: installer not found: $INSTALLER" >&2; exit 1; }
 bash -n "$INSTALLER"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+case "$VERSION" in *-beta.*) TRACK=beta ;; *) TRACK=stable ;; esac
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
@@ -15,8 +17,8 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 # update. Dry-run exits at that safe handoff boundary for this smoke.
 mkdir -p "$TMP/bridge-bundle/app/release" "$TMP/bridge-home"
 cp "$INSTALLER" "$TMP/bridge-bundle/install.sh"
-printf '1.5.8-beta.9\n' > "$TMP/bridge-bundle/app/VERSION"
-printf '{"version":"1.5.8-beta.9","track":"beta"}\n' > "$TMP/bridge-bundle/app/release/release.json"
+printf '%s\n' "$VERSION" > "$TMP/bridge-bundle/app/VERSION"
+printf '{"version":"%s","track":"%s"}\n' "$VERSION" "$TRACK" > "$TMP/bridge-bundle/app/release/release.json"
 HOME="$TMP/bridge-home" DASHGO_SELECTOR_BRIDGE_DRY_RUN=1 bash "$TMP/bridge-bundle/install.sh" --bootstrap-selector-integrity
 cmp -s "$TMP/bridge-bundle/install.sh" "$TMP/bridge-home/install.sh" || {
   echo 'FAIL: selector-integrity bridge did not install the reviewed updater bytes' >&2
@@ -45,8 +47,8 @@ PAYLOAD="$TMP/payload/release/app"
 mkdir -p "$PAYLOAD/bin" "$PAYLOAD/ui/js" "$PAYLOAD/ui" "$PAYLOAD/cmd/dashboard-control-server"
 printf '<!doctype html>\n' > "$PAYLOAD/index.html"
 printf '#!/usr/bin/env sh\n' > "$PAYLOAD/kiosk.sh"
-printf '1.5.8-beta.9\n' > "$PAYLOAD/VERSION"
-printf '{"version":"1.5.8-beta.9","files":[]}\n' > "$PAYLOAD/manifest.json"
+printf '%s\n' "$VERSION" > "$PAYLOAD/VERSION"
+printf '{"version":"%s","files":[]}\n' "$VERSION" > "$PAYLOAD/manifest.json"
 printf '/* css */\n' > "$PAYLOAD/ui/dashboard.css"
 printf '/* css */\n' > "$PAYLOAD/ui/control-layout.css"
 printf '// js\n' > "$PAYLOAD/ui/js/app.bundle.js"
@@ -122,10 +124,10 @@ write_updater_migration_receipt(){ :; }
 retain_update_rollback_stage(){ rm -rf "$1"; }
 rollback_release_transaction(){ echo "FAIL: unexpected rollback: $2" >&2; return 1; }
 
-install_release_payload "$TMP/release.tar.gz" '1.5.8-beta.9' '' "$TMP/canonical-installer"
+install_release_payload "$TMP/release.tar.gz" "$VERSION" '' "$TMP/canonical-installer"
 cmp -s "$TMP/canonical-selector" "$DASH/bin/dashboard-control-server" || {
-  echo 'FAIL: beta.6→beta.9 transaction did not leave the manifest-owned selector byte-identical to the payload' >&2
+  echo "FAIL: beta.6→$VERSION transaction did not leave the manifest-owned selector byte-identical to the payload" >&2
   exit 1
 }
-[ "$(head -c 2 "$DASH/bin/dashboard-control-server")" = '#!' ] || { echo 'FAIL: selector was not replaced from the beta.9 shell wrapper' >&2; exit 1; }
-printf '%s\n' 'PASS: beta.6 bridge refreshes the updater and beta.9 transaction self-heals selector drift with manifest-matching payload bytes'
+[ "$(head -c 2 "$DASH/bin/dashboard-control-server")" = '#!' ] || { echo "FAIL: selector was not replaced from the $VERSION shell wrapper" >&2; exit 1; }
+printf '%s\n' 'PASS: beta.6 bridge refreshes the updater and the current transaction self-heals selector drift with manifest-matching payload bytes'

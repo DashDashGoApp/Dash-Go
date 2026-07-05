@@ -2,103 +2,35 @@
 
 This changelog records stable Dash-Go milestones. During an active development cycle, concise beta notes may remain for release review; they are consolidated into one stable section at promotion so the file remains useful as a product history rather than a release-by-release development journal.
 
-## [1.5.8-beta.9] — 2026-07-04
+## [1.5.8] — 2026-07-04
 
-### Installer reliability and first-boot guardrails
+### Calendar access and guided private accounts
 
-- Added bounded, user-visible retry handling for verified release downloads and installer/private-calendar APT work, including clear background-maintenance lock guidance without widening Dashboard Control’s scoped sudo permissions.
-- Added a pre-commit update storage check that reserves room for the staged payload and rollback snapshot before any live dashboard file is replaced.
-- Expanded interactive preflight with memory guidance tuned for Lite-class devices, home/dashboard write probes for read-only storage, and time-zone visibility. UTC/unset systems can now set an explicit validated IANA time zone during setup; Dash-Go never guesses one silently.
-- Added an interactive setup lock and sudo keep-alive so a second installer window cannot race the first and a long first install does not fail on an expired sudo timestamp.
-- Hardened the deliberate X11/LightDM/Openbox kiosk policy for Trixie-era systems: `greetd` is disabled alongside competing display managers, active Wayland state is named plainly, LightDM’s recorded/enabled postcondition is checked, and Doctor reports remaining mismatches.
-- Added clear post-system-stage reboot guidance with an opt-in reboot prompt, plus a local `Ctrl`+`Alt`+`F2` rescue card in the installer and README for black/frozen kiosk recovery.
-- Added regression smoke coverage for download retry, APT lock retry/timeout behavior, pre-commit space refusal, preflight/interaction safeguards, and X11/Wayland diagnostics. Control-PIN behavior is intentionally unchanged in this release.
+- Clarified the calendar setup boundary: read-only iCalendar links remain view-only, while owned Google, iCloud, and compatible CalDAV calendars can use explicitly selected two-way synchronization.
+- Added account-first private calendar setup with discovered calendar names, per-calendar read-only or editable state, first-sync-before-activation, and provider-aware migration guidance.
+- Added Go-native Google OAuth for both computer-browser loopback and kiosk phone/tablet paste-back flows, plus guided iCloud and compatible CalDAV setup with owner-only credentials and draft cleanup.
+- Hardened the vdirsyncer tool ladder with supported package, pipx, isolated Dash-Go virtual-environment, and explicitly approved user-level fallback paths; routine calendar work remains bounded and low priority.
 
-## [1.5.8-beta.8] — 2026-07-04
+### Update integrity, maintenance, and diagnostics
 
-### Release integrity, migration safety, and test enforcement
+- Added managed Debian security maintenance for supported Debian and compatible 64-bit Raspberry Pi OS systems: security-only unattended upgrades, dormant backports pinning, bounded maintenance timers, and Doctor repair coverage without general feature upgrades.
+- Corrected Doctor weather-cache location validation and kiosk duplicate detection so normal Pi launcher trees and healthy current cache schemas are not misreported as faults.
+- Made payload replacement manifest-safe: package-owned selectors are preserved, post-commit and rollback trees are verified, and missing legacy selectors can be reconstructed for every shipped architecture.
+- Added a one-time beta.6 selector-integrity bridge. A device still on `1.5.8-beta.6` can refresh its updater from the verified 1.5.8 bundle before its first ordinary stable update, so selector drift is repaired from the manifest-owned payload.
+- Hardened installer-owned configuration editing: multiline `config.local.js` values are replaced safely, field names are treated literally, explicit JSON/string modes avoid accidental type coercion, and malformed JSON paths refuse silent data loss.
 
-- Extended missing-selector legacy recovery across every shipped target (`amd64`, `386`, `arm64`, `armv7`, and `armv6`) and added all-architecture selector contract coverage.
-- Added the beta.6 selector-integrity updater bridge plus a transaction smoke that proves beta.6 selector drift is replaced by the manifest-owned beta.8 selector before success is reported.
-- Replaced line-regex edits of `config.local.js` with a top-level assignment editor that safely replaces multiline values and treats field names literally.
-- Added explicit `--json-set-string` and `--json-set-json` modes; protected JSON paths now refuse to overwrite a non-object intermediate.
-- Corrected codename-less Debian 12/13 Doctor classification, restored the OAuth display endpoints’ JSON `405` behavior for `HEAD`, and suppress terminal QR output in the loopback OAuth path.
-- Added the required `app/tests/run-all.sh` release gate and GitHub Actions verification workflow for Go, shellcheck, shell smokes, and Node/browser smokes.
+### Installer and kiosk resilience
 
-## [1.5.8-beta.7] — 2026-07-04
+- Added bounded retry behavior for verified release downloads and APT work, including clear package-lock guidance while preserving Dashboard Control’s narrow sudo permissions.
+- Added pre-commit update storage checks, home/dashboard write probes, Lite-aware RAM guidance, and an explicit validated time-zone prompt for UTC or unset systems; Dash-Go never guesses a time zone silently.
+- Prevented duplicate interactive installer runs, kept an approved sudo session alive through longer system work, and added clear reboot guidance after boot-affecting changes.
+- Hardened the deliberate X11/LightDM/Openbox kiosk policy for Trixie-era systems by handling `greetd`, reporting active Wayland mismatches, and verifying LightDM’s configured/enabled state. Wayland kiosk support is not introduced.
+- Added a concise local black/frozen-screen rescue route in the installer and README.
 
-### Installer selector integrity
+### Release assurance
 
-- Stopped the installer from rewriting an existing manifest-managed `bin/dashboard-control-server` selector after a verified payload commit, during ordinary update work, or while restoring a modern rollback target. A package-owned selector now remains byte-for-byte the selector validated by the release manifest.
-- Retained a deliberately narrow legacy fallback for installations that have compatible architecture binaries but no generic selector at all. It creates a selector only when the path is absent and never replaces an existing file.
-- Added an installed-tree manifest verification immediately after every payload commit and before generated-asset/runtime continuation. A changed managed file now triggers transactional rollback instead of a successful update that Doctor later has to block.
-- Added the same manifest verification after rollback, so restored payloads are verified as both generated-asset-valid and manifest-consistent before the kiosk is returned to service.
-- Added source smoke coverage proving selector preservation, missing-only legacy reconstruction, exact live-manifest verification arguments, and rollback verification.
-
-## [1.5.8-beta.6] — 2026-07-04
-
-### Doctor truthfulness and self-healing restraint
-
-- Corrected the Doctor weather-cache location check for the current Go cache schema. Doctor now reads `weather-cache.json` root-level `location` coordinates first, accepts the older nested payload form only as a compatibility fallback, and requires both numeric coordinate fields before reporting a true `0,0` cache. A healthy cache for the configured location is no longer quarantined or repeatedly warned about.
-- Renamed the internal cache finding to the provider-neutral `WEATHER_CACHE_ZERO_LOCATION`; cache protection now describes the actual malformed condition rather than naming one weather provider.
-- Reworked kiosk duplicate detection from raw `pgrep` counting to live, exact Dash-Go candidate validation plus bounded parent-tree classification. The kiosk lock owner is authoritative when valid; a matching wrapper and its lock-owning kiosk child count as one launcher tree.
-- Preserved conservative duplicate handling: only independently rooted live kiosk trees remain a warning, no live kiosk process is terminated automatically, and diagnostic detail is retained for a real conflict.
-- Added regressions for root-versus-legacy weather-cache schema handling, partial/missing cache location fields, and the lock-owner plus wrapper-tree topology observed on the Pi.
-
-## [1.5.8-beta.5] — 2026-07-04
-
-### Managed Debian security maintenance
-
-- Added a shared, deterministic Debian security-maintenance policy for supported Debian and compatible 64-bit Raspberry Pi OS installations. It adds the codename-specific Debian Security archive only when no equivalent source exists, records matching backports as dormant at pin priority 100, and never rewrites user-managed repository entries.
-- Added a security-only `unattended-upgrades` policy that clears stock origins before permitting only the installed codename’s Debian Security archive. Automatic reboot, shutdown installation, unattended dependency/kernel removal, automatic backports installation, and general feature upgrades remain disabled.
-- Scheduled APT list refresh and security installation after the nightly browser restart and before Dash-Go housekeeping, with low CPU and I/O priority. Automatic APT cache cleanup is bounded; normal dashboard work remains outside the maintenance path.
-- Removed the old Pi-kiosk trim conflict that disabled `unattended-upgrades`.
-- Added installer reconciliation on system/package stages and normal updates. Interactive terminal updates can repair the policy immediately; noninteractive Dashboard Control updates remain successful and explicitly defer privileged system repair rather than prompting or broadening privilege.
-- Added Doctor health and repair-plan coverage for supported, unsupported, drifted, failed-timer, and administrator-overridden policies. `~/install.sh --repair --system` restores only Dash-Go-owned APT/systemd files and never runs a general operating-system upgrade.
-- Kept 32-bit Raspbian, nonstandard/unproven archive layouts, later administrator-owned unattended-origin overrides, Raspberry Pi firmware/kernel upgrades, read-only root, and overlayfs outside automatic configuration.
-
-## [1.5.8-beta.4] — 2026-07-04
-
-### Calendar access clarity and reversible private sync
-
-- Renamed installer option 9 to **Read-only calendar link** and option 10 to **Personal calendar sync**, making the provider-write boundary explicit before setup begins.
-- Added a first-install access decision: Google view-only calendars use an iCal/ICS link, Google two-way calendars use secure OAuth, and iCloud or compatible CalDAV calendars can use the same signed-in account in either view-only or two-way mode.
-- Added Calendar Manager switches for exact private calendars. Moving to view-only clears queued writes, saves an owner-only local snapshot, removes writeback eligibility, and regenerates a provider read-only policy. Moving back to two-way sync requires a bounded targeted provider verification before Dashboard edits return.
-- Added provider-aware migration guidance for Google: lock the secure source view-only first, add and verify a read-only link, then stop the old secure source. Dash-Go never guesses matches or silently merges two calendar sources.
-
-
-### Guided private calendar accounts
-
-- Reworked private calendar setup around accounts and discovered calendar names instead of raw provider fields. Google and iCloud credentials are staged privately, calendars are discovered before color/writeback questions, and a successful first sync is required before a new account becomes active.
-- Simplified Google setup to one ordinary instruction: create a Google **Desktop app** OAuth client. The recommended computer-browser route prints a temporary SSH bridge and receives the local callback automatically. The phone/tablet path shows a kiosk QR and truthfully explains the required paste-back address; no ordinary user sees a desktop/web architecture choice.
-- Made Apple iCloud a first-class guided provider with the fixed iCloud CalDAV endpoint, Apple Account email and app-specific-password prompts, per-calendar read-only defaults, clear recovery wording, and no normal server-URL or collection-UUID fields.
-- Added a safer private-calendar tool ladder: reuse healthy managed vdirsyncer, use working pipx, repair/install pipx through supported system repositories when needed, use an isolated Dash-Go virtual-environment fallback, then offer an explicitly approved user-level pip fallback only as a last resort. Unsafe system-pip operations remain forbidden.
-- Hardened every private-calendar retry path: invalid credentials, calendar selections, colors, and duplicate-account choices re-prompt only the affected answer instead of discarding completed authorization. Headless SSH sessions now default to the phone/QR paste-back route, all blocking discovery and first-sync phases are bounded, and cancellation removes staged drafts without touching active calendars.
-- Added provider-aware credential guidance: Google trims and checks pasted credentials without logging them; iCloud trims pasted app-specific passwords, warns when the shape looks wrong, and turns iCloud authorization failures into a clear fresh-app-password or account/2FA next action.
-- Clarified the phone QR route as a short-lived display-only paste-back aid and removed the unused HTTPS/LAN callback path, so setup never suggests an automatic completion mode it cannot offer.
-
-### Friendlier first installation and recovery
-
-- Added a visible preflight before interactive questions: supported device and architecture, normal-user/sudo safety, clock sanity, free space, DNS, and the actual release host. Failed checks now state the corrective action before Dash-Go changes anything.
-- Added an **Express setup** lane that applies safe defaults and asks only for a location and optional PIN. The existing detailed path remains available for intentional customization.
-- Added bounded installer step labels, safer re-prompts for PIN and restore input, clearer destructive-confirmation guidance, an interruption reassurance message, and a final local readiness verification that runs Doctor rather than claiming success when the dashboard is unavailable.
-- Removed installer-authored Python calls. Installer JSON edits, PIN hashing, and both location-search paths now use the shipped Go helper with bounded network behavior and correct international URL encoding.
-- Refined first and later launches: non-US Express installs choose metric defaults, location and menu typos stay on the current question, installed devices describe the recommended lane as an update, Custom mode summarizes selected tasks before running them, and final access notes distinguish localhost-only service from an intentionally enabled LAN listener.
-- Added an explicit, reversible Pi display-configuration helper with backup and black-screen recovery instructions; Express never applies it silently.
-- Hardened menu and Custom-session recovery: harmless typos re-prompt, every interactive restart preserves original launcher arguments, and the defensive dispatcher returns safely to the menu instead of ending the installer.
-
-### Installer order and supported-platform policy
-
-- Put the installer’s Help & Admin and Remove actions in one consecutive 18–25 sequence, with **Remove Dash-Go** directly above **Exit installer**. Menu dispatch, recovery wording, and tests now use the same canonical numbers.
-- Defined Bookworm as supported and Trixie as recommended for new Dash-Go kiosks. Fresh installation blocks Bullseye and older before system changes, while Doctor can still provide safe maintenance guidance.
-- Added required kiosk-package candidate checks before session/autologin provisioning. Missing required packages now stop safely with one concrete next action; optional helpers remain optional.
-- Retired Dash-Go’s FKMS display rewrite. The Pi display helper now reports the detected configuration and can make an owner-only backup for manual troubleshooting without changing KMS settings.
-
-### Calendar management hierarchy
-
-- Promoted **Manage calendars** to the first open action on the Calendars tab and retired the standalone Calendar Visibility card.
-- Calendar rows now combine shown/hidden state, provider source, view-only/two-way access, and health in one place. Selected private calendars receive the same direct visibility control.
-- Added a compact **Calendar visibility** Quick Action for rapid show/hide changes. It shares the Manager’s underlying state and explicitly does not change synchronization or provider access.
+- Added a required local/CI source gate covering Go module/vet/test/build work, formatting, ShellCheck, shell smokes, and Node/browser smokes, with a GitHub Actions verification workflow.
+- Added regression coverage for selector recovery on all shipped architectures, beta.6 migration, update rollback, OAuth route behavior, Debian platform fallback, installer guardrails, and release identity/cache-buster consistency.
 
 ## [1.5.7] — 2026-07-03
 

@@ -4,7 +4,7 @@
 
 ## Current stable release
 
-- **Version:** `1.5.7`
+- **Version:** `1.5.8`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
 - **Promotion status:** stable source handoff ready for local-builder validation and GitHub publication.
@@ -12,21 +12,13 @@
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
 
-## Current beta source handoff
+## 1.5.8 stable scope
 
-- **Version:** `1.5.8-beta.9`
-- **Track:** beta
-- **Minimum upgrade version:** `1.4.0`
-- **Scope:** Installer fool-proofing and Trixie/X11 kiosk enforcement on top of the beta-series integrity work: bounded download and APT-lock retries, pre-commit storage checks, RAM/filesystem/time-zone preflight clarity, safe sudo/session concurrency handling, opt-in reboot clarity, and local black-screen rescue instructions. Dash-Go remains deliberately X11/LightDM/Openbox-based; Doctor now names an active Wayland or `greetd` mismatch rather than implying Wayland support.
-- **beta.6 migration:** a verified beta.9 release bundle provides `./install.sh --bootstrap-selector-integrity` for a device still on beta.6. It atomically refreshes `~/install.sh`, verifies the copied installer, and launches the corrected beta updater so a drifted beta.6 selector is replaced from the manifest-owned payload. The full source gate includes an explicit beta.6 transaction rehearsal.
+- **Calendar access:** Calendar Manager now makes the view-only/two-way boundary explicit. Guided Google OAuth, iCloud, and compatible CalDAV accounts discover exact calendars before activation and retain owner-only credentials outside the webroot.
+- **Update safety:** package-owned selectors remain manifest-owned, updates and rollbacks verify their installed payloads, all shipped architectures have missing-selector legacy recovery, and a one-time bridge repairs a beta.6 updater before its first stable update when needed.
+- **Maintenance and Doctor:** supported Debian-family systems can receive narrowly scoped security maintenance; Doctor recognizes the current weather-cache schema and legitimate kiosk process trees while naming actual display-manager/Wayland mismatches.
+- **Installer resilience:** verified download/APT retries, pre-commit storage checks, writable-filesystem/RAM/time-zone readiness, sudo/session locking, X11/LightDM enforcement, and clear reboot/rescue guidance reduce first-boot and update failure modes. Dash-Go remains deliberately X11/LightDM/Openbox based.
 - **Validation boundary:** `app/tests/run-all.sh` is the required local/CI source gate: it runs formatting, Go module/vet/test checks, shellcheck, all shell smokes, and all Node/browser smokes. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
-
-## 1.5.7 stable scope
-
-- **Recurrence safety:** series time edits now preserve EXDATE occurrence identity when a UTC-form DTSTART crosses UTC midnight. Explicit TZID/DST and floating-time coverage protects the corresponding local-time paths.
-- **Final-delete synchronization safety:** the one-run empty-collection override is armed only after a verified final local-event delete. Its exact source, pair, and collection authorization is persisted for one bounded automatic retry across a failed targeted run or server restart, revalidated against the still-empty collection before use, and cleared by a later non-final mutation or successful sync.
-- **Truthful sync status:** a zero-exit provider authorization skip or unrecognized wrapper result is shown as attention rather than a false synchronized result.
-- **Deliberate scope boundary:** legacy pair-less queue coalescing, update-version recovery hardening, version-grammar alignment, and update-preflight I/O caching remain follow-up review items rather than unverified changes in this focused release.
 
 ## 1.5.6 stable highlights
 

@@ -8,6 +8,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 INSTALLER="${1:-${DASHGO_INSTALLER_UNDER_TEST:-$ROOT/../installer/install.sh}}"
 [ -f "$INSTALLER" ] || { echo "FAIL: installer not found: $INSTALLER" >&2; exit 1; }
 bash -n "$INSTALLER"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
@@ -83,7 +84,7 @@ awk '
 source "$TMP/manifest-helper.sh"
 DASH="$TMP/manifest-dashboard"
 mkdir -p "$DASH/bin"
-printf '{"version":"1.5.8-beta.9","files":[]}' > "$DASH/manifest.json"
+printf '{"version":"%s","files":[]}' "$VERSION" > "$DASH/manifest.json"
 cat > "$TMP/manifest-verifier" <<'VERIFY'
 #!/usr/bin/env bash
 printf '%s\n' "$*" > "${MANIFEST_TEST_LOG:?}"
@@ -92,8 +93,8 @@ VERIFY
 chmod +x "$TMP/manifest-verifier"
 warn(){ printf '%s\n' "$*" >> "$TMP/warnings"; }
 release_server_for_host(){ printf '%s\n' "$TMP/manifest-verifier"; }
-MANIFEST_TEST_LOG="$TMP/manifest-log" verify_installed_release_manifest '1.5.8-beta.9'
-for token in '--verify-release-manifest' '--manifest' "$DASH/manifest.json" '--root' "$DASH" '--version' '1.5.8-beta.9' '--target-bin' 'bin/dashboard-control-server-linux-'; do
+MANIFEST_TEST_LOG="$TMP/manifest-log" verify_installed_release_manifest "$VERSION"
+for token in '--verify-release-manifest' '--manifest' "$DASH/manifest.json" '--root' "$DASH" '--version' "$VERSION" '--target-bin' 'bin/dashboard-control-server-linux-'; do
   grep -Fq -- "$token" "$TMP/manifest-log" || { echo "FAIL: installed manifest verifier omitted $token" >&2; exit 1; }
 done
 

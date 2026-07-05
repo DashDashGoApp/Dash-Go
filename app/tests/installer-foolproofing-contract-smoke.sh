@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source-level contract for beta.9 first-install reliability guardrails.
+# Source-level contract for 1.5.8 first-install reliability guardrails.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALLER="$ROOT/../installer/install.sh"
@@ -22,7 +22,7 @@ need '/etc/X11/default-display-manager' "$DOCTOR"
 need 'Local rescue for a black or frozen screen' "$README"
 need 'Ctrl`+`Alt`+`F2' "$README"
 if grep -Fq 'Forgot the PIN?' "$INSTALLER" "$ROOT/bin/dashboard-terminal.sh" "$README"; then
-  echo 'FAIL: beta.9 unexpectedly added a forgotten-PIN recovery route' >&2
+  echo 'FAIL: 1.5.8 unexpectedly added a forgotten-PIN recovery route' >&2
   exit 1
 fi
-echo 'PASS: beta.9 fool-proofing contracts are present and Control-PIN recovery behavior is unchanged'
+echo 'PASS: 1.5.8 fool-proofing contracts are present and Control-PIN recovery behavior is unchanged'

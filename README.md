@@ -110,7 +110,7 @@ Set the official repository path and the release version you want to install:
 
 ```bash
 REPOSITORY="DashDashGoApp/Dash-Go"
-VERSION="1.5.7"
+VERSION="1.5.8"
 TAG="v${VERSION}"
 ARCHIVE="Dash-Go_${VERSION}_release.tar.gz"
 RELEASE_BASE="https://github.com/${REPOSITORY}/releases/download/${TAG}"
@@ -134,7 +134,7 @@ sha256sum --ignore-missing --check SHA256SUMS
 A successful check reports:
 
 ```text
-Dash-Go_1.5.7_release.tar.gz: OK
+Dash-Go_1.5.8_release.tar.gz: OK
 ```
 
 Do not continue if checksum verification fails.
