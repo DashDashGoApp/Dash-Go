@@ -96,6 +96,10 @@ func (a *app) httpRoutes() *http.ServeMux {
 	// the owner-local setup terminal. The kiosk display remains loopback-only.
 	mux.HandleFunc("GET /api/oauth-display", a.requireLoopback(a.handleOAuthDisplayMetadata))
 	mux.HandleFunc("GET /api/oauth-display/qr.png", a.requireLoopback(a.handleOAuthDisplayQR))
+	// ServeMux otherwise maps HEAD to GET patterns. Keep the API's explicit
+	// JSON 405 contract for display endpoints as well.
+	mux.HandleFunc("HEAD /api/oauth-display", a.requireLoopback(a.handleAPIMethodNotAllowed))
+	mux.HandleFunc("HEAD /api/oauth-display/qr.png", a.requireLoopback(a.handleAPIMethodNotAllowed))
 	// The generic API path keeps Dash-Go's JSON 405 behavior without a method
 	// pattern that conflicts with the two narrower GET-only display endpoints.
 	mux.HandleFunc("/api/", a.requireLoopback(a.handleAPIRoute))

@@ -90,3 +90,16 @@ func TestGoogleOAuthDisplayExpiresAndNeverPublishesCallback(t *testing.T) {
 		t.Fatalf("public callback status=%d, want 404", callback.Code)
 	}
 }
+
+func TestGoogleOAuthDisplayRoutesRejectHEAD(t *testing.T) {
+	a := &app{}
+	for _, path := range []string{"/api/oauth-display", "/api/oauth-display/qr.png"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodHead, path, nil)
+		request.RemoteAddr = "127.0.0.1:10004"
+		a.handle(recorder, request)
+		if recorder.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("HEAD %s status=%d, want %d", path, recorder.Code, http.StatusMethodNotAllowed)
+		}
+	}
+}

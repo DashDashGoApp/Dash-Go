@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -39,12 +38,38 @@ func (a *app) runPinHashCLI(args []string) int {
 	return 0
 }
 
+type jsonSetValueMode uint8
+
+const (
+	jsonSetAuto jsonSetValueMode = iota
+	jsonSetString
+	jsonSetJSON
+)
+
+// parseCLIValue preserves the legacy --json-set behavior. New installer-owned
+// calls use explicit string or JSON modes so text such as "0420", "true", or
+// "null" cannot silently change type.
 func parseCLIValue(raw string) any {
 	var value any
 	if json.Unmarshal([]byte(raw), &value) == nil {
 		return value
 	}
 	return raw
+}
+
+func parseJSONSetValue(raw string, mode jsonSetValueMode) (any, error) {
+	switch mode {
+	case jsonSetString:
+		return raw, nil
+	case jsonSetJSON:
+		var value any
+		if err := json.Unmarshal([]byte(raw), &value); err != nil {
+			return nil, fmt.Errorf("VALUE must be valid JSON for --json-set-json: %w", err)
+		}
+		return value, nil
+	default:
+		return parseCLIValue(raw), nil
+	}
 }
 
 func jsonObjectFile(path string) (map[string]any, error) {
@@ -73,10 +98,16 @@ func jsonSetPath(root map[string]any, dotted string, value any) error {
 	}
 	current := root
 	for _, part := range parts[:len(parts)-1] {
-		child, ok := current[part].(map[string]any)
-		if !ok {
-			child = map[string]any{}
+		value, exists := current[part]
+		if !exists {
+			child := map[string]any{}
 			current[part] = child
+			current = child
+			continue
+		}
+		child, ok := value.(map[string]any)
+		if !ok {
+			return fmt.Errorf("field %q is not an object; refusing to overwrite it", part)
 		}
 		current = child
 	}
@@ -84,14 +115,18 @@ func jsonSetPath(root map[string]any, dotted string, value any) error {
 	return nil
 }
 
-func (a *app) runJSONSetCLI(args []string) int {
+func (a *app) runJSONSetModeCLI(args []string, mode jsonSetValueMode, usage string) int {
 	if len(args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: --json-set FILE FIELD VALUE")
+		fmt.Fprintf(os.Stderr, "usage: %s FILE FIELD VALUE\n", usage)
 		return 64
 	}
 	root, err := jsonObjectFile(args[0])
 	if err == nil {
-		err = jsonSetPath(root, args[1], parseCLIValue(args[2]))
+		var value any
+		value, err = parseJSONSetValue(args[2], mode)
+		if err == nil {
+			err = jsonSetPath(root, args[1], value)
+		}
 	}
 	if err == nil {
 		err = fileio.WriteJSON(args[0], root)
@@ -101,6 +136,21 @@ func (a *app) runJSONSetCLI(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// runJSONSetCLI remains for compatibility with existing external scripts.
+// Prefer --json-set-string for user-entered text and --json-set-json for
+// deliberate structured values.
+func (a *app) runJSONSetCLI(args []string) int {
+	return a.runJSONSetModeCLI(args, jsonSetAuto, "--json-set")
+}
+
+func (a *app) runJSONSetStringCLI(args []string) int {
+	return a.runJSONSetModeCLI(args, jsonSetString, "--json-set-string")
+}
+
+func (a *app) runJSONSetJSONCLI(args []string) int {
+	return a.runJSONSetModeCLI(args, jsonSetJSON, "--json-set-json")
 }
 
 func (a *app) runInstallerTodoSettingsCLI(args []string) int {
@@ -152,9 +202,10 @@ func removeConfigLocalLines(path string, keys ...string) error {
 	if err != nil {
 		return err
 	}
-	pattern := `(?m)^\s*(?:` + strings.Join(keys, "|") + `)\s*:\s*.*?,?\s*\n`
-	re := regexp.MustCompile(pattern)
-	updated := re.ReplaceAll(body, nil)
+	updated, err := removeConfigLocalFields(body, keys...)
+	if err != nil {
+		return fmt.Errorf("refusing to edit config.local.js: %w", err)
+	}
 	if string(updated) == string(body) {
 		return nil
 	}

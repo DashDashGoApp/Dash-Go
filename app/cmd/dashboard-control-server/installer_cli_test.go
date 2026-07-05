@@ -126,3 +126,37 @@ func TestInstallerNormalizeAppVisibilityCLI(t *testing.T) {
 		t.Fatalf("unexpected config cleanup result: %s", config)
 	}
 }
+
+func TestJSONSetStringCLIPreservesJSONLookingText(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var a app
+	if code := a.runJSONSetStringCLI([]string{path, "identity.code", "0420"}); code != 0 {
+		t.Fatalf("runJSONSetStringCLI returned %d", code)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	identity, ok := got["identity"].(map[string]any)
+	if !ok || identity["code"] != "0420" {
+		t.Fatalf("string mode retyped a JSON-looking value: %#v", got)
+	}
+}
+
+func TestJSONSetPathRefusesNonObjectIntermediate(t *testing.T) {
+	root := map[string]any{"todo": "legacy-string"}
+	if err := jsonSetPath(root, "todo.syncMode", "local"); err == nil {
+		t.Fatalf("jsonSetPath overwrote a non-object intermediate: %#v", root)
+	}
+	if root["todo"] != "legacy-string" {
+		t.Fatalf("jsonSetPath changed the protected intermediate: %#v", root)
+	}
+}

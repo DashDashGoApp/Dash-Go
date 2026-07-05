@@ -190,6 +190,14 @@ vdirsyncer_version(){
 }
 vdirsyncer_is_pinned(){ [ "$(vdirsyncer_version 2>/dev/null || true)" = "$VDIRSYNCER_VERSION" ]; }
 pipx_run(){ PIPX_HOME="$VDIR_PIPX_HOME" PIPX_BIN_DIR="$VDIR_PIPX_BIN" pipx "$@"; }
+# This helper may run directly from the private-calendar wizard, outside the
+# main installer's sudo keepalive. APT still waits a bounded time for scheduled
+# maintenance instead of immediately failing with a raw dpkg lock message.
+apt_with_lock_wait(){
+  local timeout="${DASHGO_APT_LOCK_TIMEOUT_SECONDS:-180}"
+  case "$timeout" in ''|*[!0-9]*) timeout=180;; esac
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=$timeout" "$@"
+}
 pipx_works(){ have pipx && pipx_run --version >/dev/null 2>&1; }
 python_venv_works(){ have python3 && python3 -c 'import venv' >/dev/null 2>&1; }
 python_pip_works(){ have python3 && python3 -m pip --version >/dev/null 2>&1; }
@@ -197,7 +205,7 @@ install_pipx_apt(){
   have apt-get || return 1
   have sudo || { warn "sudo is required to install the missing private-calendar tools"; return 1; }
   echo "  Installing pipx and Python virtual-environment support from this device's normal supported repositories."
-  sudo apt-get update && sudo apt-get install -y pipx python3-venv || return 1
+  apt_with_lock_wait update && apt_with_lock_wait install -y pipx python3-venv || return 1
   pipx_works
 }
 offer_optional_qrencode(){
@@ -211,7 +219,7 @@ offer_optional_qrencode(){
   case "${answer:-y}" in
     n|N|no|NO) echo "  QR setup will still work by showing a link to type on your phone."; return 0;;
   esac
-  if sudo apt-get install -y qrencode; then
+  if apt_with_lock_wait install -y qrencode; then
     ok "optional QR helper installed"
   else
     warn "qrencode could not be installed. Google setup will show a link to type on your phone instead."
@@ -1165,8 +1173,12 @@ private_connect_account(){
     printf '%s\n' "$PRIVATE_CONNECTION_REF|blue||connect_$PRIVATE_CONNECTION_REF|$PRIVATE_DRAFT/collections/$PRIVATE_CONNECTION_REF||||google|$PRIVATE_CLIENT_ID|$PRIVATE_LABEL|$PRIVATE_CONNECTION_REF|" > "$PRIVATE_DRAFT/pairs"
     chmod 600 "$PRIVATE_DRAFT/pairs"
     say "Step 3 of 4 — Sign in to Google"
-    local oauth_args=(--google-oauth authorize -client-id "$PRIVATE_CLIENT_ID" -client-secret-file "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret" -token-file "$PRIVATE_DRAFT/google-tokens/$PRIVATE_CONNECTION_REF.json" -qr)
-    if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then oauth_args+=(-loopback); else oauth_args+=(-display-dir "$OAUTH_DISPLAY_DIR"); fi
+    local oauth_args=(--google-oauth authorize -client-id "$PRIVATE_CLIENT_ID" -client-secret-file "$PRIVATE_DRAFT/passwords/$PRIVATE_CONNECTION_REF.google-client-secret" -token-file "$PRIVATE_DRAFT/google-tokens/$PRIVATE_CONNECTION_REF.json")
+    if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then
+      oauth_args+=(-loopback)
+    else
+      oauth_args+=(-qr -display-dir "$OAUTH_DISPLAY_DIR")
+    fi
     [ -x "$CONTROL_SERVER_BIN" ] || { warn "dashboard control server is unavailable; no calendars were added. Re-run $BIN_DIR/setup-vdirsyncer.sh after Dashboard Control is repaired."; private_remove_draft; return 1; }
     "$CONTROL_SERVER_BIN" "${oauth_args[@]}" || { rc=$?; warn "Google sign-in did not complete. No calendars were added. Re-run $BIN_DIR/setup-vdirsyncer.sh --authorize when ready."; private_remove_draft; return "$rc"; }
     PRIVATE_URL=""; PRIVATE_USERNAME=""; label="Google Calendar"
@@ -1203,8 +1215,12 @@ private_google_authorize_saved_ref(){
   echo "Reconnect Google Calendar: $credential_ref"
   echo "Google requires the consent screen to remain In production for reliable unattended calendar sync."
   private_google_signin_mode_prompt || return $?
-  args=(--google-oauth authorize -client-id "$client_id" -client-secret-file "$VDIR_PASSWORDS/$credential_ref.google-client-secret" -token-file "$GOOGLE_TOKENS/$credential_ref.json" -qr)
-  if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then args+=(-loopback); else args+=(-display-dir "$OAUTH_DISPLAY_DIR"); fi
+  args=(--google-oauth authorize -client-id "$client_id" -client-secret-file "$VDIR_PASSWORDS/$credential_ref.google-client-secret" -token-file "$GOOGLE_TOKENS/$credential_ref.json")
+  if [ "$PRIVATE_GOOGLE_MODE" = loopback ]; then
+    args+=(-loopback)
+  else
+    args+=(-qr -display-dir "$OAUTH_DISPLAY_DIR")
+  fi
   [ -x "$CONTROL_SERVER_BIN" ] || { warn "dashboard control server is unavailable; '$credential_ref' was not changed. Repair Dashboard Control, then try again."; return 1; }
   "$CONTROL_SERVER_BIN" "${args[@]}" || { rc=$?; return "$rc"; }
 }

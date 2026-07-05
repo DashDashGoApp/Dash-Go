@@ -20,7 +20,7 @@ if grep -Fq '[ -n "${DASH_UPDATE_JOB_ID:-}" ||' "$INSTALLER"; then
 fi
 require 'A newer selected release was confirmed' "$INSTALLER"
 require 'Installed version is newer' "$INSTALLER"
-require 'Private calendar setup will verify the selected provider' "$INSTALLER"
+require 'Dash-Go will use a secure sign-in. Choose view-only or two-way sync for each selected iCloud or CalDAV calendar.' "$INSTALLER"
 require 'pre.canStart' "$UPDATES"
 require 'r&&r.noUpdate===true' "$UPDATES"
 require 'Installed version is newer' "$UPDATES"

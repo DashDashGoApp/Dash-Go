@@ -301,7 +301,7 @@ updater_capability_query_is_safe(){
   version_at_least "$(installed_dashboard_version)" "$UPDATER_CAPABILITY_FLOOR"
 }
 updater_capability_for_feature(){
-  case "${1:-}" in
+case "${1:-}" in
     --verify-release-manifest) printf '%s\n' release-manifest-v1;;
     --release-file-list) printf '%s\n' release-file-list-v1;;
     --purge-stale-managed) printf '%s\n' stale-source-purge-v1;;
@@ -454,6 +454,7 @@ update_job_reservation_is_active(){
 UPDATE_MODE=0
 UPDATE_ROLLBACK_ONLY=0
 UPDATE_ROLLBACK_STAGE=""
+SELECTOR_INTEGRITY_BOOTSTRAP=0
 UPDATE_PREVIOUS_VERSION=""
 DASH_UPDATE_RUNTIME_ROLLBACK="${DASH_UPDATE_RUNTIME_ROLLBACK:-0}"
 DASH_UPDATE_PAUSE_OWNED="${DASH_UPDATE_PAUSE_OWNED:-0}"
@@ -498,6 +499,80 @@ INSTALLER_STAGE_TOTAL=0
 INSTALLER_INTERRUPTED=0
 INTERACTIVE_INSTALLER=0
 INSTALLER_STAGE_NAMES=()
+# Reliability controls are deliberately independent of Control PIN behavior.
+# They protect setup work without changing dashboard-access policy.
+INTERACTIVE_INSTALL_LOCK_HELD=0
+SUDO_KEEPALIVE_PID=""
+SYSTEM_REBOOT_RECOMMENDED=0
+
+mark_reboot_recommended(){ SYSTEM_REBOOT_RECOMMENDED=1; }
+
+stop_sudo_keepalive(){
+  if [ -n "${SUDO_KEEPALIVE_PID:-}" ]; then
+    kill "$SUDO_KEEPALIVE_PID" >/dev/null 2>&1 || true
+    wait "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+    SUDO_KEEPALIVE_PID=""
+  fi
+  return 0
+}
+
+start_sudo_keepalive(){
+  local parent_pid
+  if [ -n "${SUDO_KEEPALIVE_PID:-}" ] && kill -0 "$SUDO_KEEPALIVE_PID" 2>/dev/null; then
+    return 0
+  fi
+  SUDO_KEEPALIVE_PID=""
+  if ! $SUDO -v; then
+    warn "Dash-Go needs administrator permission for the selected system steps. Enter your password when prompted, then run ~/install.sh again."
+    return 1
+  fi
+  parent_pid="$$"
+  (
+    while kill -0 "$parent_pid" 2>/dev/null; do
+      sleep 50
+      $SUDO -n -v >/dev/null 2>&1 || exit 0
+    done
+  ) &
+  SUDO_KEEPALIVE_PID="$!"
+  return 0
+}
+
+interactive_run_needs_sudo(){
+  [ "${DO_SYSTEM:-0}" = "1" ] || [ "${DO_PKGS:-0}" = "1" ] || [ "${DO_SERVICE:-0}" = "1" ] || \
+    [ "${DO_AUTOLOGIN:-0}" = "1" ] || [ "${DO_AUTOSTART:-0}" = "1" ] || [ "${DO_SSH:-0}" = "1" ]
+}
+
+acquire_interactive_installer_lock(){
+  local lock_file
+  [ "$INTERACTIVE_INSTALL_LOCK_HELD" = "1" ] && return 0
+  command -v flock >/dev/null 2>&1 || { warn "This system is missing flock, so Dash-Go cannot safely prevent two setup windows from changing the same dashboard."; return 1; }
+  mkdir -p "$DASHGO_STATE_DIR" 2>/dev/null || { warn "Could not create Dash-Go's setup lock folder: $DASHGO_STATE_DIR"; return 1; }
+  lock_file="$DASHGO_STATE_DIR/install.lock"
+  # FD 7 stays open for this installer and is released automatically at exit.
+  exec 7>"$lock_file" || { warn "Could not open Dash-Go's setup lock: $lock_file"; return 1; }
+  if ! flock -n 7; then
+    warn "Another Dash-Go setup is already running in this account. Let it finish, or close the other window, then try again."
+    return 1
+  fi
+  INTERACTIVE_INSTALL_LOCK_HELD=1
+  return 0
+}
+
+offer_reboot_after_system_changes(){
+  local answer
+  [ "$SYSTEM_REBOOT_RECOMMENDED" = "1" ] || return 0
+  echo
+  ok "Setup is complete. The kiosk starts on the next boot."
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    echo "   Reboot later with: sudo reboot"
+    return 0
+  fi
+  read -r -p "Reboot now to launch the dashboard? [Y/n] " answer || answer=n
+  case "${answer:-y}" in
+    y|Y|yes|YES) $SUDO reboot || { warn "Could not start a reboot. Reboot later with: sudo reboot"; return 1; } ;;
+    *) echo "   Reboot later with: sudo reboot" ;;
+  esac
+}
 
 installer_build_stage_plan(){
   INSTALLER_STAGE_NAMES=()
@@ -536,6 +611,7 @@ installer_interrupt(){
 installer_exit_summary(){
   local code=$?
   trap - EXIT
+  stop_sudo_keepalive
   if [ "$INTERACTIVE_INSTALLER" = "1" ] && [ "$code" -ne 0 ] && [ "$INSTALLER_INTERRUPTED" != "1" ]; then
     warn "Install stopped at ${INSTALLER_STAGE}. Existing settings were preserved where possible; run ~/install.sh again to resume or choose a smaller repair action."
   fi
@@ -631,9 +707,37 @@ show_local_release_bundle_info(){
   printf 'Dash-Go local release bundle\nVersion: %s\nTrack: %s\nPayload: validated app tree present\n' "$version" "$track"
 }
 
+# beta.6's standalone updater predates selector-integrity protection and can
+# rewrite a manifest-owned selector after a successful payload transaction.
+# This one-time bridge copies the reviewed current installer to ~/install.sh,
+# then immediately runs the beta update through the corrected updater. It is
+# intentionally local-only: it never downloads or accepts a different script.
+bootstrap_selector_integrity_updater(){
+  local source="$INSTALLER_SOURCE_DIR/install.sh" target="$INSTALLER" tmp track
+  [ -r "$source" ] || { echo "ERROR: selector-integrity bootstrap must run from an extracted Dash-Go release bundle" >&2; return 1; }
+  track="$(bundle_release_track 2>/dev/null || true)"
+  case "$track" in
+    beta|stable) ;;
+    *) echo "ERROR: selector-integrity bootstrap requires a release bundle with a valid beta or stable track" >&2; return 1 ;;
+  esac
+  mkdir -p "$(dirname "$target")" || return 1
+  tmp="${target}.selector-integrity.tmp.$$"
+  (umask 077; cp "$source" "$tmp") || { rm -f "$tmp"; return 1; }
+  chmod 700 "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+  cmp -s "$source" "$target" || { echo "ERROR: selector-integrity bootstrap could not verify $target" >&2; return 1; }
+  ok "Selector-integrity updater bridge installed at $target"
+  if [ "${DASHGO_SELECTOR_BRIDGE_DRY_RUN:-0}" = 1 ]; then
+    return 0
+  fi
+  echo "Starting the corrected $track updater."
+  exec "$target" --update --track "$track"
+}
+
 case "${1:-}" in
   help|--help|-h) HELP_MODE=1;;
   --bundle-info) BUNDLE_INFO_MODE=1;;
+  --bootstrap-selector-integrity) SELECTOR_INTEGRITY_BOOTSTRAP=1;;
   update|--update) UPDATE_MODE=1;;
   repair|--repair|--repair-install) REPAIR_MODE=1;;
   --rollback-update) UPDATE_ROLLBACK_ONLY=1; UPDATE_ROLLBACK_STAGE="${2:-}"; shift || true;;
@@ -681,6 +785,11 @@ fi
 
 if [ "$BUNDLE_INFO_MODE" = "1" ]; then
   show_local_release_bundle_info
+  exit $?
+fi
+
+if [ "$SELECTOR_INTEGRITY_BOOTSTRAP" = "1" ]; then
+  bootstrap_selector_integrity_updater
   exit $?
 fi
 
@@ -921,6 +1030,8 @@ Update, repair, and health commands:
   ./install.sh --doctor                Quiet scan, then offer Fix all
   ./install.sh --doctor --full         Detailed scan with individual fixes
   ./install.sh --bundle-info           Inspect this extracted local release bundle; changes nothing
+  ./install.sh --bootstrap-selector-integrity
+                                       One-time beta.6 updater bridge from a verified local release bundle
 
 Removal commands:
   ./install.sh --remove                Offline Dash-Go uninstall (interactive)
@@ -990,6 +1101,24 @@ if [ "$UPDATE_MODE" != "1" ] && [ "$REPAIR_MODE" != "1" ] && [ "$DOCTOR_MODE" !=
   exit 1
 fi
 SUDO="sudo"
+
+# APT can legitimately be busy with Debian's own scheduled maintenance. Use a
+# bounded lock wait for installer-owned package work so a novice sees one clear
+# retry message rather than a raw dpkg lock failure. Dashboard Control keeps
+# its pre-existing exact sudoers command shape in dashboard-system-update.sh.
+APT_LOCK_TIMEOUT_SECONDS="${DASHGO_APT_LOCK_TIMEOUT_SECONDS:-180}"
+apt_managed_as(){
+  local apt_sudo="$1" rc
+  shift
+  case "$APT_LOCK_TIMEOUT_SECONDS" in ''|*[!0-9]*) APT_LOCK_TIMEOUT_SECONDS=180;; esac
+  if "$apt_sudo" env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=$APT_LOCK_TIMEOUT_SECONDS" "$@"; then
+    return 0
+  fi
+  rc=$?
+  warn "APT could not finish after waiting ${APT_LOCK_TIMEOUT_SECONDS} seconds for background system updates. Try again in a few minutes."
+  return "$rc"
+}
+apt_managed(){ apt_managed_as "$SUDO" "$@"; }
 
 # --- Platform detection -------------------------------------------------
 # The dashboard app itself is portable, but the appliance setup has a few
@@ -1361,24 +1490,41 @@ preseed_lightdm_default(){
     printf 'lightdm shared/default-x-display-manager select lightdm\n' | $SUDO debconf-set-selections 2>/dev/null || true
   fi
 }
+wayland_session_is_active(){
+  [ -n "${WAYLAND_DISPLAY:-}" ] && return 0
+  command -v pgrep >/dev/null 2>&1 && { pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1 || pgrep -x sway >/dev/null 2>&1; }
+}
+
 ensure_lightdm_default(){
+  local dm default_dm=""
   if [ ! -x /usr/sbin/lightdm ] && ! command -v lightdm >/dev/null 2>&1; then
     warn "LightDM is not installed yet; cannot set it as the default display manager"
     return 0
   fi
+  if wayland_session_is_active; then
+    warn "This device is currently running a Wayland desktop. Dash-Go's kiosk uses X11/LightDM and will take over on the next reboot."
+  fi
   preseed_lightdm_default
   if [ -d /etc/X11 ]; then
-    echo '/usr/sbin/lightdm' | $SUDO tee /etc/X11/default-display-manager >/dev/null
+    echo '/usr/sbin/lightdm' | $SUDO tee /etc/X11/default-display-manager >/dev/null || return 1
   fi
   $SUDO systemctl set-default graphical.target >/dev/null 2>&1 || true
   $SUDO systemctl enable lightdm >/dev/null 2>&1 || true
-  local dm
-  for dm in gdm3 lxdm sddm xdm wdm; do
+  for dm in gdm3 lxdm sddm xdm wdm greetd; do
     if systemctl list-unit-files "${dm}.service" 2>/dev/null | grep -q "^${dm}\.service"; then
       $SUDO systemctl disable "${dm}.service" >/dev/null 2>&1 || true
     fi
   done
-  ok "LightDM selected as the dashboard display manager for next boot"
+  default_dm="$(cat /etc/X11/default-display-manager 2>/dev/null || true)"
+  if [ "$default_dm" != "/usr/sbin/lightdm" ]; then
+    warn "LightDM is not the recorded default display manager yet; run ~/install.sh --repair --system before rebooting."
+    return 1
+  fi
+  if ! systemctl is-enabled lightdm >/dev/null 2>&1; then
+    warn "LightDM could not be enabled for the next boot; run ~/install.sh --repair --system before rebooting."
+    return 1
+  fi
+  ok "LightDM selected as Dash-Go's X11 display manager for next boot"
 }
 bootstrap_detect_platform
 
@@ -1424,8 +1570,61 @@ installer_clock_is_sane(){
   [ "$year" -ge 2024 ] && [ "$year" -le 2100 ]
 }
 
+installer_timezone(){
+  local zone=""
+  if command -v timedatectl >/dev/null 2>&1; then
+    zone="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+  fi
+  [ -n "$zone" ] || zone="$(tr -d '\r\n' < /etc/timezone 2>/dev/null || true)"
+  printf '%s\n' "$zone"
+}
+installer_timezone_needs_attention(){
+  case "${1:-}" in ''|UTC|Etc/UTC) return 0;; esac
+  return 1
+}
+installer_timezone_is_valid(){
+  local zone="$1"
+  case "$zone" in ''|/*|*'..'*|*'//'*) return 1;; esac
+  [ -f "/usr/share/zoneinfo/$zone" ]
+}
+prompt_timezone_if_needed(){
+  local current requested
+  current="$(installer_timezone)"
+  installer_timezone_needs_attention "$current" || return 0
+  echo
+  warn "Time zone is ${current:-unset}. Calendar times and weather use this device setting."
+  if ! command -v timedatectl >/dev/null 2>&1; then
+    warn "This system cannot set a time zone automatically. Set one later with: sudo timedatectl set-timezone Region/City"
+    return 0
+  fi
+  read -r -p "  Time zone (for example America/Chicago; Enter leaves it unchanged): " requested || return 0
+  [ -n "$requested" ] || return 0
+  if ! installer_timezone_is_valid "$requested"; then
+    warn "'$requested' is not a valid IANA time-zone name. Leave it unchanged, then try again with a name such as America/Chicago."
+    return 0
+  fi
+  start_sudo_keepalive || return 1
+  if $SUDO timedatectl set-timezone "$requested"; then
+    ok "Time zone set to $requested"
+  else
+    warn "Could not set the time zone. Try later with: sudo timedatectl set-timezone $requested"
+  fi
+}
+
+installer_writable_probe(){
+  local target="$1" probe
+  [ -d "$target" ] || target="$(dirname "$target")"
+  probe="$target/.dash-go-write-test.$$"
+  if ( umask 077; : > "$probe" && { sync -f "$probe" 2>/dev/null || sync >/dev/null 2>&1; } ); then
+    rm -f "$probe" 2>/dev/null || true
+    return 0
+  fi
+  rm -f "$probe" 2>/dev/null || true
+  return 1
+}
+
 run_startup_preflight(){
-  local failed=0 free_mb year
+  local failed=0 free_mb year mem_mb zone dashboard_probe
   say "Checking your device"
   echo "This quick check runs before setup questions so problems are easy to fix."
 
@@ -1467,6 +1666,39 @@ run_startup_preflight(){
       fi
       ;;
   esac
+
+  mem_mb="$(bootstrap_mem_total_mb)"
+  case "$mem_mb" in ''|*[!0-9]*) mem_mb=0;; esac
+  if [ "$mem_mb" -ge 900 ]; then
+    preflight_item '✓' "RAM: ${mem_mb} MB"
+  elif [ "$mem_mb" -ge 450 ]; then
+    preflight_item '✓' "RAM: ${mem_mb} MB (Lite profile is recommended on lower-memory devices)"
+  elif [ "$mem_mb" -ge 400 ]; then
+    preflight_item '!' "RAM: ${mem_mb} MB" 'below the recommended level; the dashboard may load slowly, and the Lite profile is recommended'
+  else
+    preflight_item '!' "RAM: ${mem_mb} MB" 'very low memory; a Raspberry Pi Zero 2 W or newer is recommended'
+  fi
+
+  if installer_writable_probe "$HOME"; then
+    preflight_item '✓' 'Home folder is writable'
+  else
+    preflight_item '✗' 'Home folder is not writable' 'the SD card or filesystem may be read-only or failing; repair, re-flash, or replace the card, then run ~/install.sh again'
+    failed=1
+  fi
+  dashboard_probe="$DASH"
+  if [ -e "$DASH" ] && ! installer_writable_probe "$dashboard_probe"; then
+    preflight_item '✗' 'Dashboard folder is not writable' 'the SD card or filesystem may be read-only or failing; repair storage, then run ~/install.sh again'
+    failed=1
+  elif [ -e "$DASH" ]; then
+    preflight_item '✓' 'Dashboard folder is writable'
+  fi
+
+  zone="$(installer_timezone)"
+  if installer_timezone_needs_attention "$zone"; then
+    preflight_item '!' "Time zone: ${zone:-unset}" 'calendar times and weather use this setting; setup can help you set it'
+  else
+    preflight_item '✓' "Time zone: $zone"
+  fi
 
   year="$(date +%Y 2>/dev/null || true)"
   if installer_clock_is_sane; then
@@ -1514,13 +1746,29 @@ run_startup_preflight(){
 # update host or send any household credential during this path.
 UA="Dash-Go installer"
 fetch(){
-  local url="$1" out="$2"
+  local url="$1" out="$2" attempt=1 attempts="${DASHGO_FETCH_ATTEMPTS:-3}" delay="${DASHGO_FETCH_RETRY_DELAY:-2}"
   case "$url" in
     https://*) ;;
     *) return 1;;
   esac
-  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-    --connect-timeout 15 --max-time 180 -A "$UA" "$url" -o "$out"
+  case "$attempts" in ''|*[!0-9]*) attempts=3;; esac
+  [ "$attempts" -ge 1 ] || attempts=1
+  case "$delay" in ''|*[!0-9]*) delay=2;; esac
+  while [ "$attempt" -le "$attempts" ]; do
+    if curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+      --retry 1 --retry-delay "$delay" --retry-connrefused --retry-all-errors \
+      --connect-timeout 15 --max-time 180 -A "$UA" "$url" -o "$out"; then
+      return 0
+    fi
+    rm -f "$out" 2>/dev/null || true
+    if [ "$attempt" -lt "$attempts" ]; then
+      warn "Download interrupted; retrying (${attempt}/${attempts})."
+      sleep "$delay"
+    fi
+    attempt=$((attempt + 1))
+  done
+  warn "Download failed after retries. Move closer to Wi-Fi or use Ethernet, then run ~/install.sh again."
+  return 1
 }
 
 # Base dashboard faces are runtime dependencies rather than release payload
@@ -1989,6 +2237,9 @@ if [ "$INSTALLER_ORIGINAL_ARGC" -eq 0 ]; then
   trap 'installer_interrupt' INT TERM
   trap 'installer_exit_summary' EXIT
   run_startup_preflight || exit 1
+  # The preflight write probe should be able to explain read-only storage
+  # before this setup lock attempts its own state-file write.
+  acquire_interactive_installer_lock || exit 1
 fi
 
 say "Dash-Go installer"
@@ -2192,11 +2443,11 @@ TODO_AZURE_CLI_SOURCE
       fi
     fi
 
-    if ! "$todo_sudo" apt-get update; then
+    if ! apt_managed_as "$todo_sudo" update; then
       warn "Could not refresh apt before Azure CLI installation. Any temporary Azure CLI source/key changes were rolled back."
       return 1
     fi
-    if ! "$todo_sudo" apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release; then
+    if ! apt_managed_as "$todo_sudo" install -y apt-transport-https ca-certificates curl gnupg lsb-release; then
       warn "Could not install Azure CLI prerequisites. No Dash-Go settings changed."
       return 1
     fi
@@ -2220,11 +2471,11 @@ TODO_AZURE_CLI_SOURCE
       todo_source_created=1
     fi
 
-    if ! "$todo_sudo" apt-get update; then
+    if ! apt_managed_as "$todo_sudo" update; then
       warn "Could not refresh the Azure CLI package source. The temporary source/key changes were rolled back."
       return 1
     fi
-    if ! "$todo_sudo" apt-get install -y azure-cli; then
+    if ! apt_managed_as "$todo_sudo" install -y azure-cli; then
       warn "Azure CLI installation failed. The temporary source/key changes were rolled back."
       return 1
     fi
@@ -2698,10 +2949,19 @@ release_server_for_host(){
 # from the signed release manifest. This fallback exists solely for a very old
 # installation which has architecture binaries but no generic selector at all.
 ensure_missing_go_selector_wrapper(){
-  local selector="$DASH/bin/dashboard-control-server" tmp
+  local selector="$DASH/bin/dashboard-control-server" tmp arch have_arch_bin=0
   [ -d "$DASH/bin" ] || return 0
   [ -e "$selector" ] && return 0
-  [ -x "$DASH/bin/dashboard-control-server-linux-armv7" ] || [ -x "$DASH/bin/dashboard-control-server-linux-amd64" ] || return 0
+  # Legacy reconstruction is missing-only, but it must recognize every
+  # architecture shipped by the canonical selector. A pre-selector rollback on
+  # arm64, armv6, or 386 must remain bootable just like amd64 and armv7.
+  for arch in amd64 386 arm64 armv7 armv6; do
+    if [ -x "$DASH/bin/dashboard-control-server-linux-$arch" ]; then
+      have_arch_bin=1
+      break
+    fi
+  done
+  [ "$have_arch_bin" = 1 ] || return 0
   tmp="$selector.tmp.$$"
   cat > "$tmp" <<'EOSERVERWRAP'
 #!/usr/bin/env sh
@@ -2907,6 +3167,34 @@ purge_stale_managed_sources(){
   update_cli --purge-stale-managed --root "$root" --manifest "$manifest" --backup "$backup"
 }
 
+update_commit_required_free_mb(){
+  local payload_root="$1" payload_mb required
+  payload_mb="$(du -sm "$payload_root" 2>/dev/null | awk 'NR==1{print $1}')"
+  case "$payload_mb" in ''|*[!0-9]*) payload_mb=0;; esac
+  # Stage, rollback snapshot, and atomic replacement need more room than the
+  # archive alone. Keep a conservative floor for small releases.
+  required=$((payload_mb * 2 + 64))
+  [ "$required" -ge 300 ] || required=300
+  printf '%s\n' "$required"
+}
+
+require_update_commit_space(){
+  local target="$1" payload_root="$2" free_mb required
+  required="$(update_commit_required_free_mb "$payload_root")"
+  free_mb="$(df -Pm "$target" 2>/dev/null | awk 'NR==2{print $4}')"
+  case "$free_mb" in
+    ''|*[!0-9]*)
+      warn "Could not check free space before the update commit. Nothing was changed."
+      return 1
+      ;;
+  esac
+  if [ "$free_mb" -lt "$required" ]; then
+    warn "Not enough free space to update safely (${required} MB needed; ${free_mb} MB available). Free space, then retry. Nothing was changed."
+    return 1
+  fi
+  return 0
+}
+
 install_release_payload(){
   local tarball="$1" version="$2" manifest_src="${3:-}" installer_src="${4:-}" stage extract src backup personal file_list rel failed=0 manifest_file generated_check canonical_installer=""
   mkdir -p "$DASH" "$BIN_DIR" "$CONFIG_DIR" "$CAL_DIR" "$CACHE_DIR" "$LOG_DIR" "$FONT_DIR" "$RUNTIME_FONT_DIR" "$BASE_DIR" || return 1
@@ -2995,6 +3283,10 @@ install_release_payload(){
     validate_download "$rel" "$src/$rel" || { warn "release payload failed validation: $rel"; failed=1; }
   done < "$file_list"
   [ "$failed" = 0 ] || { rm -rf "$stage"; return 1; }
+  if ! require_update_commit_space "$DASH" "$src"; then
+    rm -rf "$stage"
+    return 1
+  fi
   write_update_phase committing "Preparing safe replacement" "The release is verified. Saving current managed files for rollback before any live file is replaced."
   : > "$stage/preexisting-files.txt"
   while IFS= read -r rel; do
@@ -3981,7 +4273,7 @@ configure_security_maintenance(){
     fi
   done
   if [ "$rc" = 0 ]; then
-    if ! $SUDO apt-get update || ! $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades; then
+    if ! apt_managed update || ! apt_managed install -y unattended-upgrades; then
       rc=1
     elif ! $SUDO systemctl daemon-reload || ! $SUDO systemctl enable --now apt-daily.timer apt-daily-upgrade.timer; then
       rc=1
@@ -4146,7 +4438,7 @@ install_runtime_packages(){
 
   # Refresh package metadata once, then prove each required package has a real
   # candidate before changing display-manager, autologin, or kiosk settings.
-  if ! $SUDO apt-get update; then
+  if ! apt_managed update; then
     warn "Could not refresh APT package metadata. No kiosk settings were changed. Check Wi-Fi and APT sources, then run ~/install.sh again."
     return 1
   fi
@@ -4161,7 +4453,7 @@ install_runtime_packages(){
   if echo " $PKGS " | grep -q " lightdm "; then
     preseed_lightdm_default
   fi
-  if ! $SUDO apt-get install -y $PKGS; then
+  if ! apt_managed install -y $PKGS; then
     warn "Required kiosk packages could not be installed. No autologin or kiosk settings were changed. Fix the package error, then run ~/install.sh again."
     return 1
   fi
@@ -4171,6 +4463,7 @@ install_runtime_packages(){
       return 1
     fi
   done
+  mark_reboot_recommended
   ok "required runtime packages installed and verified"
   if echo " $PKGS " | grep -q " lightdm "; then
     ensure_lightdm_default || { warn "LightDM could not be selected after packages installed. Run ~/install.sh and choose Dashboard service after checking the warning."; return 1; }
@@ -4180,7 +4473,7 @@ install_runtime_packages(){
   # blocks EGL/glvnd graphics vendor files. It is an optional recovery detail;
   # failure never invalidates the package verification above.
   if [ -e /etc/apparmor.d/usr.bin.surf ]; then
-    $SUDO apt-get install -y apparmor-utils >/dev/null 2>&1 || true
+    apt_managed install -y apparmor-utils >/dev/null 2>&1 || true
     if $SUDO aa-complain /usr/bin/surf >/dev/null 2>&1; then
       ok "surf AppArmor profile set to complain mode (was blocking rendering)"
     else
@@ -4225,6 +4518,7 @@ provision_dashboard_autologin(){
     return 1
   fi
   install_kiosk_no_logout_guard || true
+  mark_reboot_recommended
   ok "dashboard graphical autologin recovery complete ($kiosk_session)"
 }
 
@@ -5694,6 +5988,13 @@ else
   esac
 fi
 
+# A correct clock alone is not enough for calendar and weather semantics. Ask
+# only after the user has approved the selected work, and never infer a zone.
+prompt_timezone_if_needed || exit 1
+if interactive_run_needs_sudo; then
+  start_sudo_keepalive || exit 1
+fi
+
 APP_FILES_OK=0
 DEMO_MODE_OK=0
 SERVICE_CONFIRMED_OK=0
@@ -5721,7 +6022,7 @@ configure_optional_zram_tuning(){
   if command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='${Status}' zram-tools 2>/dev/null | grep -q 'install ok installed'; then
     had_zram=1
   fi
-  if ! $SUDO apt-get install -y zram-tools; then
+  if ! apt_managed install -y zram-tools; then
     warn "could not install zram-tools"
     return 1
   fi
@@ -5808,7 +6109,7 @@ if [ "$IS_PI" = "1" ]; then
   read -rp "Proceed with Pi update + kiosk trim? [y/N] " dosys
   if { [ "$dosys" = "y" ] || [ "$dosys" = "Y" ]; }; then
     say "  apt update && full-upgrade (this can take a while on small boards)"
-    $SUDO apt-get update && $SUDO apt-get -y full-upgrade && $SUDO apt-get -y autoremove
+    apt_managed update && apt_managed -y full-upgrade && apt_managed -y autoremove
     ok "system updated"
 
     say "  Disabling services not needed for a Pi kiosk"
@@ -5823,7 +6124,7 @@ if [ "$IS_PI" = "1" ]; then
     warn "cron, systemd-timesyncd, avahi-daemon (.local hostname), dashboard server."
 
     say "  Removing a desktop extra (diodon clipboard manager)"
-    $SUDO apt-get -y remove --purge diodon 2>/dev/null && ok "removed diodon" || true
+    apt_managed -y remove --purge diodon 2>/dev/null && ok "removed diodon" || true
 
     say "  Suppressing desktop autostart items (per-user, reversible)"
     mkdir -p "$HOME/.config/autostart"
@@ -5842,7 +6143,7 @@ else
   echo "update is safe, but service trimming is skipped by default."
   read -rp "Run apt update + full-upgrade + autoremove? [y/N] " dosys
   if { [ "$dosys" = "y" ] || [ "$dosys" = "Y" ]; }; then
-    $SUDO apt-get update && $SUDO apt-get -y full-upgrade && $SUDO apt-get -y autoremove
+    apt_managed update && apt_managed -y full-upgrade && apt_managed -y autoremove
     ok "system updated"
   else
     warn "Skipped system update."
@@ -5866,6 +6167,8 @@ fi
 say "Managed Debian security maintenance"
 if ! ensure_security_maintenance_once system; then
   mark_install_step_failed "Managed Debian security maintenance" "Run ~/install.sh --repair --system from a terminal after resolving the named APT policy or permission warning."
+else
+  mark_reboot_recommended
 fi
 fi
 
@@ -6615,7 +6918,7 @@ if [ -z "$PIMODEL" ] && [ "$PROFILE" != "lite" ]; then
     if command -v apt-get >/dev/null 2>&1; then
       read -rp "  No temperature sensors detected — install lm-sensors to enable the CPU-temp tile? [Y/n] " SENSOK
       if [ "$SENSOK" != "n" ] && [ "$SENSOK" != "N" ]; then
-        $SUDO apt-get install -y lm-sensors >/dev/null 2>&1 \
+        apt_managed install -y lm-sensors >/dev/null 2>&1 \
           && $SUDO sensors-detect --auto >/dev/null 2>&1 || true
         ok "lm-sensors installed (CPU temp shows '—' on VMs that expose no sensors at all)"
       fi
@@ -7541,7 +7844,7 @@ if [ "$DO_SSH" = "1" ]; then
 installer_stage "Preparing remote access"
 say "Enabling SSH for remote (headless) administration"
 # Install + enable the SSH server.
-$SUDO apt-get install -y openssh-server >/dev/null 2>&1
+apt_managed install -y openssh-server >/dev/null 2>&1
 $SUDO systemctl enable --now ssh 2>/dev/null || $SUDO systemctl enable --now sshd 2>/dev/null
 if systemctl is-active ssh >/dev/null 2>&1 || systemctl is-active sshd >/dev/null 2>&1; then
   ok "SSH server running"
@@ -7783,12 +8086,14 @@ NEXT STEPS FOR RASPBERRY PI:
   4) Add calendars: use Dashboard Control or re-run ~/install.sh.
 
 IF SOMETHING LOOKS WRONG:
-  * Black screen at boot      -> check step 1 above (display driver)
+  * Black/frozen screen       -> connect a keyboard, press Ctrl+Alt+F2, sign in,
+                                 then run: ~/install.sh --doctor
+                                 For a system/session repair: ~/install.sh --repair --system
   * Dashboard but no events   -> re-run installer, choose Built-in calendars
   * No weather                -> check WiFi/network; weather retries automatically
   * Want to change anything   -> just re-run:  ~/install.sh
 
-Then reboot (sudo reboot). The dashboard should come up fullscreen.
+The dashboard starts fullscreen after the next reboot.
 NOTE
 else
 cat <<NOTE
@@ -7811,10 +8116,13 @@ IF SOMETHING LOOKS WRONG:
   * Login screen appears      -> check /etc/lightdm/lightdm.conf autologin lines
   * Desktop appears instead   -> check ~/.config/lxsession/*/autostart and
                                  ~/.config/autostart/dashboard-kiosk.desktop
+  * Black/frozen screen       -> connect a keyboard, press Ctrl+Alt+F2, sign in,
+                                 then run: ~/install.sh --doctor
+                                 For a system/session repair: ~/install.sh --repair --system
   * Dashboard but no events   -> re-run installer, choose Built-in calendars
   * No weather                -> check network; weather retries automatically
 
-Then reboot (sudo reboot). The dashboard should come up fullscreen.
+The dashboard starts fullscreen after the next reboot.
 NOTE
 fi
 fi
@@ -7825,3 +8133,4 @@ fi
 if [ "$INSTALLER_FINAL_READY" != "1" ] || [ "${#INSTALL_STEP_FAILURES[@]}" -gt 0 ]; then
   exit 1
 fi
+offer_reboot_after_system_changes

@@ -200,6 +200,8 @@ doctor_os_support(){
       case "$major" in
         ''|*[!0-9]*) printf 'conservative\t%s %s — conservative mode\n' "$id" "${code:-newer release}" ;;
         0|1|2|3|4|5|6|7|8|9|10|11) printf 'unsupported\t%s %s — unsupported for a fresh Dash-Go install\n' "$id" "${code:-$version}" ;;
+        12) printf 'supported\t%s %s — Debian 12 compatibility support (codename unavailable)\n' "$id" "${code:-Bookworm}" ;;
+        13) printf 'recommended\t%s %s — recommended current Debian baseline (codename unavailable)\n' "$id" "${code:-Trixie}" ;;
         *) printf 'conservative\t%s %s — conservative mode\n' "$id" "${code:-$version}" ;;
       esac
       ;;
@@ -1105,9 +1107,10 @@ current_kiosk_log_errors(){
 }
 
 check_kiosk(){
-  local gui=0 gui_active=0 gui_expected=0 kiosk_lines="" kiosk_roots="" independent_kiosks="" independent_count=0 kiosk_count=0 surf_count=0 lock="$CACHE_DIR/kiosk.lock" pid="" lock_kiosk_pid="" cmd="" session="" autouser="" path="" errors="" relaunches=0 missing_gui="" legacy="" detail="" surf_pid="" surf_window="" kiosk_log="" openbox_log=""
+  local gui=0 gui_active=0 gui_expected=0 wayland_active=0 default_dm="" kiosk_lines="" kiosk_roots="" independent_kiosks="" independent_count=0 kiosk_count=0 surf_count=0 lock="$CACHE_DIR/kiosk.lock" pid="" lock_kiosk_pid="" cmd="" session="" autouser="" path="" errors="" relaunches=0 missing_gui="" legacy="" detail="" surf_pid="" surf_window="" kiosk_log="" openbox_log=""
   section "Kiosk, Surf, and graphical session"
 
+  if [ -n "${WAYLAND_DISPLAY:-}" ] || { have pgrep && { pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1 || pgrep -x sway >/dev/null 2>&1; }; }; then wayland_active=1; fi
   if have pgrep && { pgrep -x openbox >/dev/null 2>&1 || pgrep -x lightdm >/dev/null 2>&1; }; then gui_active=1; fi
   if [ -d /tmp/.X11-unix ] && find /tmp/.X11-unix -maxdepth 1 -type s -name 'X*' -print -quit 2>/dev/null | grep -q .; then gui_active=1; fi
   if [ "$COMMON_LOADED" -eq 1 ] && { [ -f "$AUTLOGIN_FILE" ] || [ -f "$XSESSION_FILE" ]; }; then
@@ -1116,6 +1119,23 @@ check_kiosk(){
     if [ "$autouser" = "$USER_NAME" ] && { [ "$session" = dashboard-openbox ] || [ "$session" = dashboard-lite ]; }; then gui_expected=1; fi
   fi
   if [ "$gui_active" -eq 1 ] || [ "$gui_expected" -eq 1 ]; then gui=1; fi
+
+  # Dash-Go intentionally uses X11/LightDM/Openbox for its kiosk session. A
+  # Wayland desktop may still be active until reboot on a Trixie-era image, but
+  # it must be visible as an actionable configuration mismatch rather than a
+  # mysterious missing kiosk.
+  if [ "$wayland_active" -eq 1 ] && { have lightdm || [ -f "$AUTLOGIN_FILE" ] || [ -f "$XSESSION_FILE" ]; }; then
+    warn_fix "a Wayland compositor is active while Dash-Go expects its X11/LightDM kiosk session" "reboot; if it returns to Wayland, run ~/install.sh --repair --system"
+  fi
+  if [ -r /etc/X11/default-display-manager ]; then
+    default_dm="$(tr -d '\r\n' < /etc/X11/default-display-manager 2>/dev/null || true)"
+    if [ -n "$default_dm" ] && [ "$default_dm" != "/usr/sbin/lightdm" ]; then
+      warn_fix "the default display manager is '$default_dm', not LightDM" "run ~/install.sh --repair --system, then reboot"
+    fi
+  fi
+  if have systemctl && systemctl is-enabled greetd >/dev/null 2>&1; then
+    warn_fix "greetd is enabled and can take precedence over Dash-Go's X11/LightDM kiosk" "run ~/install.sh --repair --system, then reboot"
+  fi
 
   for path in "$DASH/kiosk.sh" "$BIN_DIR/dashboard-lite-session.sh" "$BIN_DIR/dashboard-session-guard.sh"; do
     if [ -x "$path" ]; then

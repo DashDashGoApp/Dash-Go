@@ -1,6 +1,29 @@
 # Dash-Go Changelog
 
-This changelog records stable Dash-Go milestones. Detailed development increments are consolidated at stable promotion so the file remains useful as a product history rather than a release-by-release development journal.
+This changelog records stable Dash-Go milestones. During an active development cycle, concise beta notes may remain for release review; they are consolidated into one stable section at promotion so the file remains useful as a product history rather than a release-by-release development journal.
+
+## [1.5.8-beta.9] — 2026-07-04
+
+### Installer reliability and first-boot guardrails
+
+- Added bounded, user-visible retry handling for verified release downloads and installer/private-calendar APT work, including clear background-maintenance lock guidance without widening Dashboard Control’s scoped sudo permissions.
+- Added a pre-commit update storage check that reserves room for the staged payload and rollback snapshot before any live dashboard file is replaced.
+- Expanded interactive preflight with memory guidance tuned for Lite-class devices, home/dashboard write probes for read-only storage, and time-zone visibility. UTC/unset systems can now set an explicit validated IANA time zone during setup; Dash-Go never guesses one silently.
+- Added an interactive setup lock and sudo keep-alive so a second installer window cannot race the first and a long first install does not fail on an expired sudo timestamp.
+- Hardened the deliberate X11/LightDM/Openbox kiosk policy for Trixie-era systems: `greetd` is disabled alongside competing display managers, active Wayland state is named plainly, LightDM’s recorded/enabled postcondition is checked, and Doctor reports remaining mismatches.
+- Added clear post-system-stage reboot guidance with an opt-in reboot prompt, plus a local `Ctrl`+`Alt`+`F2` rescue card in the installer and README for black/frozen kiosk recovery.
+- Added regression smoke coverage for download retry, APT lock retry/timeout behavior, pre-commit space refusal, preflight/interaction safeguards, and X11/Wayland diagnostics. Control-PIN behavior is intentionally unchanged in this release.
+
+## [1.5.8-beta.8] — 2026-07-04
+
+### Release integrity, migration safety, and test enforcement
+
+- Extended missing-selector legacy recovery across every shipped target (`amd64`, `386`, `arm64`, `armv7`, and `armv6`) and added all-architecture selector contract coverage.
+- Added the beta.6 selector-integrity updater bridge plus a transaction smoke that proves beta.6 selector drift is replaced by the manifest-owned beta.8 selector before success is reported.
+- Replaced line-regex edits of `config.local.js` with a top-level assignment editor that safely replaces multiline values and treats field names literally.
+- Added explicit `--json-set-string` and `--json-set-json` modes; protected JSON paths now refuse to overwrite a non-object intermediate.
+- Corrected codename-less Debian 12/13 Doctor classification, restored the OAuth display endpoints’ JSON `405` behavior for `HEAD`, and suppress terminal QR output in the loopback OAuth path.
+- Added the required `app/tests/run-all.sh` release gate and GitHub Actions verification workflow for Go, shellcheck, shell smokes, and Node/browser smokes.
 
 ## [1.5.8-beta.7] — 2026-07-04
 

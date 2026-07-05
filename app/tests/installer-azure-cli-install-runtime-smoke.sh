@@ -72,6 +72,10 @@ awk '/^valid_microsoft_client_id\(\)/{take=1} /^validate_download\(\)/{take=0} t
 warn(){ printf 'WARN: %s\n' "$*" >&2; }
 ok(){ printf 'OK: %s\n' "$*"; }
 say(){ printf '== %s ==\n' "$*"; }
+# The targeted source slice starts after the shared installer APT helper.
+# Mirror its exact command shape so this fixture keeps exercising the bounded
+# package-lock path without requiring a privileged installer source.
+apt_managed_as(){ local apt_sudo="$1"; shift; "$apt_sudo" env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=180" "$@"; }
 # The runtime helper is Go-owned. Keep this Azure transaction fixture offline;
 # Go unit tests cover the real JSON writer.
 installer_cli(){
@@ -102,8 +106,8 @@ assert 'enabled' not in todo and todo['source'] == 'local' and todo['syncMode'] 
 assert todo['clientId'] == '12345678-1234-1234-1234-1234567890ab'
 assert todo['map'] == {'todo':'local-todo','grocery':'local-grocery'}
 PYDONE
-grep -Fq 'apt-get update' "$AZ_INSTALL_LOG"
-grep -Fq 'apt-get install -y azure-cli' "$AZ_INSTALL_LOG"
+grep -Fq 'apt-get -o DPkg::Lock::Timeout=180 update' "$AZ_INSTALL_LOG"
+grep -Fq 'apt-get -o DPkg::Lock::Timeout=180 install -y azure-cli' "$AZ_INSTALL_LOG"
 grep -Fq 'https://packages.microsoft.com/repos/azure-cli/' "$TODO_AZURE_CLI_SOURCE_FILE"
 grep -Fqx 'Suites: bookworm' "$TODO_AZURE_CLI_SOURCE_FILE"
 [ -s "$TODO_AZURE_CLI_KEYRING" ]

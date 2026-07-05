@@ -34,6 +34,7 @@ assert.match(css,/background:#fff/,"QR must use an always-white backing panel in
 assert.match(css,/min-width:min\(40vh,70vw\)/,"QR backing panel must stay touch-visible on the kiosk display");
 assert.doesNotMatch(server,/GET \/oauth\/google\/callback/,"Dash-Go must not publish a dead advanced OAuth callback route");
 assert.match(server,/GET \/api\/oauth-display/,"server must register the loopback display metadata route");
+assert.match(server,/HEAD \/api\/oauth-display/,"display routes must retain the API JSON 405 contract for HEAD");
 assert.match(server,/requireLoopback\(a\.handleOAuthDisplayMetadata\)/,"kiosk display metadata must remain loopback-only");
 assert.match(display,/oauthDisplayTTL\s*=\s*10 \* time\.Minute/,"presentation window must remain bounded to ten minutes");
 assert.match(display,/googleOAuthDisplayOnly/,"phone QR paste-back must arm a display-only state");
@@ -48,6 +49,7 @@ assert.match(setup,/Choose application type: Desktop app\./,"ordinary Google set
 assert.doesNotMatch(setup,/OAuth client type \[desktop\/web/,"ordinary setup must not expose desktop/web architecture jargon");
 assert.match(setup,/-loopback/,"ordinary computer setup must invoke the temporary local callback");
 assert.match(setup,/-display-dir "\$OAUTH_DISPLAY_DIR"/,"phone fallback must show a kiosk QR without enabling a callback");
+assert.match(setup,/PRIVATE_GOOGLE_MODE" = loopback[\s\S]{0,180}oauth_args\+=\(-loopback\)[\s\S]{0,180}else[\s\S]{0,180}-qr -display-dir/,"loopback setup must not also print the phone/paste-back QR");
 assert.doesNotMatch(setup,/bullseye-backports|DASH_VDIR_APT_CODENAME/,"unsupported Bullseye backports must not be added by private-calendar setup");
 assert.match(setup,/apt-get install -y pipx python3-venv/,"supported private-calendar setup must install pipx and Python venv support together");
 assert.match(setup,/python3 -m pip install --user/,"last-resort user-level pip fallback must remain explicit and non-root");

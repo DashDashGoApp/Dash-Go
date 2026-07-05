@@ -18,6 +18,7 @@ SHA256SUMS
 - Stable tag: `vX.Y.Z`; GitHub release is **not** a prerelease.
 - Beta tag: `vX.Y.Z-beta.N`; GitHub release **is** a prerelease.
 - Published releases and tags are immutable. Correct a published release with a new version; never replace its assets or force-push its tag.
+- Before a stable promotion, collapse the active `X.Y.Z-beta.*` entries in `CHANGELOG.md` into one `X.Y.Z` stable section, preserving the user-visible changes but removing the interim beta headings.
 
 ## 1. Prepare the source repository
 
@@ -25,9 +26,10 @@ Start with the final source handoff, not a builder directory or a prior release-
 
 1. Extract the handoff into the dedicated Dash-Go Git working tree.
 2. Confirm it contains no `AI.md`, generated binaries, browser bundles, release assets, logs, caches, backups, calendars, credentials, or local configuration.
-3. Run `app/tests/public-source-repository-smoke.sh` from the source root.
-4. Inspect `git status`, `git diff --cached`, `.gitignore`, and `.gitattributes` before committing.
-5. Commit only the reviewed source tree to `DashDashGoApp/Dash-Go`.
+3. Run the release gate from the source root: `app/tests/run-all.sh`. It requires clean `gofmt`, Go module verification, `go vet`, `go test ./...`, shellcheck on the changed installer scripts, and every shell/Node smoke. The GitHub Actions **Verify Dash-Go source** workflow must be green for the same commit.
+4. Exercise the beta.6 selector migration in that gate (`beta6-selector-upgrade-smoke.sh`). For an actual device still on **1.5.8-beta.6**, extract the verified beta.9 release bundle and run `./install.sh --bootstrap-selector-integrity` before its first ordinary beta update. The bridge atomically refreshes `~/install.sh`, verifies the copied bytes, then starts the corrected beta updater; it is not needed for newer installs.
+5. Inspect `git status`, `git diff --cached`, `.gitignore`, and `.gitattributes` before committing.
+6. Commit only the reviewed source tree to `DashDashGoApp/Dash-Go`.
 
 ## 2. Build release assets locally
 

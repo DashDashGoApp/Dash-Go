@@ -14,12 +14,12 @@
 
 ## Current beta source handoff
 
-- **Version:** `1.5.8-beta.7`
+- **Version:** `1.5.8-beta.9`
 - **Track:** beta
 - **Minimum upgrade version:** `1.4.0`
-- **Scope:** Managed Debian security maintenance plus Doctor truthfulness repairs. Supported Debian and compatible 64-bit Raspberry Pi OS installations receive a codename-specific Debian Security source when needed, an inert backports source pinned at priority 100, and a Dash-Go-owned `unattended-upgrades` policy limited to Debian Security. Automatic reboot, unattended autoremove, automatic backports installation, broad feature upgrades, and Raspberry Pi firmware/kernel updates remain disabled or deliberate. Installer system/package stages and direct terminal updates repair drift when sudo is available; Dashboard Control updates defer privileged repair without failing the verified app update. Doctor reports healthy, repair-needed, unsupported-layout, and manual-review states, routing repair through `~/install.sh --repair --system`. Doctor now reads current root-level weather-cache coordinates without treating absent legacy fields as `0,0`, retains legacy nested-cache recognition only when coordinates are present, and treats a lock-owning kiosk process plus wrapper/child matches in the same process tree as one launcher. 32-bit Raspbian and unproven/nonstandard source layouts are never rewritten. Read-only root/overlayfs is intentionally out of scope.
-- **Selector-integrity correction:** beta.7 stops installer-owned rewriting of a present package selector, verifies the installed manifest after payload commit and after rollback, and retains only a missing-file legacy selector fallback. Devices updating from beta.6 need the supplied one-time updater bridge before their first beta.7 update, because beta.6 otherwise overwrites the newly installed selector after package verification.
-- **Validation boundary:** this is a source handoff. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
+- **Scope:** Installer fool-proofing and Trixie/X11 kiosk enforcement on top of the beta-series integrity work: bounded download and APT-lock retries, pre-commit storage checks, RAM/filesystem/time-zone preflight clarity, safe sudo/session concurrency handling, opt-in reboot clarity, and local black-screen rescue instructions. Dash-Go remains deliberately X11/LightDM/Openbox-based; Doctor now names an active Wayland or `greetd` mismatch rather than implying Wayland support.
+- **beta.6 migration:** a verified beta.9 release bundle provides `./install.sh --bootstrap-selector-integrity` for a device still on beta.6. It atomically refreshes `~/install.sh`, verifies the copied installer, and launches the corrected beta updater so a drifted beta.6 selector is replaced from the manifest-owned payload. The full source gate includes an explicit beta.6 transaction rehearsal.
+- **Validation boundary:** `app/tests/run-all.sh` is the required local/CI source gate: it runs formatting, Go module/vet/test checks, shellcheck, all shell smokes, and all Node/browser smokes. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
 
 ## 1.5.7 stable scope
 

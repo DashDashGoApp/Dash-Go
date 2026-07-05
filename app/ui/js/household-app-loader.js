@@ -65,7 +65,7 @@ function appendLazyStyle(src,dataName){
 function loadChoreWheelAssets(){
   if(window.openChoreWheelImpl) return Promise.resolve();
   if(_choreWheelLoading) return _choreWheelLoading;
-  _choreWheelLoading=Promise.all([appendLazyStyle("ui/chore-wheel.css?v="+(CONFIG.version||"1.5.8-beta.7"),"chorewheel"),appendLazyScript("ui/chore-wheel-core.js?v="+(CONFIG.version||"1.5.8-beta.7"),"chorewheel-core")]).then(()=>appendLazyScript("ui/chore-wheel.js?v="+(CONFIG.version||"1.5.8-beta.7"),"chorewheel-script"));
+  _choreWheelLoading=Promise.all([appendLazyStyle("ui/chore-wheel.css?v="+(CONFIG.version||"1.5.8-beta.9"),"chorewheel"),appendLazyScript("ui/chore-wheel-core.js?v="+(CONFIG.version||"1.5.8-beta.9"),"chorewheel-core")]).then(()=>appendLazyScript("ui/chore-wheel.js?v="+(CONFIG.version||"1.5.8-beta.9"),"chorewheel-script"));
   _choreWheelLoading.catch(()=>{_choreWheelLoading=null;});return _choreWheelLoading;
 }
 function openChoreWheel(){
@@ -77,7 +77,7 @@ function openChoreWheel(){
 function loadFamilyBoardAssets(){
   if(window.openFamilyBoardImpl) return Promise.resolve();
   if(_familyBoardLoading) return _familyBoardLoading;
-  _familyBoardLoading=Promise.all([appendLazyStyle("ui/family-board.css?v="+(CONFIG.version||"1.5.8-beta.7"),"familyboard"),appendLazyScript("ui/family-board-core.js?v="+(CONFIG.version||"1.5.8-beta.7"),"familyboard-core")]).then(()=>appendLazyScript("ui/family-board.js?v="+(CONFIG.version||"1.5.8-beta.7"),"familyboard-script"));
+  _familyBoardLoading=Promise.all([appendLazyStyle("ui/family-board.css?v="+(CONFIG.version||"1.5.8-beta.9"),"familyboard"),appendLazyScript("ui/family-board-core.js?v="+(CONFIG.version||"1.5.8-beta.9"),"familyboard-core")]).then(()=>appendLazyScript("ui/family-board.js?v="+(CONFIG.version||"1.5.8-beta.9"),"familyboard-script"));
   _familyBoardLoading.catch(()=>{_familyBoardLoading=null;});return _familyBoardLoading;
 }
 function openFamilyBoard(){
@@ -89,7 +89,7 @@ function openFamilyBoard(){
 function loadMaintenanceAssets(){
   if(window.openMaintenanceImpl) return Promise.resolve();
   if(_maintenanceLoading) return _maintenanceLoading;
-  _maintenanceLoading=Promise.all([appendLazyStyle("ui/maintenance.css?v="+(CONFIG.version||"1.5.8-beta.7"),"maintenance"),appendLazyScript("ui/maintenance-core.js?v="+(CONFIG.version||"1.5.8-beta.7"),"maintenance-core")]).then(()=>appendLazyScript("ui/maintenance.js?v="+(CONFIG.version||"1.5.8-beta.7"),"maintenance-script"));
+  _maintenanceLoading=Promise.all([appendLazyStyle("ui/maintenance.css?v="+(CONFIG.version||"1.5.8-beta.9"),"maintenance"),appendLazyScript("ui/maintenance-core.js?v="+(CONFIG.version||"1.5.8-beta.9"),"maintenance-core")]).then(()=>appendLazyScript("ui/maintenance.js?v="+(CONFIG.version||"1.5.8-beta.9"),"maintenance-script"));
   _maintenanceLoading.catch(()=>{_maintenanceLoading=null;});return _maintenanceLoading;
 }
 function openMaintenance(){
@@ -105,7 +105,7 @@ window.openMaintenance=openMaintenance;
 function loadRoutinesAssets(){
   if(window.openRoutinesImpl)return Promise.resolve();
   if(_routinesLoading)return _routinesLoading;
-  _routinesLoading=Promise.all([appendLazyStyle("ui/routines.css?v="+(CONFIG.version||"1.5.8-beta.7"),"routines"),appendLazyScript("ui/routines-core.js?v="+(CONFIG.version||"1.5.8-beta.7"),"routines-core")]).then(()=>appendLazyScript("ui/routines.js?v="+(CONFIG.version||"1.5.8-beta.7"),"routines-script"));
+  _routinesLoading=Promise.all([appendLazyStyle("ui/routines.css?v="+(CONFIG.version||"1.5.8-beta.9"),"routines"),appendLazyScript("ui/routines-core.js?v="+(CONFIG.version||"1.5.8-beta.9"),"routines-core")]).then(()=>appendLazyScript("ui/routines.js?v="+(CONFIG.version||"1.5.8-beta.9"),"routines-script"));
   _routinesLoading.catch(()=>{_routinesLoading=null;});return _routinesLoading;
 }
 function openRoutines(options){return loadRoutinesAssets().then(()=>{if(typeof window.openRoutinesImpl!=="function")throw new Error("Routines did not initialize");return window.openRoutinesImpl(options||{});});}

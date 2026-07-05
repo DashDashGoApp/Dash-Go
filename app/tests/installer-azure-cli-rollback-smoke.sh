@@ -42,6 +42,8 @@ awk '/^valid_microsoft_client_id\(\)/{take=1} /^validate_download\(\)/{take=0} t
 warn(){ printf '%s\n' "$*" >&2; }
 ok(){ :; }
 say(){ :; }
+# The targeted source slice begins after the shared installer APT helper.
+apt_managed_as(){ local apt_sudo="$1"; shift; "$apt_sudo" env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=180" "$@"; }
 # shellcheck source=/dev/null
 source "$TMP/app-setup-functions.sh"
 export PATH="$TMP/fakebin:$PATH" SUDO="$TMP/fakebin/sudo" OS_CODENAME=bookworm

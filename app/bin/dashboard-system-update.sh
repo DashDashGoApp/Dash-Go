@@ -27,6 +27,39 @@ acquire_lock(){
   esac
   return 1
 }
+SYSTEM_UPDATE_LOCK_RETRIES="${DASHGO_SYSTEM_UPDATE_LOCK_RETRIES:-12}"
+SYSTEM_UPDATE_LOCK_DELAY="${DASHGO_SYSTEM_UPDATE_LOCK_DELAY:-15}"
+case "$SYSTEM_UPDATE_LOCK_RETRIES" in ''|*[!0-9]*) SYSTEM_UPDATE_LOCK_RETRIES=12;; esac
+case "$SYSTEM_UPDATE_LOCK_DELAY" in ''|*[!0-9]*) SYSTEM_UPDATE_LOCK_DELAY=15;; esac
+[ "$SYSTEM_UPDATE_LOCK_RETRIES" -ge 1 ] || SYSTEM_UPDATE_LOCK_RETRIES=1
+APT_LOCK_WAIT_EXPIRED=0
+apt_lock_error(){ grep -Eqi 'Could not get lock|Unable to acquire the dpkg frontend lock|Could not open lock file' "$1"; }
+run_exact_apt_with_lock_retry(){
+  attempt=1
+  while :; do
+    tmp="$(mktemp "$CACHE_DIR/system-update-apt.XXXXXX")" || return 1
+    # Keep this exact sudo invocation shape. Existing Dash-Go sudoers rules
+    # authorize only apt-get update and apt-get -y upgrade, not arbitrary args.
+    sudo -n /usr/bin/apt-get "$@" > "$tmp" 2>&1
+    rc=$?
+    cat "$tmp"
+    if [ "$rc" -eq 0 ]; then rm -f "$tmp"; return 0; fi
+    if apt_lock_error "$tmp"; then
+      rm -f "$tmp"
+      if [ "$attempt" -lt "$SYSTEM_UPDATE_LOCK_RETRIES" ]; then
+        write_status running "System update" "APT is busy with background maintenance; waiting for the package lock"
+        printf '%s\n' "APT is busy with background maintenance; retrying in ${SYSTEM_UPDATE_LOCK_DELAY}s (${attempt}/${SYSTEM_UPDATE_LOCK_RETRIES})."
+        sleep "$SYSTEM_UPDATE_LOCK_DELAY"
+        attempt=$((attempt + 1))
+        continue
+      fi
+      APT_LOCK_WAIT_EXPIRED=1
+      return 75
+    fi
+    rm -f "$tmp"
+    return "$rc"
+  done
+}
 if ! acquire_lock; then
   write_status running "System update" "another update is already running"
   exit 75
@@ -36,14 +69,20 @@ write_status running "System update" "starting apt update"
 set +e
 {
   echo "== Dash-Go system update $(date) =="
-  sudo -n /usr/bin/apt-get update
+  run_exact_apt_with_lock_retry update
   rc=$?
   if [ "$rc" -eq 0 ]; then
     write_status running "System update" "running apt upgrade"
-    sudo -n /usr/bin/apt-get -y upgrade
+    run_exact_apt_with_lock_retry -y upgrade
     rc=$?
   fi
 } >> "$LOG_FILE" 2>&1
 set -e
-if [ "$rc" -eq 0 ]; then write_status complete "System update" "complete" "$rc"; else write_status failed "System update" "failed; see logs/system-update.log" "$rc"; fi
+if [ "$rc" -eq 0 ]; then
+  write_status complete "System update" "complete" "$rc"
+elif [ "$rc" -eq 75 ] && [ "$APT_LOCK_WAIT_EXPIRED" -eq 1 ]; then
+  write_status failed "System update" "APT was busy with background maintenance for too long. Try again in a few minutes." "$rc"
+else
+  write_status failed "System update" "failed; see logs/system-update.log" "$rc"
+fi
 exit "$rc"

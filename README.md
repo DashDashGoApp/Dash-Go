@@ -212,6 +212,22 @@ Dash-Go updates use the official Dash-Go GitHub Releases page for the installed 
 
 Use plain `--repair` first for damaged application files when you need to restore the currently installed version exactly. Use `--repair --update` only when you deliberately want the newest eligible release. Add `--system` when service, autologin, kiosk launch, scheduled maintenance, or Dash-Go-managed Debian security maintenance needs repair. Add `--packages` only when Doctor identifies missing operating-system dependencies.
 
+### Local rescue for a black or frozen screen
+
+Connect a keyboard to the device, press `Ctrl`+`Alt`+`F2`, sign in as the normal Dash-Go Linux user, then run:
+
+```sh
+~/install.sh --doctor
+```
+
+If Doctor identifies a display-manager, session, service, or kiosk wiring problem, run:
+
+```sh
+~/install.sh --repair --system
+```
+
+On a Raspberry Pi with a black display after a manual boot-display change, restore the installer-created `config.txt.dash-go.bak` from the SD card or another computer before rebooting. These commands do not remove calendars, settings, or personal dashboard data.
+
 A normal update first checks the selected GitHub Release track. It applies only a strictly newer compatible release; an equal version exits successfully without a download, backup, replacement, service restart, cache refresh, or kiosk recycle, and an older selected release is never allowed to downgrade the device. A normal update that does proceed stages and verifies the downloaded release before replacement, restarts the local service, confirms readiness, and relaunches the tracked Dash-Go kiosk process. An ordinary update should not return the kiosk to the login screen. Use explicit `--repair` when you deliberately need to reconstruct the installed release.
 
 ### Managed Debian security maintenance
