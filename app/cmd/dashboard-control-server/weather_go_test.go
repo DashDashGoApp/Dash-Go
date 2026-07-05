@@ -65,10 +65,18 @@ func TestGoWeatherOpenMeteoRefreshAndCache(t *testing.T) {
 }
 
 func TestGoWeatherLeavesBrowserFallbackAvailableWhenNoSourceAnswered(t *testing.T) {
+	// The fallback provider is intentional runtime behavior. Use a local
+	// failing endpoint so the no-source contract does not depend on whether
+	// api.open-meteo.com is reachable from the test runner.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "offline test fixture", http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
 	dir := t.TempDir()
 	a := &app{dash: dir, configDir: filepath.Join(dir, "config"), cacheDir: filepath.Join(dir, "cache"), logDir: filepath.Join(dir, "logs"), settingsFile: filepath.Join(dir, "config", "settings.json")}
 	a.ensureDirs()
-	if err := os.WriteFile(a.settingsFile, []byte(`{"weatherProviders":["weatherapi"]}`), 0644); err != nil {
+	if err := os.WriteFile(a.settingsFile, []byte(`{"wxApi":"`+ts.URL+`","weatherProviders":["weatherapi"]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	payload := a.weatherPayload().(map[string]any)

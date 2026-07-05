@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "contract": "dashgo-showcase/v1",
+  "capabilities": {
+    "separateDataRoot": true,
+    "scenarioManifest": true,
+    "scenarioCalendars": true,
+    "calendarWritebackAllowlist": true,
+    "cacheRebuildReport": true,
+    "statusEndpoint": true,
+    "staticScenarioAssets": true
+  }
+}
