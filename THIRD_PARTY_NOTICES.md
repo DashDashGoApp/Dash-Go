@@ -1,17 +1,19 @@
 # Third-Party Notices
 
-Dash-Go includes or installs third-party software and font assets. This file identifies those components, their pinned versions where applicable, and the licenses or notices that apply.
+Dash-Go includes, links, or reviews third-party software and font assets as part of its release source and binaries. This file identifies those components, their pinned versions where applicable, and the licenses or notices that apply.
 
 This notice file covers software and assets distributed with Dash-Go or installed by Dash-Go. Optional online services, APIs, and user-configured providers are described separately in `INTEGRATIONS.md`.
 
 The complete license texts named below are provided in `third_party_licenses/`.
 
-## Included Go software
+## Included and reviewed Go software
 
 | Component | Version | License | Purpose |
 |---|---:|---|---|
 | `github.com/unraid/apprise-go` | `v0.2.6` | BSD 2-Clause | Optional household notification delivery |
 | `github.com/gomarkdown/markdown` | `v0.0.0-20260417124207-7d523f7318df` | BSD 2-Clause | Markdown conversion used by Apprise-Go |
+| `github.com/tdewolff/minify/v2` | `v2.24.13` | MIT | Deterministic generated JavaScript minification with identifiers retained |
+| `github.com/tdewolff/parse/v2` | `v2.8.12` | MIT | ECMAScript parsing used by the generated-bundle minifier |
 | `golang.org/x/crypto` | `v0.53.0` | BSD 3-Clause | Cryptographic support used by Apprise-Go |
 | `golang.org/x/mod` | `v0.36.0` | BSD 3-Clause | Go module metadata support in the resolved Go module graph |
 | `golang.org/x/net` | `v0.56.0` | BSD 3-Clause | HTML-processing support used by Apprise-Go |
@@ -37,6 +39,12 @@ Copyright © 2018 Krzysztof Kowalczyk
 Copyright © 2018 Authors
 
 Gomarkdown is licensed under the BSD 2-Clause License.
+
+### Tdewolff minify and parse
+
+Copyright (c) 2015 Taco de Wolff
+
+`github.com/tdewolff/minify/v2` and `github.com/tdewolff/parse/v2` are licensed under the MIT License. Dash-Go uses the JavaScript minifier only while generating and verifying browser bundles, with variable and function names retained.
 
 ### Go supplementary libraries
 
@@ -74,8 +82,8 @@ third_party_licenses/
 
 ## Scope and maintenance
 
-- This file records Dash-Go runtime software and font assets.
+- This file records Dash-Go linked runtime software, reviewed Go module-graph components, and font assets. The release SPDX document narrows its `DEPENDS_ON` relationships to modules whose authenticated build metadata is identical across all five released Linux binaries.
 - It does not list Raspberry Pi OS packages, browser packages, or other components installed and maintained by the operating-system distribution.
 - It does not grant rights in the names, logos, trademarks, hosted services, or brands of third parties.
-- When a Dash-Go release changes the resolved runtime dependency graph or distributed font inventory, update this file and the corresponding license-text directory in the same change.
-- The local release builder must verify that this inventory matches the resolved release dependency graph and installed asset set.
+- When a Dash-Go release changes the linked runtime dependency graph, reviewed source module graph, or distributed font inventory, update this file and the corresponding license-text directory in the same change.
+- The local release builder must verify that every linked release-binary module is covered here, that all five binary inventories match, and that the installed asset set carries every required license text. Extra reviewed graph entries do not become runtime SBOM packages.

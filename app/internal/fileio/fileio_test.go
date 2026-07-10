@@ -34,6 +34,30 @@ func TestWriteJSONAndReadString(t *testing.T) {
 	}
 }
 
+func TestWriteCompactJSONUsesDurableAtomicReplacement(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "nested", "cache.json")
+	if err := WriteCompactJSON(path, map[string]any{"name": "Family", "count": 2}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "{\"count\":2,\"name\":\"Family\"}\n" {
+		t.Fatalf("WriteCompactJSON body = %q", body)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Fatalf("compact JSON writer left staging file %q", entry.Name())
+		}
+	}
+}
+
 func TestWriteAtomicAndExists(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "nested", "payload.txt")

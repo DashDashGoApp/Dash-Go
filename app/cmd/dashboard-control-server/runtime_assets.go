@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
+	minifyjs "github.com/tdewolff/minify/v2/js"
 )
 
 // Keep these verifier-only patterns local. The release builder deliberately
@@ -156,21 +158,31 @@ func verifyGeneratedAssets(root string, write bool) error {
 		}
 		return s
 	}
-	buildJS := func(bundle string) string {
+	buildJS := func(bundle string) (string, error) {
 		label := "browser bundle"
 		target := "ui/js/app.bundle.js"
 		if bundle == "control" {
 			label = "control bundle"
 			target = "ui/js/app.control.bundle.js"
 		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "/* Dash-Go %s %s. GENERATED as %s from ui/js split source files; edit split files, not this bundle. */\n", version, label, target)
+		var source strings.Builder
 		for _, p := range jsBundles[bundle] {
 			rel, _ := filepath.Rel(root, p)
-			fmt.Fprintf(&b, "\n/* ===== %s ===== */\n", filepath.ToSlash(rel))
-			b.WriteString(readNorm(p))
+			fmt.Fprintf(&source, "\n/* ===== %s ===== */\n", filepath.ToSlash(rel))
+			source.WriteString(readNorm(p))
 		}
-		return b.String()
+		var minified bytes.Buffer
+		minifier := minifyjs.Minifier{KeepVarNames: true}
+		if err := minifier.Minify(nil, &minified, strings.NewReader(source.String()), nil); err != nil {
+			return "", fmt.Errorf("minify generated %s: %w", target, err)
+		}
+		var bundleBody strings.Builder
+		fmt.Fprintf(&bundleBody, "/* Dash-Go %s %s. GENERATED as %s from ui/js split source files; edit split files, not this bundle. Identifiers retained. */\n", version, label, target)
+		bundleBody.WriteString(minified.String())
+		if !strings.HasSuffix(minified.String(), "\n") {
+			bundleBody.WriteByte('\n')
+		}
+		return bundleBody.String(), nil
 	}
 	buildCSS := func(bundle, target string) string {
 		var b strings.Builder
@@ -182,9 +194,17 @@ func verifyGeneratedAssets(root string, write bool) error {
 		}
 		return b.String()
 	}
+	appBundle, err := buildJS("app")
+	if err != nil {
+		return err
+	}
+	controlBundle, err := buildJS("control")
+	if err != nil {
+		return err
+	}
 	checks := map[string]string{
-		filepath.Join(root, "ui/js/app.bundle.js"):         buildJS("app"),
-		filepath.Join(root, "ui/js/app.control.bundle.js"): buildJS("control"),
+		filepath.Join(root, "ui/js/app.bundle.js"):         appBundle,
+		filepath.Join(root, "ui/js/app.control.bundle.js"): controlBundle,
 		filepath.Join(root, "ui/dashboard.css"):            buildCSS("dashboard", "dashboard.css"),
 		filepath.Join(root, "ui/control-layout.css"):       buildCSS("control", "control-layout.css"),
 	}

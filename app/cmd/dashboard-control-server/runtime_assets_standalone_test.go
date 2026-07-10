@@ -35,7 +35,12 @@ func TestRuntimeAssetsStandaloneVerifierRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeStandaloneFile(t, filepath.Join(work, "go.mod"), []byte("module github.com/DashDashGoApp/Dash-Go/app\n\ngo 1.26\n\ntoolchain go1.26.4\n"))
+	writeStandaloneFile(t, filepath.Join(work, "go.mod"), []byte("module github.com/DashDashGoApp/Dash-Go/app\n\ngo 1.26\n\ntoolchain go1.26.4\n\nrequire github.com/tdewolff/minify/v2 v2.24.13\n\nrequire github.com/tdewolff/parse/v2 v2.8.12 // indirect\n"))
+	goSum, err := os.ReadFile(filepath.Join(projectRoot, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeStandaloneFile(t, filepath.Join(work, "go.sum"), goSum)
 	writeStandaloneFile(t, filepath.Join(work, "runtime_assets.go"), runtimeAssets)
 	writeStandaloneFile(t, filepath.Join(work, "verify_main.go"), []byte(standaloneRuntimeAssetsVerifyMain))
 	for _, rel := range []string{"internal/fileio/fileio.go", "internal/fileio/directory_sync_unix.go", "internal/fileio/directory_sync_windows.go", "internal/jsonutil/jsonutil.go"} {
@@ -51,7 +56,7 @@ func TestRuntimeAssetsStandaloneVerifierRuns(t *testing.T) {
 	writeStandaloneFile(t, filepath.Join(fixture, "index.html"), []byte("<link href=\"ui/dashboard.css?v="+version+"\">\n<script src=\"ui/js/app.bundle.js?v="+version+"\"></script>\n"))
 	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "config-defaults.js"), []byte("const CONFIG={version: \""+version+"\"};\n"))
 	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "control-lazy-loader.js"), []byte("controlAssetURL(\"ui/control-layout.css\"); controlAssetURL(\"ui/js/app.control.bundle.js\");\n"))
-	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "dashboard-core.js"), []byte("window.dashboard=true;\n"))
+	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "dashboard-core.js"), []byte("// removable build comment\nconst dashboardCoreMarker=true; window.dashboard=dashboardCoreMarker;\n"))
 	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "control-test.js"), []byte("window.control=true;\n"))
 	writeStandaloneFile(t, filepath.Join(fixture, "ui", "js", "bundle.manifest.json"), []byte(`{"schema":1,"bundles":{"app":["dashboard-core.js"],"control":["control-test.js"]}}
 `))
@@ -62,6 +67,16 @@ func TestRuntimeAssetsStandaloneVerifierRuns(t *testing.T) {
 
 	if err := verifyGeneratedAssets(fixture, true); err != nil {
 		t.Fatalf("prepare generated fixture: %v", err)
+	}
+	bundle, err := os.ReadFile(filepath.Join(fixture, "ui", "js", "app.bundle.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(bundle), "dashboardCoreMarker") {
+		t.Fatalf("generated minifier renamed a top-level identifier: %s", bundle)
+	}
+	if strings.Contains(string(bundle), "removable build comment") {
+		t.Fatalf("generated bundle retained a removable source comment: %s", bundle)
 	}
 	cmd := exec.Command(goBinary, "run", ".", fixture)
 	cmd.Dir = work

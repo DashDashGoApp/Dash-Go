@@ -34,7 +34,6 @@ VDIRSYNCER_BIN="${DASH_VDIRSYNCER_BIN:-$VDIR_PIPX_BIN/vdirsyncer}"
 CONTROL_SERVER_BIN="${DASH_CONTROL_SERVER_BIN:-$BIN_DIR/dashboard-control-server}"
 MAP="${DASH_VDIR_MAP:-$VDIR_HOME/calendars.map}"
 WRITEBACK_REGISTRY="$CONFIG_DIR/calendar-writeback.json"
-SYNC_LOG="$LOG_DIR/vdir-sync.log"
 
 # The generated wrapper calls the known Dash-Go-managed executable directly;
 # keep its bin directory first only for interactive diagnostics and helpers.

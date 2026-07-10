@@ -3,6 +3,7 @@ package events
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,109 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
+
+type cacheMetadata struct {
+	Fingerprint        string   `json:"fingerprint"`
+	FingerprintVersion int      `json:"fingerprintVersion"`
+	UpdatedAt          int64    `json:"updatedAt"`
+	LastSuccessAt      int64    `json:"lastSuccessAt"`
+	Generator          string   `json:"generator"`
+	CacheVersion       int      `json:"cacheVersion,omitempty"`
+	WindowStart        int64    `json:"windowStart,omitempty"`
+	WindowEnd          int64    `json:"windowEnd,omitempty"`
+	EventCount         int      `json:"eventCount,omitempty"`
+	Issues             []string `json:"issues,omitempty"`
+	CacheSize          int64    `json:"cacheSize,omitempty"`
+	CacheMtimeNs       int64    `json:"cacheMtimeNs,omitempty"`
+}
+
+func readCacheMetadata(path string) (cacheMetadata, bool) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return cacheMetadata{}, false
+	}
+	var meta cacheMetadata
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return cacheMetadata{}, false
+	}
+	return meta, true
+}
+
+func cacheMetadataMatchesFile(path string, meta cacheMetadata) bool {
+	if meta.CacheVersion != CacheVersion || meta.CacheSize <= 0 || meta.CacheMtimeNs <= 0 {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	return info.Size() == meta.CacheSize && info.ModTime().UnixNano() == meta.CacheMtimeNs
+}
+
+func cacheMetadataCovers(meta cacheMetadata, fingerprint string, windowStart, windowEnd time.Time) bool {
+	return meta.Fingerprint == fingerprint &&
+		meta.FingerprintVersion == FingerprintVersion &&
+		meta.CacheVersion == CacheVersion &&
+		meta.WindowStart <= epochMs(windowStart) &&
+		meta.WindowEnd >= epochMs(windowEnd)
+}
+
+func unchangedCacheResult(eventCount int, issues []string) map[string]any {
+	if issues == nil {
+		issues = []string{}
+	}
+	return map[string]any{
+		"ok":         true,
+		"unchanged":  true,
+		"eventCount": eventCount,
+		"issues":     issues,
+		"issueCount": len(issues),
+		"generator":  "go",
+	}
+}
+
+func cacheMetadataFromOutput(fingerprint string, out *CacheOutput, info os.FileInfo, nowMs int64) cacheMetadata {
+	return cacheMetadata{
+		Fingerprint:        fingerprint,
+		FingerprintVersion: FingerprintVersion,
+		UpdatedAt:          nowMs,
+		LastSuccessAt:      nowMs,
+		Generator:          "go",
+		CacheVersion:       out.Version,
+		WindowStart:        out.WindowStart,
+		WindowEnd:          out.WindowEnd,
+		EventCount:         len(out.Events),
+		Issues:             append([]string(nil), out.Issues...),
+		CacheSize:          info.Size(),
+		CacheMtimeNs:       info.ModTime().UnixNano(),
+	}
+}
+
+func cacheMetadataFromExisting(fingerprint string, oldMeta cacheMetadata, oldCache map[string]any, info os.FileInfo, nowMs int64) cacheMetadata {
+	updatedAt := oldMeta.UpdatedAt
+	if updatedAt <= 0 {
+		updatedAt = nowMs
+	}
+	issuesAny := jsonutil.List(oldCache["issues"])
+	issues := make([]string, 0, len(issuesAny))
+	for _, issue := range issuesAny {
+		issues = append(issues, fmt.Sprint(issue))
+	}
+	return cacheMetadata{
+		Fingerprint:        fingerprint,
+		FingerprintVersion: FingerprintVersion,
+		UpdatedAt:          updatedAt,
+		LastSuccessAt:      nowMs,
+		Generator:          "go",
+		CacheVersion:       jsonutil.Int(oldCache["version"], 0),
+		WindowStart:        anyInt64(oldCache["windowStart"], 0),
+		WindowEnd:          anyInt64(oldCache["windowEnd"], 0),
+		EventCount:         len(jsonutil.List(oldCache["events"])),
+		Issues:             issues,
+		CacheSize:          info.Size(),
+		CacheMtimeNs:       info.ModTime().UnixNano(),
+	}
+}
 
 func (s *Service) refresh(force bool, daysPast int, daysFuture int) (map[string]any, error) {
 	if daysPast < 0 {
@@ -29,23 +133,49 @@ func (s *Service) refresh(force bool, daysPast int, daysFuture int) (map[string]
 	fp := eventFingerprint(sources, start, end, s.capabilityFingerprint())
 	cachePath := filepath.Join(s.cacheDir, "events.cache.json")
 	metaPath := filepath.Join(s.cacheDir, ".events-cache.meta.json")
-	oldMeta := jsonutil.Map(readJSONDefault(metaPath, map[string]any{}))
-	oldCache := jsonutil.Map(readJSONDefault(cachePath, map[string]any{}))
-	if !force && jsonutil.StringValue(oldMeta["fingerprint"]) == fp && jsonutil.Int(oldCache["version"], 0) == CacheVersion && anyInt64(oldCache["windowStart"], 0) <= epochMs(start) && anyInt64(oldCache["windowEnd"], 0) >= epochMs(end) {
-		oldMeta["lastSuccessAt"] = s.now().UnixMilli()
-		oldMeta["generator"] = "go"
-		_ = fileio.WriteJSON(metaPath, oldMeta)
-		return map[string]any{"ok": true, "unchanged": true, "eventCount": len(jsonutil.List(oldCache["events"])), "issues": jsonutil.List(oldCache["issues"]), "issueCount": len(jsonutil.List(oldCache["issues"])), "generator": "go"}, nil
+	oldMeta, metaOK := readCacheMetadata(metaPath)
+
+	if !force && metaOK && cacheMetadataCovers(oldMeta, fp, start, end) && cacheMetadataMatchesFile(cachePath, oldMeta) {
+		oldMeta.LastSuccessAt = s.now().UnixMilli()
+		oldMeta.Generator = "go"
+		if err := fileio.WriteJSON(metaPath, oldMeta); err != nil {
+			return nil, err
+		}
+		return unchangedCacheResult(oldMeta.EventCount, oldMeta.Issues), nil
 	}
+
+	// Metadata written before beta.5 has no cache summary/stat fields. Parse the
+	// existing cache once, preserve the established unchanged result, and upgrade
+	// the metadata so later no-op generations need only a stat check.
+	oldCache := jsonutil.Map(readJSONDefault(cachePath, map[string]any{}))
+	if !force && metaOK && oldMeta.Fingerprint == fp &&
+		jsonutil.Int(oldCache["version"], 0) == CacheVersion &&
+		anyInt64(oldCache["windowStart"], 0) <= epochMs(start) &&
+		anyInt64(oldCache["windowEnd"], 0) >= epochMs(end) {
+		info, err := os.Stat(cachePath)
+		if err == nil && info.Mode().IsRegular() {
+			nowMs := s.now().UnixMilli()
+			upgraded := cacheMetadataFromExisting(fp, oldMeta, oldCache, info, nowMs)
+			if err := fileio.WriteJSON(metaPath, upgraded); err != nil {
+				return nil, err
+			}
+			return unchangedCacheResult(upgraded.EventCount, upgraded.Issues), nil
+		}
+	}
+
 	out, err := s.buildCache(cals, sources, start, end)
 	if err != nil {
 		return nil, err
 	}
-	if err := writeCompactJSON(cachePath, out); err != nil {
+	if err := fileio.WriteCompactJSON(cachePath, out); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(cachePath)
+	if err != nil {
 		return nil, err
 	}
 	nowMs := s.now().UnixMilli()
-	if err := fileio.WriteJSON(metaPath, map[string]any{"fingerprint": fp, "fingerprintVersion": FingerprintVersion, "updatedAt": nowMs, "lastSuccessAt": nowMs, "generator": "go"}); err != nil {
+	if err := fileio.WriteJSON(metaPath, cacheMetadataFromOutput(fp, out, info, nowMs)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"ok": true, "unchanged": false, "eventCount": len(out.Events), "issues": out.Issues, "issueCount": len(out.Issues), "windowStart": out.WindowStart, "windowEnd": out.WindowEnd, "generator": "go"}, nil

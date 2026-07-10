@@ -1,5 +1,25 @@
 # Dash-Go Changelog
 
+## [1.5.9-beta.5] — 2026-07-10
+
+### Release-gate and source-handoff integrity
+
+- Restored the private-calendar Google OAuth smoke to the lock-aware APT contract and added the required GitHub Actions verification workflow to the public source handoff.
+- Defined the source gate against ShellCheck 0.9.0 with an explicit severity policy, corrected destructive calendar cleanup to refuse an empty directory variable, and removed obsolete installer state left by earlier refactors.
+- Extended the handoff contract so the source runner, CI workflow, and maintainer release instructions travel together.
+- Added a no-diff Go module tidy gate and corrected SPDX generation to inventory only authenticated modules actually linked into all five released Linux binaries; broader graph-only and upstream test dependencies remain outside runtime `DEPENDS_ON` relationships.
+- Completed the tidy checksum lock for the minifier's graph-only upstream test helper without promoting that helper into third-party release notices or the binary-derived runtime SBOM.
+
+### Pi Zero 2 W performance and reliability
+
+- Minified builder-generated JavaScript without renaming bindings, preserving classic-script cross-file identifiers while reducing browser source volume.
+- Normalized floating-point artifacts in generated weather SVG coordinates without changing their rendered geometry.
+- Added an additive event-cache metadata summary and file-stat fast path so unchanged cache generations avoid reparsing the complete event cache; older metadata upgrades safely after one fallback parse.
+- Moved compact event-cache writes onto the existing durable atomic-write primitive and removed the redundant timestamp query from the browser cache request.
+- Added a measured `GOMEMLIMIT=96MiB` service experiment to both installer service-generation paths, with convergence and regression coverage.
+
+- This remains a source-only handoff. The local Windows/WSL builder owns generated bundles, compiled binaries, package validation, checksums, SBOM, and publishable release assets.
+
 ## [1.5.9-beta.4] — 2026-07-09
 
 ### Calendar décor and weather SVG refresh

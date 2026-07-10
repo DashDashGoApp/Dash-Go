@@ -2,26 +2,10 @@ package events
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
-
-func writeCompactJSON(path string, v any) error {
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b = append(b, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
 
 func epochMs(t time.Time) int64 { return t.UnixMilli() }
 

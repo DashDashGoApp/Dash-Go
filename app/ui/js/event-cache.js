@@ -26,7 +26,7 @@ function maybePrewarmEventMaps(winStart,winEnd){
 
 async function loadEventsCache(winStart,winEnd){
   try{
-    const res=await fetch("cache/events.cache.json?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch("cache/events.cache.json",{cache:"no-store"});
     if(!res.ok) return null;
     const cache=await res.json();
     if(!cache || cache.version!==9 || !Array.isArray(cache.events)) return null;

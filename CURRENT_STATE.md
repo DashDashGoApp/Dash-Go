@@ -4,13 +4,14 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.9-beta.4`
+- **Version:** `1.5.9-beta.5`
 - **Track:** beta
-- **Purpose:** calendar décor and weather SVG refresh beta. The beta updates refined inline SVG artwork from the v4 gallery while preserving the five-artwork runtime contract for each calendar décor set and leaving generated browser bundles to the local builder.
-- **Required candidate proof:** the local builder must regenerate browser bundles, pass the seasonal décor SVG smoke, JavaScript syntax checks, generated-asset checks, and the standard source/release gates before publication.
-- **Compatibility:** changes are static inline SVG/source-only visual updates. Calendar décor remains dormant unless enabled by the existing visual setting, and all décor sets retain five SVG entries so existing selection and smoke-test behavior remains intact.
+- **Purpose:** restore an honest release gate and test a bounded Pi Zero 2 W performance/reliability set. The beta carries its CI workflow in the source handoff, pins the ShellCheck gate policy, requires a tidy Go module lock, minifies generated JavaScript without binding renames, removes weather-SVG float artifacts, avoids unchanged event-cache reparsing, uses durable compact cache writes, removes a redundant cache URL timestamp, and applies a soft `GOMEMLIMIT=96MiB` service experiment.
+- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify the minified browser bundles, run the complete source gate with ShellCheck 0.9.0, clear both Chromium computed-layout smokes, derive the SPDX Go inventory from matching build metadata in all five released Linux binaries, and pass installer, package, checksum, SBOM, and final-archive validation before publication. On a physical Pi Zero 2 W, compare beta.5 service `MemoryCurrent`/peak and restart count against the beta.4 baseline under the same normal kiosk workload before retaining or lowering the 96 MiB soft limit; any restart increase, visible latency, or sustained GC pressure rejects the experiment.
+- **Compatibility:** event-cache metadata gains additive summary/stat fields. Existing beta.4 metadata is accepted and upgraded after one safe fallback parse; `events.cache.json` and the browser/API response content remain unchanged. The memory limit is a soft Go runtime target rather than a systemd hard cap.
+- **Source-handoff contract:** `app/tests/run-all.sh`, `.github/workflows/verify.yml`, and `RELEASING.md` must travel together. `AI.md`, `.git/`, generated bundles, binaries, builder tooling, release artifacts, mutable user data, and credentials remain excluded.
 - **Security-maintenance eligibility:** Debian base and `trixie-security` sources are identified by enabled APT entry plus current Debian-signed Release metadata, not by hostname. Valid country mirrors, proxies, and mirrored local archives qualify; wrong-suite and insecure source flags do not. A missing security source is repairable only through the explicit `--repair --system` path after the base source is verified.
-- **Native Showcase Windows portability:** Contract v1 keeps Linux-specific locks, signals, directory durability, disk-free reporting, and detached-process behavior behind build-tagged helpers. Its static data router now canonicalizes HTTP paths with URL slash semantics before it applies the isolated-data allowlist, so Windows cannot turn an approved `/config/...` or `/calendars/...` fixture request into a miss.
+- **Native Showcase Windows portability:** Contract v1 keeps Linux-specific locks, signals, directory durability, disk-free reporting, and detached-process behavior behind build-tagged helpers. Its static data router canonicalizes HTTP paths with URL slash semantics before applying the isolated-data allowlist.
 - **Calendar writeback presentation:** fixed local-calendar labels in edit popups retain nested provider/name elements for existing events, a single writable calendar, and unavailable-calendar states.
 
 ## Current stable release
@@ -18,7 +19,7 @@
 - **Version:** `1.5.8`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.4 is the SVG-refresh beta source handoff built on the 1.5.9-beta.3 native Showcase readiness baseline. It supersedes beta.3 only for the next controlled beta candidate; 1.5.8 remains the current stable baseline.
+- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.5 is the current controlled beta source handoff and supersedes beta.4 for beta testing. It does not alter the 1.5.8 stable baseline until every local-builder and physical-device check required for promotion is complete.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
@@ -29,7 +30,7 @@
 - **Update safety:** package-owned selectors remain manifest-owned, updates and rollbacks verify their installed payloads, all shipped architectures have missing-selector legacy recovery, and a one-time bridge repairs a beta.6 updater before its first stable update when needed.
 - **Maintenance and Doctor:** supported Debian-family systems can receive narrowly scoped security maintenance; Doctor recognizes the current weather-cache schema and legitimate kiosk process trees while naming actual display-manager/Wayland mismatches.
 - **Installer resilience:** verified download/APT retries, pre-commit storage checks, writable-filesystem/RAM/time-zone readiness, sudo/session locking, X11/LightDM enforcement, and clear reboot/rescue guidance reduce first-boot and update failure modes. Dash-Go remains deliberately X11/LightDM/Openbox based.
-- **Validation boundary:** `app/tests/run-all.sh` is the required local/CI source gate: it runs formatting, Go module/vet/test checks, shellcheck, all shell smokes, and all Node/browser smokes. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, SBOM, and publishable GitHub Release assets.
+- **Validation boundary:** `app/tests/run-all.sh` is the required local/CI source gate: it runs formatting, `go mod tidy -diff`, Go module verification, vet/test checks, shellcheck, all shell smokes, and all Node/browser smokes. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, a binary-derived SPDX inventory, and publishable GitHub Release assets.
 
 ## 1.5.6 stable highlights
 

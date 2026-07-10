@@ -100,6 +100,17 @@ func WriteJSON(path string, v any) error {
 	return syncDirectory(dir)
 }
 
+// WriteCompactJSON writes compact JSON with a trailing newline through the
+// same durable fsync-before-rename path used for other managed state.
+func WriteCompactJSON(path string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return WriteAtomic(path, b, 0644)
+}
+
 // Exists reports whether p is an existing non-directory path.
 func Exists(p string) bool {
 	st, err := os.Stat(p)

@@ -375,7 +375,8 @@ require_update_compatibility_tools(){
     return 1
   fi
   say "One-time compatibility step: upgrading the installed updater to Go-native release verification."
-  DASH_UPDATE_LEGACY_BRIDGE=1; export DASH_UPDATE_LEGACY_BRIDGE
+  # Exported for the child updater bridge; it is intentionally not read in this shell.
+  export DASH_UPDATE_LEGACY_BRIDGE=1
   return 0
 }
 write_updater_migration_receipt(){
@@ -833,7 +834,6 @@ prompt_demo_mode_reset(){
         ;;
       3)
         REMOVE_MODE=1
-        DEMO_FULL_REMOVE_REQUESTED=1
         warn "Dash-Go full removal selected; this will use the install.sh --remove flow"
         return 0
         ;;
@@ -872,7 +872,7 @@ reset_demo_mode_if_requested(){
     fi
     rm -f "$CAL_DIR"/demo-*.ics "$CACHE_DIR/demo-mode.json" "$CACHE_DIR/events.cache.json" "$CACHE_DIR/events.cache.meta.json"
     if [ "${DEMO_WIPE_CALENDARS_REQUESTED:-0}" = "1" ]; then
-      rm -rf "$CAL_DIR"/*
+      rm -rf -- "${CAL_DIR:?}/"*
       mkdir -p "$CAL_DIR"
       rm -f "$CACHE_DIR"/events.cache.json "$CACHE_DIR"/events.cache.meta.json "$CACHE_DIR"/events.json "$CACHE_DIR"/events-cache.json
     fi
@@ -1156,8 +1156,6 @@ bootstrap_load_os_release(){
 # installer cannot begin changing an end-of-life operating system.
 bootstrap_classify_os_support(){
   local major="${OS_VERSION_ID%%.*}"
-  IS_DEBIAN_BOOKWORM=0
-  IS_DEBIAN_TRIXIE=0
   OS_SUPPORT_LEVEL="unsupported"
   OS_SUPPORT_LABEL="${OS_ID:-unknown} ${OS_CODENAME:-unknown}"
   OS_SUPPORT_HINT="Install Raspberry Pi OS Bookworm or Trixie, then run ~/install.sh again."
@@ -1167,13 +1165,11 @@ bootstrap_classify_os_support(){
   esac
   case "$OS_CODENAME" in
     bookworm)
-      IS_DEBIAN_BOOKWORM=1
       OS_SUPPORT_LEVEL="supported"
       OS_SUPPORT_LABEL="${OS_ID} Bookworm — supported compatibility mode"
       OS_SUPPORT_HINT="Bookworm is supported. Trixie is recommended for new devices."
       ;;
     trixie)
-      IS_DEBIAN_TRIXIE=1
       OS_SUPPORT_LEVEL="recommended"
       OS_SUPPORT_LABEL="${OS_ID} Trixie — recommended"
       OS_SUPPORT_HINT="Trixie is the recommended Dash-Go base."
@@ -3030,6 +3026,7 @@ ensure_go_dashboard_service_unit(){
   if service_unit_section_has_setting "$svc" Unit 'StartLimitIntervalSec=120' \
     && service_unit_section_has_setting "$svc" Unit 'StartLimitBurst=5' \
     && service_unit_section_has_setting "$svc" Service "ExecStart=$DASH/bin/dashboard-control-server" \
+    && service_unit_section_has_setting "$svc" Service 'Environment=GOMEMLIMIT=96MiB' \
     && service_unit_section_has_setting "$svc" Service 'Restart=always' \
     && service_unit_section_has_setting "$svc" Service 'RestartSec=3'; then
     return 0
@@ -3046,6 +3043,7 @@ StartLimitBurst=5
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$DASH
+Environment=GOMEMLIMIT=96MiB
 ExecStart=$DASH/bin/dashboard-control-server
 Restart=always
 RestartSec=3
@@ -3702,7 +3700,6 @@ repair_bundle_recovery_recipe(){
 
 download_app_files(){
   local target="${1:-latest}"
-  RELEASE_PAYLOAD_FATAL=0
   case "${UPDATE_PLAN_KIND:-}" in
     local) install_local_release_bundle "$target" && return 0 ;;
     github) download_release_payload_from_resolution "${UPDATE_PLAN_META:-}" "$target" && return 0 ;;
@@ -4390,6 +4387,7 @@ StartLimitBurst=5
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$DASH
+Environment=GOMEMLIMIT=96MiB
 ExecStart=$DASH/bin/dashboard-control-server
 Restart=always
 RestartSec=3
@@ -6420,7 +6418,7 @@ prompt_message_api_keys(){
 }
 
 prompt_weather_sources(){
-  WEATHER_PROVIDER="openmeteo"; WEATHER_PROVIDERS="openmeteo"; WEATHER_KEYS_JS="{}"; WXAPI=""; AQAPI=""; APIKEY=""
+  WEATHER_PROVIDERS="openmeteo"; WEATHER_KEYS_JS="{}"; WXAPI=""; AQAPI=""; APIKEY=""
   key_weatherapi=""; key_openweather=""; key_googleweather=""; key_tomorrow=""; key_visualcrossing=""; key_weatherbit=""; key_pirateweather=""; key_accuweather=""; key_xweather=""; key_openmeteocustom=""
   if [ -f "$WEATHER_ENV" ]; then
     # shellcheck disable=SC1090
@@ -8075,7 +8073,6 @@ echo "   * Tip: TRIPLE-TAP the moon-phase icon next to the weather to open Dashb
 
 # The full first-boot guide only matters when boot/system pieces were touched.
 if [ "$MODE" = "1" ] || [ "$DO_AUTOSTART" = "1" ] || [ "$DO_AUTOLOGIN" = "1" ]; then
-IP_NOW="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if [ "$IS_PI" = "1" ]; then
 cat <<NOTE
 

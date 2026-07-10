@@ -36,4 +36,5 @@ for(const key of ["high","low","feels","precipChance","precipTotal","wind","uv",
 }
 assert.notEqual(context.__icons.soft.sun,context.__icons.bold.sun,"Bold sun must visibly differ from Soft");
 assert.notEqual(context.__icons.soft.cloud,context.__icons.contrast.cloud,"High Contrast cloud must visibly differ from Soft");
+assert.doesNotMatch(source,/-?\d+\.\d{6,}/,"generated weather SVG coordinates must not retain floating-point artifact tails");
 console.log("PASS: reviewed static weather and metric SVG catalogs stay local, distinct, and cached");

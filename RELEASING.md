@@ -2,7 +2,7 @@
 
 Dash-Go is a public GitHub project. GitHub Releases are the canonical installer and update distribution channel. The release workflow is deliberately fail-closed: source is audited, the local builder creates every generated asset, GitHub publication starts as a draft, and the public route is probed only after publication.
 
-The local Windows/WSL builder owns generated browser bundles, Linux binaries, release archives, SPDX SBOMs, checksums, and release catalogs. Do not hand-edit an archive, SBOM, `SHA256SUMS`, or catalog after a successful build.
+The local Windows/WSL builder owns generated browser bundles, Linux binaries, release archives, binary-derived SPDX SBOMs, checksums, and release catalogs. Do not hand-edit an archive, SBOM, `SHA256SUMS`, or catalog after a successful build.
 
 ## Release identity and assets
 
@@ -25,8 +25,8 @@ SHA256SUMS
 Start with the final source handoff, not a builder directory or a prior release-asset directory.
 
 1. Extract the handoff into the dedicated Dash-Go Git working tree.
-2. Confirm it contains no `AI.md`, generated binaries, browser bundles, release assets, logs, caches, backups, calendars, credentials, or local configuration.
-3. Run the release gate from the source root: `app/tests/run-all.sh`. It requires clean `gofmt`, Go module verification, `go vet`, `go test ./...`, shellcheck on the changed installer scripts, and every shell/Node smoke. The GitHub Actions **Verify Dash-Go source** workflow must be green for the same commit.
+2. Confirm it contains `app/tests/run-all.sh`, `.github/workflows/verify.yml`, and this `RELEASING.md`; the source runner, CI workflow, and maintainer instructions are one handoff contract and may not be filtered independently. Also confirm it contains no `AI.md`, generated binaries, browser bundles, release assets, logs, caches, backups, calendars, credentials, or local configuration.
+3. Run the release gate from the source root: `app/tests/run-all.sh`. It requires clean `gofmt`, a no-diff `go mod tidy`, Go module verification, `go vet`, `go test ./...`, exactly ShellCheck 0.9.0 with error-severity findings release-blocking, and every shell/Node smoke. ShellCheck warnings remain review findings and must be resolved or narrowly documented when they identify real dead or indirect state. The GitHub Actions **Verify Dash-Go source** workflow must be green for the same commit.
 4. Exercise the beta.6 selector migration in that gate (`beta6-selector-upgrade-smoke.sh`). For an actual device still on **1.5.8-beta.6**, extract the verified **1.5.8** release bundle and run `./install.sh --bootstrap-selector-integrity` before its first ordinary stable update. The bridge atomically refreshes `~/install.sh`, verifies the copied bytes, then starts the corrected stable updater; it is not needed for newer installs.
 5. Inspect `git status`, `git diff --cached`, `.gitignore`, and `.gitattributes` before committing.
 6. Commit only the reviewed source tree to `DashDashGoApp/Dash-Go`.

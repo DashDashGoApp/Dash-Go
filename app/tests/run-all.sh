@@ -8,6 +8,8 @@ APP_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 REPO_ROOT="$(CDPATH= cd -- "$APP_ROOT/.." && pwd)"
 GO_BIN="${GO:-go}"
 NODE_BIN="${NODE:-node}"
+SHELLCHECK_BIN="${SHELLCHECK:-shellcheck}"
+SHELLCHECK_REQUIRED_VERSION="0.9.0"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/dash-go-tests.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
@@ -15,7 +17,7 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 need(){ command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"; }
 need "$GO_BIN"
 need "$NODE_BIN"
-need shellcheck
+need "$SHELLCHECK_BIN"
 GOFMT_BIN="${GOFMT:-$($GO_BIN env GOROOT)/bin/gofmt}"
 [ -x "$GOFMT_BIN" ] || fail "gofmt is unavailable next to $GO_BIN"
 
@@ -39,6 +41,7 @@ format_out="$("$GOFMT_BIN" -l "${go_files[@]}")"
 printf '%s\n' '== Go module, vet, and test gate =='
 (
   cd "$APP_ROOT"
+  "$GO_BIN" mod tidy -diff
   "$GO_BIN" mod verify
   "$GO_BIN" vet ./...
   "$GO_BIN" test -count=1 ./...
@@ -46,8 +49,23 @@ printf '%s\n' '== Go module, vet, and test gate =='
 )
 export DASHGO_CONTROL_SERVER_BIN="$TMP/dashboard-control-server"
 
-printf '%s\n' '== Shellcheck gate =='
-shellcheck "$REPO_ROOT/installer/install.sh" "$APP_ROOT/bin/setup-vdirsyncer.sh"
+# Focused shell and Node smokes use application-relative fixture paths. Keep
+# local runs and repository-root CI runs on the same deterministic working
+# directory.
+cd "$APP_ROOT"
+
+printf '%s\n' '== ShellCheck gate =='
+shellcheck_version="$($SHELLCHECK_BIN --version | awk '/^version:/{print $2; exit}')"
+[ "$shellcheck_version" = "$SHELLCHECK_REQUIRED_VERSION" ] || fail "ShellCheck $SHELLCHECK_REQUIRED_VERSION is required; found ${shellcheck_version:-unknown}"
+printf '%s\n' "  > ShellCheck $shellcheck_version (errors are release-blocking; warnings remain review findings)"
+shellcheck_targets=(
+  "$REPO_ROOT/installer/install.sh"
+  "$APP_ROOT/bin/setup-vdirsyncer.sh"
+)
+"$SHELLCHECK_BIN" --external-sources --severity=error "${shellcheck_targets[@]}"
+if ! "$SHELLCHECK_BIN" --external-sources --severity=warning "${shellcheck_targets[@]}"; then
+  printf '%s\n' 'NOTE: ShellCheck warning findings are reported above for review; only error severity blocks this gate.' >&2
+fi
 
 printf '%s\n' '== Shell smoke gate =='
 while IFS= read -r -d '' test_file; do
