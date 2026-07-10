@@ -64,6 +64,26 @@ Set-Location 'C:\Users\chris\Projects\Dash-Go_GitHub_Publisher_1.0.0'
 
 `Preflight` verifies the selected source handoff and Builder-produced public source asset agree. `Guided` creates the source commit, exact tag, and GitHub **draft** release after its explicit confirmations. It records a transaction journal before mutation so an interrupted local-only attempt can be diagnosed and recovered safely.
 
+### GitHub release-note contract
+
+The current version section at the top of `CHANGELOG.md` is the reviewed source of truth for the GitHub release body. The Publisher extracts only that exact version section, previews the final body before the typed draft confirmation, and verifies the initial GitHub draft body after creation.
+
+The optional canonical `###` categories are:
+
+- `Features`
+- `Improvements`
+- `Bug fixes`
+- `Performance and reliability`
+- `Security`
+- `Build and release integrity`
+- `Removals`
+- `Upgrade notes`
+- `Known issues`
+
+Omit categories with no meaningful entries. `Removals` is reserved for significant user-visible, compatibility, platform, provider, setting, API, file-format, or supported-workflow removals. Do not use it for dead variables, internal helpers, duplicate tests, dependency cleanup, comments, unused styles, or other implementation housekeeping.
+
+The source gate and Publisher both fail closed when the current version section is missing, not first, empty, contains unsupported or duplicate category headings, or has a category without at least one bullet. Stable promotion first consolidates the active beta history into one stable changelog section, so stable GitHub notes describe the complete stable delta rather than replaying each beta.
+
 Review the draft before publication:
 
 - version, tag, title, and beta/stable state;

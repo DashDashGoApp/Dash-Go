@@ -1,80 +1,49 @@
 # Dash-Go Changelog
 
-## [1.5.9-beta.5] — 2026-07-10
+## [1.5.9] — 2026-07-10
 
-### Release-gate and source-handoff integrity
+Dash-Go 1.5.9 expands the native Showcase contract, improves Debian security-maintenance recognition, refreshes calendar and weather artwork, and reduces background work on the Pi Zero 2 W while strengthening the source, builder, SBOM, and GitHub release workflow.
 
-- Restored the private-calendar Google OAuth smoke to the lock-aware APT contract and added the required GitHub Actions verification workflow to the public source handoff.
-- Defined the source gate against ShellCheck 0.9.0 with an explicit severity policy, corrected destructive calendar cleanup to refuse an empty directory variable, and removed obsolete installer state left by earlier refactors.
-- Extended the handoff contract so the source runner, CI workflow, and maintainer release instructions travel together.
-- Added a no-diff Go module tidy gate and corrected SPDX generation to inventory only authenticated modules actually linked into all five released Linux binaries; broader graph-only and upstream test dependencies remain outside runtime `DEPENDS_ON` relationships.
-- Completed the tidy checksum lock for the minifier's graph-only upstream test helper without promoting that helper into third-party release notices or the binary-derived runtime SBOM.
+### Features
 
-### Pi Zero 2 W performance and reliability
+- Added the dormant-by-default native `dashgo-showcase/v1` contract for Dash-Go Showcase Studio, with an immutable application tree, isolated disposable scenario data, manifest-owned calendars, bounded cache preparation, an authoritative readiness endpoint, and a package-contract probe. Ordinary Dash-Go installations remain outside Showcase mode.
 
-- Minified builder-generated JavaScript without renaming bindings, preserving classic-script cross-file identifiers while reducing browser source volume.
+### Improvements
+
+- Made the Showcase contract portable to Windows by isolating platform-specific locking, process, signal, directory-durability, disk-reporting, and detached-process behavior behind native helpers while preserving Linux appliance behavior.
+- Expanded managed Debian security-maintenance eligibility to authenticated country mirrors, caching proxies, and mirrored local archives when their enabled base and `trixie-security` metadata is current and Debian-signed. Explicit repair remains opt-in and rolls back Dash-Go-owned source changes on failure.
+- Refreshed seasonal, holiday, and observance calendar artwork together with every weather icon style and weather-summary metric icon while preserving static inline-SVG, five-artwork, and Lite-profile constraints.
+
+### Bug fixes
+
+- Corrected Showcase static-data routing on Windows by canonicalizing URL paths before applying the isolated-data allowlist and filesystem conversion, while continuing to reject drive-qualified and ambiguous paths.
+- Corrected fixed local-calendar labels in event-edit states so calendar names and providers render as structured elements rather than stringified markup.
+
+### Performance and reliability
+
+- Minified builder-generated JavaScript without renaming classic-script bindings, reducing browser source volume while preserving cross-file identifiers.
+- Reduced unchanged Calendar cache work by persisting validated summary and file-stat metadata, safely upgrading older metadata after one fallback parse, and avoiding a complete event-cache reparse when the source fingerprint and cache file are unchanged.
+- Moved compact event-cache output onto the durable atomic-write path and removed the redundant timestamp query from browser cache requests.
+- Added a `GOMEMLIMIT=96MiB` soft runtime target to both dashboard-service generation paths to keep Go memory growth bounded on low-memory appliances without imposing a hard systemd cap.
 - Normalized floating-point artifacts in generated weather SVG coordinates without changing their rendered geometry.
-- Added an additive event-cache metadata summary and file-stat fast path so unchanged cache generations avoid reparsing the complete event cache; older metadata upgrades safely after one fallback parse.
-- Moved compact event-cache writes onto the existing durable atomic-write primitive and removed the redundant timestamp query from the browser cache request.
-- Added a measured `GOMEMLIMIT=96MiB` service experiment to both installer service-generation paths, with convergence and regression coverage.
 
-- This remains a source-only handoff. The local Windows/WSL builder owns generated bundles, compiled binaries, package validation, checksums, SBOM, and publishable release assets.
+### Security
 
-## [1.5.9-beta.4] — 2026-07-09
+- Hardened Debian source qualification by refusing insecure, trusted-without-verification, wrong-suite, missing-metadata, and incompatible Raspbian layouts with explicit Doctor reasons.
+- Preserved strict Showcase static-data isolation and no-store behavior while adding URL-path canonicalization and regression coverage for Windows-shaped separators and native scenario delivery.
 
-### Calendar décor and weather SVG refresh
+### Build and release integrity
 
-- Updated calendar seasonal, holiday, and observance inline SVG artwork from the refined v4 gallery while preserving Dash-Go's static inline-SVG constraints: no external assets, filters, masks, gradients, or animation.
-- Updated all weather icon style sets and weather summary metric icons to the refined SVG set.
-- Preserved the five-artwork runtime contract for every calendar décor mode. The uploaded gallery provided fewer previews for Pride, Veterans Day, and Mother’s Day, so the unmatched fifth slots remain from beta.3 rather than disabling those décor modes.
-- This is a source-only handoff; browser bundles, generated CSS, compiled binaries, release metadata, checksums, SBOM, and publishable release assets remain owned by the local Windows/WSL release builder.
+- Added the Contract v1 Windows cross-compile and built-binary release probes so a source handoff cannot publish an undeclared, unbuildable, or misidentified native Showcase runtime.
+- Made the public source handoff carry its full local/CI gate, GitHub verification workflow, and maintainer release instructions together.
+- Standardized ShellCheck 0.9.0 policy, added an exact `go mod tidy -diff` gate, and retained fail-closed formatting, module, vet, test, race, browser, installer, package, checksum, and archive validation.
+- Improved SPDX accuracy by deriving the Go runtime dependency inventory from authenticated module metadata embedded in all five released Linux binaries rather than treating graph-only or upstream test modules as shipped runtime dependencies.
+- Added structured GitHub release notes sourced from the exact current-version changelog section, including canonical optional categories, pre-draft preview, source-asset agreement, and initial GitHub-body verification.
 
-## [1.5.9-beta.3] — 2026-07-05
+### Upgrade notes
 
-### Native Showcase Windows static-data routing
-
-- Corrected Contract v1 static scenario-data routing on Windows. The server now normalizes HTTP request paths using URL slash semantics before native Showcase data-root allowlisting and filesystem conversion, so approved browser requests such as `/config/config.local.js` and manifest-declared `/calendars/*.ics` cannot be mistaken for backslash-prefixed paths.
-- Retained strict static allowlisting and no-store configuration behavior. Drive-qualified or ambiguous static URL segments are refused before filesystem conversion; ordinary Dash-Go static routing remains unchanged.
-- Added regression coverage for Windows-shaped separators, URL-path canonicalization, native config delivery from the disposable data root, and the four-calendar native allowlist.
-- This follows the beta.2 rehearsal result: immutable-release metadata, native Contract v1 selection, status readiness, cache evidence, and Stage Candidate proof passed; only the installed Windows self-test exposed the final static browser-route boundary before a Studio release or device update.
-
-## [1.5.9-beta.2] — 2026-07-05
-
-### Native Showcase Windows portability
-
-- Moved Unix-only file-lock, process-liveness, process-detach, termination-signal, directory-sync, disk-free, and terminal-detach primitives behind explicit Dash-Go platform helpers. Linux behavior is unchanged; Windows Showcase builds use conservative no-op behavior for updater/process and device-storage operations that are not supported in the packaged Studio runtime.
-- Adds a Builder-owned Contract v1 Windows cross-compile gate so a Dash-Go source handoff that declares `dashgo-showcase/v1` cannot publish if `cmd/dashboard-control-server` fails to build for the Studio Windows payload.
-- This correction follows the first native Studio rehearsal: source, contract, assets, and native selection passed; the Windows engine compile exposed remaining Unix-only references before a Studio release or device update could occur.
-- Corrected the standalone generated-assets verifier fixture to stage both build-tagged directory-sync helpers alongside `fileio.go`; the self-contained verifier now compiles on its selected host platform instead of relying on an omitted package sibling.
-
-## [1.5.9-beta.1] — 2026-07-05
-
-### Showcase Contract v1 beta rehearsal
-
-- Introduced the dormant-by-default native `dashgo-showcase/v1` runtime contract for Dash-Go Showcase Studio. Ordinary Dash-Go installs do not enter Showcase mode and retain their existing application and user-data paths.
-- Added strict isolated Showcase roots: the immutable Dash-Go application tree remains read-only to the scenario, while Studio supplies a separate disposable data root and a strict scenario manifest.
-- Made scenario calendars manifest-owned: Dash-Go validates the declared static ICS fixtures, writes their calendar manifest, registers the exact private writable collections, and rebuilds the bounded event cache before Studio opens.
-- Added the authoritative `GET /api/showcase/status` readiness report and `dashboard-control-server --showcase-contract` package-contract probe. Studio now uses these native surfaces when the packaged Dash-Go runtime declares Contract v1; older releases continue through the checked-in legacy bridge.
-- Added source coverage for ordinary-mode dormancy, strict manifest/path refusal, static scenario-data allowlisting, cache and writeback readiness, and the native status endpoint.
-
-### Mirror-aware Debian security-maintenance eligibility
-
-- Replaced hostname recognition with authenticated Debian Release-metadata checks. Enabled `.list` and Deb822 `.sources` entries can now use official country aliases, caching proxies, or properly mirrored local endpoints when the selected base and `trixie-security` suites carry current signatures from the Debian archive keyring and report the expected Debian identity.
-- Refused `trusted=yes`, `allow-insecure`, wrong-suite, missing-metadata, and Raspbian-incompatible layouts explicitly. Doctor now names the exact reason rather than describing a valid mirror as unofficial.
-- Made security-source creation opt-in: only `~/install.sh --repair --system`, and only after a verified base source exists while `trixie-security` is missing, may add Dash-Go’s canonical security source. The repair snapshots Dash-Go-owned files, refreshes APT, revalidates signed metadata, and rolls back its own changes on failure.
-- Added mirror/proxy, Deb822 and `.list`, wrong-suite, insecure-source, Raspbian, metadata-identity, and repair/rollback-contract smoke coverage.
-
-### Local calendar edit-popup labels
-
-- Corrected fixed local-calendar rows in existing-event, one-writable-calendar, and unavailable-calendar states. The calendar name and provider are now appended as nested DOM elements rather than passed to the text-only `el()` argument, so local events such as payday entries no longer show stringified markup or `[object HTMLSpanElement]`.
-- Added an executable DOM-structure smoke covering all three fixed states, including the unavailable-calendar safety message.
-
-### Release assurance
-
-- Added a release-gate smoke that runs the built control-server binary against the shipped Contract v1 declaration, so a source handoff cannot silently omit or misidentify the native Showcase contract.
-- Made the existing no-source weather fallback test deterministic with a local failing fixture. Production weather-provider behavior is unchanged.
-
-This changelog records stable Dash-Go milestones. During an active development cycle, concise beta notes may remain for release review; they are consolidated into one stable section at promotion so the file remains useful as a product history rather than a release-by-release development journal.
+- Existing event-cache metadata is accepted and upgraded automatically after one safe fallback parse; the browser-facing `events.cache.json` format remains unchanged.
+- The dashboard service now uses a 96 MiB soft Go memory target. It is not a hard memory cap, and normal systemd restart behavior remains unchanged.
 
 ## [1.5.8] — 2026-07-04
 

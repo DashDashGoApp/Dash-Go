@@ -2,35 +2,25 @@
 
 **Dash-Go** is pronounced **“Dash Dash Go.”**
 
-## Current beta release candidate
-
-- **Version:** `1.5.9-beta.5`
-- **Track:** beta
-- **Purpose:** restore an honest release gate and test a bounded Pi Zero 2 W performance/reliability set. The beta carries its CI workflow in the source handoff, pins the ShellCheck gate policy, requires a tidy Go module lock, minifies generated JavaScript without binding renames, removes weather-SVG float artifacts, avoids unchanged event-cache reparsing, uses durable compact cache writes, removes a redundant cache URL timestamp, and applies a soft `GOMEMLIMIT=96MiB` service experiment.
-- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify the minified browser bundles, run the complete source gate with ShellCheck 0.9.0, clear both Chromium computed-layout smokes, derive the SPDX Go inventory from matching build metadata in all five released Linux binaries, and pass installer, package, checksum, SBOM, and final-archive validation before publication. On a physical Pi Zero 2 W, compare beta.5 service `MemoryCurrent`/peak and restart count against the beta.4 baseline under the same normal kiosk workload before retaining or lowering the 96 MiB soft limit; any restart increase, visible latency, or sustained GC pressure rejects the experiment.
-- **Compatibility:** event-cache metadata gains additive summary/stat fields. Existing beta.4 metadata is accepted and upgraded after one safe fallback parse; `events.cache.json` and the browser/API response content remain unchanged. The memory limit is a soft Go runtime target rather than a systemd hard cap.
-- **Source-handoff contract:** `app/tests/run-all.sh`, `.github/workflows/verify.yml`, and `RELEASING.md` must travel together. `AI.md`, `.git/`, generated bundles, binaries, builder tooling, release artifacts, mutable user data, and credentials remain excluded.
-- **Security-maintenance eligibility:** Debian base and `trixie-security` sources are identified by enabled APT entry plus current Debian-signed Release metadata, not by hostname. Valid country mirrors, proxies, and mirrored local archives qualify; wrong-suite and insecure source flags do not. A missing security source is repairable only through the explicit `--repair --system` path after the base source is verified.
-- **Native Showcase Windows portability:** Contract v1 keeps Linux-specific locks, signals, directory durability, disk-free reporting, and detached-process behavior behind build-tagged helpers. Its static data router canonicalizes HTTP paths with URL slash semantics before applying the isolated-data allowlist.
-- **Calendar writeback presentation:** fixed local-calendar labels in edit popups retain nested provider/name elements for existing events, a single writable calendar, and unavailable-calendar states.
-
 ## Current stable release
 
-- **Version:** `1.5.8`
+- **Version:** `1.5.9`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.5 is the current controlled beta source handoff and supersedes beta.4 for beta testing. It does not alter the 1.5.8 stable baseline until every local-builder and physical-device check required for promotion is complete.
-- **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
-- **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
-- **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.
+- **Promotion basis:** 1.5.9 consolidates the validated 1.5.9 beta line into one stable source contract. The local Windows/WSL builder remains responsible for the final generated bundles, five Linux binaries, package validation, binary-derived SPDX SBOM, checksums, release archives, and publishable GitHub assets.
+- **Required release proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified browser bundles, clear the complete source and Chromium layout gates, derive one matching authenticated module inventory from all five released Linux binaries, and pass installer, package, checksum, SBOM, and final-archive validation. Dash-Go GitHub Publisher 1.4.11 or newer must extract, preview, publish, and verify the exact structured 1.5.9 changelog section.
+- **Compatibility:** existing event-cache metadata is accepted and upgraded after one safe fallback parse. `events.cache.json` and normal browser/API content remain compatible. The service memory setting is a soft Go runtime target rather than a systemd hard limit.
+- **Source-handoff contract:** `app/tests/run-all.sh`, `.github/workflows/verify.yml`, and `RELEASING.md` travel together. `AI.md`, `.git/`, generated bundles, binaries, builder tooling, release artifacts, mutable user data, and credentials remain excluded.
+- **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
+- **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
 
-## 1.5.8 stable scope
+## 1.5.9 stable scope
 
-- **Calendar access:** Calendar Manager now makes the view-only/two-way boundary explicit. Guided Google OAuth, iCloud, and compatible CalDAV accounts discover exact calendars before activation and retain owner-only credentials outside the webroot.
-- **Update safety:** package-owned selectors remain manifest-owned, updates and rollbacks verify their installed payloads, all shipped architectures have missing-selector legacy recovery, and a one-time bridge repairs a beta.6 updater before its first stable update when needed.
-- **Maintenance and Doctor:** supported Debian-family systems can receive narrowly scoped security maintenance; Doctor recognizes the current weather-cache schema and legitimate kiosk process trees while naming actual display-manager/Wayland mismatches.
-- **Installer resilience:** verified download/APT retries, pre-commit storage checks, writable-filesystem/RAM/time-zone readiness, sudo/session locking, X11/LightDM enforcement, and clear reboot/rescue guidance reduce first-boot and update failure modes. Dash-Go remains deliberately X11/LightDM/Openbox based.
-- **Validation boundary:** `app/tests/run-all.sh` is the required local/CI source gate: it runs formatting, `go mod tidy -diff`, Go module verification, vet/test checks, shellcheck, all shell smokes, and all Node/browser smokes. The local Windows/WSL builder remains responsible for generated assets, compiled binaries, package validation, checksums, a binary-derived SPDX inventory, and publishable GitHub Release assets.
+- **Native Showcase contract:** `dashgo-showcase/v1` supplies isolated scenario data, manifest-owned calendars, bounded cache preparation, readiness reporting, package probing, Windows portability, and strict static-data routing while remaining dormant during ordinary Dash-Go operation.
+- **Debian security maintenance:** valid Debian mirrors, proxies, and mirrored archives qualify through current Debian-signed base and `trixie-security` metadata rather than hostname matching. Insecure, wrong-suite, missing-metadata, and incompatible source layouts remain fail-closed; repair is explicit and rollback-safe.
+- **Calendar and weather presentation:** fixed local-calendar labels render correctly in edit flows, and refreshed static calendar décor and weather SVG sets preserve the existing low-power inline-asset model.
+- **Pi performance and durability:** generated JavaScript is minified without binding renames, unchanged event caches use validated metadata instead of full reparsing, compact cache writes are atomic, redundant cache URL churn is removed, and the dashboard service receives a 96 MiB soft Go memory target.
+- **Release assurance:** the source runner, CI workflow, and maintainer instructions travel together; ShellCheck and module-tidy policy are explicit; native Showcase declarations are cross-compiled and probed; SPDX reports modules linked into all five shipped binaries; and GitHub notes are generated from the reviewed stable changelog section.
 
 ## 1.5.6 stable highlights
 
