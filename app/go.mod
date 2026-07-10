@@ -2,7 +2,7 @@ module github.com/DashDashGoApp/Dash-Go/app
 
 go 1.26
 
-toolchain go1.26.4
+toolchain go1.26.5
 
 require github.com/unraid/apprise-go v0.2.6
 

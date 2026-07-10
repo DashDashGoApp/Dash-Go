@@ -4,11 +4,11 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.9-beta.3`
+- **Version:** `1.5.9-beta.4`
 - **Track:** beta
-- **Purpose:** first controlled Dash-Go Showcase Contract v1 rehearsal. The beta carries the native isolated-runtime, scenario-manifest, calendar/writeback readiness, and status-endpoint surfaces consumed by the merged Studio handoff.
-- **Required candidate proof:** the exact published beta must be packaged by Showcase Studio through the native path, seed its four disposable writable calendars, and refuse browser launch unless `/api/showcase/status` reports a rebuilt cache and all declared writeback candidates.
-- **Compatibility:** ordinary Dash-Go operation remains dormant unless all three Showcase environment variables are supplied. Studio continues using its reviewed legacy bridge only for packaged Dash-Go releases that do not declare Contract v1.
+- **Purpose:** calendar décor and weather SVG refresh beta. The beta updates refined inline SVG artwork from the v4 gallery while preserving the five-artwork runtime contract for each calendar décor set and leaving generated browser bundles to the local builder.
+- **Required candidate proof:** the local builder must regenerate browser bundles, pass the seasonal décor SVG smoke, JavaScript syntax checks, generated-asset checks, and the standard source/release gates before publication.
+- **Compatibility:** changes are static inline SVG/source-only visual updates. Calendar décor remains dormant unless enabled by the existing visual setting, and all décor sets retain five SVG entries so existing selection and smoke-test behavior remains intact.
 - **Security-maintenance eligibility:** Debian base and `trixie-security` sources are identified by enabled APT entry plus current Debian-signed Release metadata, not by hostname. Valid country mirrors, proxies, and mirrored local archives qualify; wrong-suite and insecure source flags do not. A missing security source is repairable only through the explicit `--repair --system` path after the base source is verified.
 - **Native Showcase Windows portability:** Contract v1 keeps Linux-specific locks, signals, directory durability, disk-free reporting, and detached-process behavior behind build-tagged helpers. Its static data router now canonicalizes HTTP paths with URL slash semantics before it applies the isolated-data allowlist, so Windows cannot turn an approved `/config/...` or `/calendars/...` fixture request into a miss.
 - **Calendar writeback presentation:** fixed local-calendar labels in edit popups retain nested provider/name elements for existing events, a single writable calendar, and unavailable-calendar states.
@@ -18,7 +18,7 @@
 - **Version:** `1.5.8`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.3 is the corrective native-Showcase Windows static-data-routing beta source handoff. It supersedes the already-published 1.5.9-beta.1 rehearsal after Studio's Windows engine compile exposed remaining Unix-only primitives.
+- **Promotion status:** 1.5.8 remains the current stable baseline; 1.5.9-beta.4 is the SVG-refresh beta source handoff built on the 1.5.9-beta.3 native Showcase readiness baseline. It supersedes beta.3 only for the next controlled beta candidate; 1.5.8 remains the current stable baseline.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, source archive, SPDX SBOM, and `SHA256SUMS`.
 - **Release integrity:** published assets use immutable GitHub Releases; installation and update flows validate downloaded and staged content before managed files are replaced.

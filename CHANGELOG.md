@@ -1,5 +1,14 @@
 # Dash-Go Changelog
 
+## [1.5.9-beta.4] — 2026-07-09
+
+### Calendar décor and weather SVG refresh
+
+- Updated calendar seasonal, holiday, and observance inline SVG artwork from the refined v4 gallery while preserving Dash-Go's static inline-SVG constraints: no external assets, filters, masks, gradients, or animation.
+- Updated all weather icon style sets and weather summary metric icons to the refined SVG set.
+- Preserved the five-artwork runtime contract for every calendar décor mode. The uploaded gallery provided fewer previews for Pride, Veterans Day, and Mother’s Day, so the unmatched fifth slots remain from beta.3 rather than disabling those décor modes.
+- This is a source-only handoff; browser bundles, generated CSS, compiled binaries, release metadata, checksums, SBOM, and publishable release assets remain owned by the local Windows/WSL release builder.
+
 ## [1.5.9-beta.3] — 2026-07-05
 
 ### Native Showcase Windows static-data routing
