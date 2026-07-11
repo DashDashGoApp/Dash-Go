@@ -9,8 +9,8 @@ import "time"
 // CacheVersion advances when recurrence expansion semantics change. A previous
 // cache remains structurally readable, but must be rebuilt before it can be
 // reused with the current parser.
-const CacheVersion = 9
-const FingerprintVersion = 7
+const CacheVersion = 10
+const FingerprintVersion = 8
 const maxRecurrenceSteps = 50000
 
 // CalendarSource is the stable source descriptor persisted inside
@@ -36,6 +36,7 @@ type SourceMeta struct {
 	Path      string   `json:"path"`
 	Exists    bool     `json:"exists"`
 	MtimeMs   *int64   `json:"mtimeMs"`
+	MtimeNs   *int64   `json:"mtimeNs,omitempty"`
 	Size      *int64   `json:"size"`
 	SHA256    *string  `json:"sha256"`
 	RealPath  string   `json:"realPath"`
@@ -72,6 +73,10 @@ type ICSEvent struct {
 	SkipDays        map[string]bool
 	Recur           bool
 	Seq             int
+	Status          string
+	LastModified    time.Time
+	DTStamp         time.Time
+	Cancelled       bool
 	AppOwner        string
 	Meta            map[string]string
 	HasScheduling   bool

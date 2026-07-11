@@ -24,25 +24,47 @@ function maybePrewarmEventMaps(winStart,winEnd){
     body:JSON.stringify({windowStart:+winStart,windowEnd:+winEnd,limit,eventMaps:true,interactiveMaps:!!CONFIG.showInteractiveMaps})}).catch(()=>{});
 }
 
-async function loadEventsCache(winStart,winEnd){
+let EVENT_CACHE_ETAG="";
+let EVENT_CACHE_BASE_EVENTS=null;
+let EVENT_CACHE_WINDOW_START=0;
+let EVENT_CACHE_WINDOW_END=0;
+function eventCacheWindowEvents(winStart,winEnd){
+  if(!Array.isArray(EVENT_CACHE_BASE_EVENTS)) return null;
+  if(EVENT_CACHE_WINDOW_START>+winStart||EVENT_CACHE_WINDOW_END<+winEnd) return null;
+  const all=EVENT_CACHE_BASE_EVENTS.filter(ev=>(ev.end||ev.start)>=winStart&&ev.start<=winEnd);
+  for(const ev of birthdayEvents(winStart,winEnd)) all.push(ev);
+  all.sort((a,b)=>a.start-b.start);
+  return all;
+}
+async function loadEventsCache(winStart,winEnd,retryWithoutETag){
   try{
-    const res=await fetch("cache/events.cache.json",{cache:"no-store"});
+    const headers=EVENT_CACHE_ETAG?{"If-None-Match":EVENT_CACHE_ETAG}:{};
+    const res=await fetch("cache/events.cache.json",{cache:"no-store",headers});
+    if(res.status===304){
+      const prior=eventCacheWindowEvents(winStart,winEnd);
+      if(prior) return prior;
+      if(!retryWithoutETag){
+        EVENT_CACHE_ETAG="";
+        return loadEventsCache(winStart,winEnd,true);
+      }
+      return null;
+    }
     if(!res.ok) return null;
     const cache=await res.json();
-    if(!cache || cache.version!==9 || !Array.isArray(cache.events)) return null;
+    if(!cache || cache.version!==10 || !Array.isArray(cache.events)) return null;
     if(cache.windowStart>+winStart || cache.windowEnd<+winEnd) return null;
-    const all=[];
+    EVENT_CACHE_BASE_EVENTS=[];
     for(const raw of cache.events){
       if(!raw || raw.start==null) continue;
-      const ev=cacheEventToRuntime(raw);
-      if((ev.end||ev.start)>=winStart && ev.start<=winEnd) all.push(ev);
+      EVENT_CACHE_BASE_EVENTS.push(cacheEventToRuntime(raw));
     }
-    for(const ev of birthdayEvents(winStart,winEnd)) all.push(ev);
-    all.sort((a,b)=>a.start-b.start);
-    EVENT_CACHE_INFO={source:"cache", using:true, generatedAt:cache.generatedAt||0,
-      windowStart:cache.windowStart||0, windowEnd:cache.windowEnd||0,
-      eventCount:cache.events.length, issues:cache.issues||[]};
-    return all;
+    EVENT_CACHE_WINDOW_START=Number(cache.windowStart)||0;
+    EVENT_CACHE_WINDOW_END=Number(cache.windowEnd)||0;
+    EVENT_CACHE_ETAG=(res.headers&&res.headers.get&&res.headers.get("ETag"))||"";
+    EVENT_CACHE_INFO={source:"cache",using:true,generatedAt:cache.generatedAt||0,
+      windowStart:cache.windowStart||0,windowEnd:cache.windowEnd||0,
+      eventCount:cache.events.length,issues:cache.issues||[],etag:EVENT_CACHE_ETAG};
+    return eventCacheWindowEvents(winStart,winEnd);
   }catch(err){
     console.warn("event cache unavailable, falling back to ICS",err);
     return null;
@@ -69,11 +91,35 @@ function queueLastKnownEventsPersist(events){
   if(typeof requestIdleCallback==="function")requestIdleCallback(persist,{timeout:4000});
   else setTimeout(persist,600);
 }
+function calendarStableJSON(value){
+  if(value===null||typeof value!=="object") return JSON.stringify(value);
+  if(Array.isArray(value)) return "["+value.map(calendarStableJSON).join(",")+"]";
+  return "{"+Object.keys(value).sort().map(key=>JSON.stringify(key)+":"+calendarStableJSON(value[key])).join(",")+"}";
+}
+function calendarSignatureMix(hash,value){
+  const text=String(value==null?"":value);
+  for(let i=0;i<text.length;i++){
+    hash^=text.charCodeAt(i);
+    hash=Math.imul(hash,16777619)>>>0;
+  }
+  hash^=31;
+  return Math.imul(hash,16777619)>>>0;
+}
+function calendarEventsSignature(all,sigExtra){
+  let hash=2166136261;
+  hash=calendarSignatureMix(hash,sigExtra||"");
+  for(const event of all){
+    const cal=event.cal||{};
+    for(const value of [event.id,event.uid,event.title,event.desc,event.location,+event.start,event.end?+event.end:0,event.allDay?1:0,cal.url,cal.name,cal.color,cal.tag,cal.owner,event.appOwner]){
+      hash=calendarSignatureMix(hash,value);
+    }
+    hash=calendarSignatureMix(hash,calendarStableJSON(event.managedSchedule||null));
+    hash=calendarSignatureMix(hash,calendarStableJSON(event.writeback||null));
+  }
+  return hash.toString(16)+":"+all.length;
+}
 function commitCalendarEvents(all,sigExtra){
-  const sig=(sigExtra||"")+"::"+all.map(e=>(e.title||"")+"|"+(+e.start)+"|"+(e.end?+e.end:0)+"|"+
-                       ((e.location||"").length)+"|"+((e.desc||"").length)+"|"+
-                       ((e.cal&&e.cal.name)||"")+"|"+((e.cal&&e.cal.color)||"")+"|"+((e.cal&&e.cal.tag)||"")+"|"+
-                       (e.appOwner||((e.cal&&e.cal.owner)||""))+"|"+JSON.stringify(e.managedSchedule||null)+"|"+JSON.stringify(e.writeback||null)).join("~");
+  const sig=calendarEventsSignature(all,sigExtra);
   // A routine cache refresh often returns byte-for-byte equivalent events.
   // Keep the current EVENTS array and per-day index intact in that case; there
   // is no DOM work to perform and rebuilding the index would only allocate on

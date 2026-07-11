@@ -1,5 +1,50 @@
 # Dash-Go Changelog
 
+## [1.5.10-beta.2] — 2026-07-11
+
+Dash-Go 1.5.10-beta.2 is a Calendar and Weather reliability beta. It keeps the existing dashboard layout and interaction model while standardizing provider units, hardening multi-source forecast blending, reducing unchanged Calendar work, and improving recurrence correctness and source diagnostics.
+
+### Improvements
+
+- Standardized Weather precipitation totals on canonical millimetres at every provider boundary, converting only at the display edge for metric or imperial presentation.
+- Added source-aware Weather detail rows with precipitation totals, cache age, request duration, request count, response size, and HTTP status where available.
+- Made multi-source Weather blending freshness-aware and field-specific: three-source disagreements use robust medians, precipitation totals and probabilities resist one-source extremes, stale values are excluded while fresh values exist, and missing condition codes no longer vote as clear weather.
+- Replaced numeric weather-code tie bias with condition-family voting and supporting precipitation signals, and selected sunrise and sunset from the median-nearest provider timestamp.
+- Gave each Weather provider an independent quota-safe freshness interval while retaining the normal profile-based aggregate check cadence.
+- Made manual Weather refresh attempt live provider requests while continuing to respect active authentication and rate-limit cooldowns and retaining stale fallback data on failure.
+- Made the Calendar event-cache window follow configured Calendar and Agenda coverage, including the selected first day of the week and a bounded safety margin.
+- Added conditional event-cache loading through ETag/304 so unchanged browser refreshes reuse the parsed event model instead of reparsing the full cache.
+- Reused persisted Calendar source digests when source path, size, and nanosecond modification time are unchanged.
+
+### Bug fixes
+
+- Corrected imperial precipitation totals that previously displayed canonical millimetres with an inch symbol.
+- Corrected Visual Crossing wind conversion when metric provider responses report kilometres per hour.
+- Included WeatherAPI snow probability when determining a day’s maximum precipitation probability.
+- Replaced Pirate Weather mixed physical accumulation with hourly liquid-water-equivalent precipitation totals grouped by forecast-local day.
+- Corrected Calendar change detection so same-length edits to event descriptions or locations invalidate the browser event model.
+- Made generated occurrence identifiers stable across unrelated earlier-event additions or removals.
+- Added ICS `STATUS:CANCELLED`, revision selection through `SEQUENCE` and revision timestamps, cancelled recurrence overrides, and `DURATION` support in both the Go cache parser and emergency browser fallback.
+
+### Performance and reliability
+
+- Serialized in-process Calendar cache generation and added a bounded cross-process lock so cron, sync, writeback, and household updates do not rebuild the same cache concurrently.
+- Serialized in-process aggregate Weather refreshes so simultaneous dashboard, manual, and command-line requests do not duplicate provider calls.
+- Advanced the Calendar cache schema and fingerprint contract so corrected recurrence and identity behavior rebuilds existing caches safely.
+- Added typed Weather HTTP errors with `Retry-After` handling and serialized provider cooldown-state updates to prevent concurrent read-modify-write loss.
+- Added per-provider live-request telemetry without introducing extra provider calls.
+- Made all-excluded Weather source recovery explicit and retained clear metadata when stale provider data is used only as a last-known fallback.
+
+### Build and release integrity
+
+- Added Calendar and Weather contract coverage for provider units, robust blend behavior, stale-source selection, request telemetry, cache-window sizing, digest reuse, conditional cache reads, stable event identity, and ICS cancellation/revision/duration semantics.
+- Retained the focused JSON v2 compatibility lane and existing source, browser, race, five-architecture, generated-asset, package, SBOM, checksum, and final-archive gates.
+
+### Upgrade notes
+
+- Existing Calendar event caches are rebuilt automatically for cache schema 10; calendar source files, settings, and browser-visible event content remain compatible.
+- Weather provider caches remain provider-specific and are refreshed as each source becomes due; changing display units continues to preserve the configured provider set and blend behavior.
+
 ## [1.5.10-beta.1] — 2026-07-10
 
 Dash-Go 1.5.10-beta.1 is a behavior-preserving cleanup beta based on 1.5.9 stable. It keeps the same end-user features, displayed content, interaction semantics, refresh cadence, API response content, and persistent file formats while reducing duplicated frontend infrastructure and small amounts of unnecessary browser and server work.

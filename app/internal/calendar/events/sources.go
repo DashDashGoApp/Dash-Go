@@ -145,19 +145,39 @@ func (s *Service) eventURLToPath(url string) string {
 	return ""
 }
 
-func (s *Service) statSources(cals []CalendarSource) []SourceMeta {
+func sourceMetaLookupKey(url, path string) string {
+	return strings.ToLower(strings.TrimSpace(url)) + "|" + filepath.Clean(path)
+}
+
+func (s *Service) statSources(cals []CalendarSource, prior []SourceMeta) []SourceMeta {
+	priorByKey := map[string]SourceMeta{}
+	for _, item := range prior {
+		priorByKey[sourceMetaLookupKey(item.URL, item.RealPath)] = item
+		priorByKey[sourceMetaLookupKey(item.URL, item.Path)] = item
+	}
 	out := []SourceMeta{}
 	for _, cal := range cals {
-		out = append(out, s.sourceMeta(cal.URL, cal.Name, cal.Color, cal.Tag, cal.Owner, s.eventURLToPath(cal.URL)))
+		path := s.eventURLToPath(cal.URL)
+		priorItem, ok := priorByKey[sourceMetaLookupKey(cal.URL, path)]
+		out = append(out, s.sourceMeta(cal.URL, cal.Name, cal.Color, cal.Tag, cal.Owner, path, optionalSourceMeta(priorItem, ok)))
 	}
 	calFile := filepath.Join(s.calendarDir, "calendars.json")
 	if fileio.Exists(calFile) {
-		out = append(out, s.sourceMeta("calendars.json", "calendars.json", "", "meta", "", calFile))
+		priorItem, ok := priorByKey[sourceMetaLookupKey("calendars.json", calFile)]
+		out = append(out, s.sourceMeta("calendars.json", "calendars.json", "", "meta", "", calFile, optionalSourceMeta(priorItem, ok)))
 	}
 	return out
 }
 
-func (s *Service) sourceMeta(url, name, color, tag, owner, path string) SourceMeta {
+func optionalSourceMeta(value SourceMeta, ok bool) *SourceMeta {
+	if !ok {
+		return nil
+	}
+	copy := value
+	return &copy
+}
+
+func (s *Service) sourceMeta(url, name, color, tag, owner, path string, prior *SourceMeta) SourceMeta {
 	item := SourceMeta{URL: url, Name: name, Color: color, Tag: tag, Owner: owner, Path: "", Exists: false, RealPath: "", IsSymlink: false}
 	if path != "" {
 		item.Path = filepath.Base(path)
@@ -170,34 +190,50 @@ func (s *Service) sourceMeta(url, name, color, tag, owner, path string) SourceMe
 	if path == "" {
 		return item
 	}
-	st, err := os.Lstat(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		return item
 	}
 	item.Exists = true
-	mtime := st.ModTime().UnixMilli()
-	size := st.Size()
-	item.MtimeMs = &mtime
+	mtimeMs := info.ModTime().UnixMilli()
+	mtimeNs := info.ModTime().UnixNano()
+	size := info.Size()
+	item.MtimeMs = &mtimeMs
+	item.MtimeNs = &mtimeNs
 	item.Size = &size
-	if st.Mode()&os.ModeSymlink != 0 {
+	if lst, err := os.Lstat(path); err == nil && lst.Mode()&os.ModeSymlink != 0 {
 		item.IsSymlink = true
 	}
 	if abs, err := filepath.Abs(path); err == nil && item.RealPath != "" && abs != item.RealPath {
 		item.IsSymlink = true
 	}
-	if h, err := fileHashHex(path, sha256.New()); err == nil {
-		item.SHA256 = &h
+	if prior != nil && prior.Exists && prior.SHA256 != nil && prior.Size != nil && prior.MtimeNs != nil &&
+		*prior.Size == size && *prior.MtimeNs == mtimeNs && filepath.Clean(prior.RealPath) == filepath.Clean(item.RealPath) {
+		hash := *prior.SHA256
+		item.SHA256 = &hash
+		return item
+	}
+	if hash, err := fileHashHex(path, sha256.New()); err == nil {
+		item.SHA256 = &hash
 	} else {
 		item.HashError = err.Error()
 	}
 	return item
 }
 
+type eventFingerprintInput struct {
+	Sources     []SourceMeta `json:"sources"`
+	WindowStart int64        `json:"windowStart"`
+	WindowEnd   int64        `json:"windowEnd"`
+	Capability  string       `json:"capability"`
+	Version     int          `json:"version"`
+}
+
 func eventFingerprint(sources []SourceMeta, start, end time.Time, capability string) string {
-	payload := map[string]any{"sources": sources, "windowStart": epochMs(start), "windowEnd": epochMs(end), "capability": capability, "version": FingerprintVersion}
-	b, _ := json.Marshal(payload)
-	h := sha256.Sum256(b)
-	return hex.EncodeToString(h[:])
+	payload := eventFingerprintInput{Sources: sources, WindowStart: epochMs(start), WindowEnd: epochMs(end), Capability: capability, Version: FingerprintVersion}
+	body, _ := json.Marshal(payload)
+	hash := sha256.Sum256(body)
+	return hex.EncodeToString(hash[:])
 }
 
 func fileHashHex(path string, h hash.Hash) (string, error) {

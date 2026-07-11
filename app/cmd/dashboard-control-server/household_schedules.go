@@ -58,7 +58,7 @@ func (a *app) saveHouseholdSchedules(body map[string]any) (map[string]any, error
 	// Calendar has committed the feed and rebuilt its manifest before this
 	// synchronous cache refresh. A success response is therefore immediately
 	// usable by the dashboard, not merely queued for later work.
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("schedule saved but event cache refresh failed: %w", err)
 	}
 	payload, err := a.householdSchedulesPayload()
@@ -83,7 +83,7 @@ func (a *app) saveHouseholdScheduleOverride(body map[string]any) (map[string]any
 	if err != nil {
 		return nil, err
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("schedule adjustment saved but event cache refresh failed: %w", err)
 	}
 	payload, err := a.householdSchedulesPayload()

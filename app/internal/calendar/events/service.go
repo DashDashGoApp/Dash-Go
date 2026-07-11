@@ -2,6 +2,7 @@ package events
 
 import (
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,7 @@ type ServiceConfig struct {
 	KnownWritebackSource  func(url string) bool
 	DeleteAllowed         func(url string) bool
 	CapabilityFingerprint func() string
+	FirstDayOfWeek        func() int
 	Now                   func() time.Time
 }
 
@@ -35,7 +37,9 @@ type Service struct {
 	knownWritebackSource  func(string) bool
 	deleteAllowed         func(string) bool
 	capabilityFingerprint func() string
+	firstDayOfWeek        func() int
 	now                   func() time.Time
+	refreshMu             sync.Mutex
 }
 
 func New(cfg ServiceConfig) *Service {
@@ -67,6 +71,10 @@ func New(cfg ServiceConfig) *Service {
 	if capabilityFingerprint == nil {
 		capabilityFingerprint = func() string { return "" }
 	}
+	firstDayOfWeek := cfg.FirstDayOfWeek
+	if firstDayOfWeek == nil {
+		firstDayOfWeek = func() int { return 0 }
+	}
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
@@ -82,6 +90,7 @@ func New(cfg ServiceConfig) *Service {
 		knownWritebackSource:  knownWritebackSource,
 		deleteAllowed:         deleteAllowed,
 		capabilityFingerprint: capabilityFingerprint,
+		firstDayOfWeek:        firstDayOfWeek,
 		now:                   now,
 	}
 }

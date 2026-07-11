@@ -27,7 +27,9 @@ function weatherRefreshProfileDefaultMinutes(){
   return String(CONFIG.profile||"balanced").toLowerCase()==="lite"?45:30;
 }
 function effectiveWeatherRefreshMinutes(){
-  return Math.max(weatherConfiguredRefreshMinimum(),weatherRefreshProfileDefaultMinutes());
+  // The aggregate weather check follows the profile cadence. Server-side
+  // provider caches independently honor each source's quota-safe minimum.
+  return Math.max(15,weatherRefreshProfileDefaultMinutes());
 }
 function weatherProviderDays(id,defaultMax){
   const meta=WEATHER_SOURCE_META[id]||{};
@@ -215,7 +217,7 @@ async function fetchWeatherApi(id){
     const day=x.day||{}; d.time.push(x.date); d.weather_code.push(textCode(day.condition&&day.condition.text));
     d.temperature_2m_max.push(toTemp(CONFIG.tempUnit==="celsius"?day.maxtemp_c:day.maxtemp_f,CONFIG.tempUnit==="celsius"?"c":"f"));
     d.temperature_2m_min.push(toTemp(CONFIG.tempUnit==="celsius"?day.mintemp_c:day.mintemp_f,CONFIG.tempUnit==="celsius"?"c":"f"));
-    d.apparent_temperature_max.push(null); d.precipitation_sum.push(precipitationMM(day.totalprecip_mm,"mm")); d.precipitation_probability_max.push(day.daily_chance_of_rain); d.wind_speed_10m_max.push(toWind(day.maxwind_mph,"mph")); d.uv_index_max.push(day.uv); d.sunrise.push(null); d.sunset.push(null);
+    d.apparent_temperature_max.push(null); d.precipitation_sum.push(precipitationMM(day.totalprecip_mm,"mm")); d.precipitation_probability_max.push(Math.max(Number(day.daily_chance_of_rain)||0,Number(day.daily_chance_of_snow)||0)); d.wind_speed_10m_max.push(toWind(day.maxwind_mph,"mph")); d.uv_index_max.push(day.uv); d.sunrise.push(null); d.sunset.push(null);
   }
   const c=j.current||{};
   return sourceOk(id,{current:{temperature_2m:toTemp(CONFIG.tempUnit==="celsius"?c.temp_c:c.temp_f,CONFIG.tempUnit==="celsius"?"c":"f"),apparent_temperature:toTemp(CONFIG.tempUnit==="celsius"?c.feelslike_c:c.feelslike_f,CONFIG.tempUnit==="celsius"?"c":"f"),weather_code:textCode(c.condition&&c.condition.text),wind_speed_10m:toWind(c.wind_mph,"mph"),relative_humidity_2m:c.humidity},daily:d,hourly:null});

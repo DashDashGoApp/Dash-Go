@@ -19,6 +19,9 @@ const (
 
 func (s *Service) Payload() any                                      { return s.weatherPayload() }
 func (s *Service) Fetch(ctx context.Context) (map[string]any, error) { return s.fetchGoWeather(ctx) }
+func (s *Service) RefreshLive(ctx context.Context) (map[string]any, error) {
+	return s.refreshWeatherLive(ctx)
+}
 
 func (s *Service) ReadCache(path, cacheKey string) (any, bool) {
 	return s.readWeatherCache(path, cacheKey)

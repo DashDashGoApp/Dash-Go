@@ -69,7 +69,7 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 	if err := a.generateCalendarManifest(); err != nil {
 		return nil, fmt.Errorf("refresh calendar manifest: %w", err)
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh dashboard events: %w", err)
 	}
 	selection.Writable = editable
@@ -126,7 +126,7 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 	} else {
 		a.calendarWritebackService().Record(source, "saved", "View-only mode is active. Dash-Go stopped queued writes and saved an owner-only local snapshot before locking provider changes.")
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
 	a.recordAction("calendars", "Change private calendar access", "success", fmt.Sprintf("%s is now %s", source, map[bool]string{true: "two-way sync", false: "view-only"}[editable]), nil)
@@ -157,7 +157,7 @@ func (a *app) deactivatePrivateCalendar(body map[string]any) (map[string]any, er
 	if err := a.generateCalendarManifest(); err != nil {
 		return nil, fmt.Errorf("refresh calendar manifest: %w", err)
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh dashboard events: %w", err)
 	}
 	a.recordAction("calendars", "Stop private calendar sync", "success", "Remote calendar was left unchanged; the local mirror remains available.", nil)

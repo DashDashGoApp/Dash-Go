@@ -186,10 +186,10 @@ func (a *app) readBody(r *http.Request) (map[string]any, error) {
 	return m, nil
 }
 
-// configLocalRevision is intentionally limited to the one mutable file the
-// browser polls for live theme changes. It avoids a body download on unchanged
-// minute checks without making general user configuration cacheable.
-func configLocalRevision(path string) (string, bool) {
+// mutableStaticRevision uses file size and nanosecond mtime for the two
+// mutable browser resources that support conditional checks: live theme
+// configuration and the generated event cache.
+func mutableStaticRevision(path string) (string, bool) {
 	st, err := os.Stat(path)
 	if err != nil || st.IsDir() {
 		return "", false
@@ -207,16 +207,18 @@ func requestHasETag(header, want string) bool {
 	return false
 }
 
-func setConfigLocalRevision(w http.ResponseWriter, r *http.Request, rel, full string) bool {
-	if rel != "config/config.local.js" {
+func setMutableStaticRevision(w http.ResponseWriter, r *http.Request, rel, full string) bool {
+	conditionalGet := rel == "cache/events.cache.json"
+	conditionalHead := conditionalGet || rel == "config/config.local.js"
+	if !conditionalGet && !conditionalHead {
 		return false
 	}
-	tag, ok := configLocalRevision(full)
+	tag, ok := mutableStaticRevision(full)
 	if !ok {
 		return false
 	}
 	w.Header().Set("ETag", tag)
-	if r.Method == http.MethodHead && requestHasETag(r.Header.Get("If-None-Match"), tag) {
+	if ((r.Method == http.MethodGet && conditionalGet) || (r.Method == http.MethodHead && conditionalHead)) && requestHasETag(r.Header.Get("If-None-Match"), tag) {
 		w.WriteHeader(http.StatusNotModified)
 		return true
 	}
@@ -318,7 +320,7 @@ func (a *app) static(w http.ResponseWriter, r *http.Request, requestPath string)
 	} else {
 		setNoStore(w)
 	}
-	if setConfigLocalRevision(w, r, rel, full) {
+	if setMutableStaticRevision(w, r, rel, full) {
 		return
 	}
 	// ServeFile performs the file/dir check itself.  Avoid a second stat on

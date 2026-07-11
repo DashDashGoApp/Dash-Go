@@ -97,6 +97,27 @@ function weatherSourceUvText(dsrc,idx){
   const raw=dsrc.uv_index_max[idx], uv=(typeof cleanUv==="function"?cleanUv(raw):raw);
   return uv==null ? "UV ignored" : "UV "+wxNum(uv,1);
 }
+function weatherSourceHealthText(status){
+  const st=status||{};
+  if(st.cacheHit){
+    const age=Number(st.cacheAgeSeconds||st.providerCacheAgeSeconds||0);
+    const label=st.stale?"stale cache":"cache";
+    return age>0?label+" "+Math.max(1,Math.round(age/60))+"m":label;
+  }
+  if(Number(st.durationMs)>=0&&st.liveAttempted){
+    const parts=[];
+    const ms=Number(st.durationMs);
+    parts.push(ms>=1000?(ms/1000).toFixed(1)+"s":Math.round(ms)+"ms");
+    const calls=Number(st.networkCalls);
+    if(Number.isFinite(calls)&&calls>0) parts.push(calls+" call"+(calls===1?"":"s"));
+    const bytes=Number(st.responseBytes);
+    if(Number.isFinite(bytes)&&bytes>0) parts.push((bytes/1024).toFixed(bytes>=10240?0:1)+" KB");
+    const http=Number(st.httpStatus);
+    if(Number.isFinite(http)&&http>0) parts.push("HTTP "+Math.round(http));
+    return parts.join(" · ");
+  }
+  return "";
+}
 function refreshWeatherAfterSourceToggle(dateStr,fallbackIndex){
   if(!WX || !Array.isArray(WX._sources) || typeof blendWeatherSources!=="function") return;
   setWeatherPayload(typeof normalizeWeatherDayRollover==="function"?normalizeWeatherDayRollover(blendWeatherSources(WX._sources),new Date()):blendWeatherSources(WX._sources));
@@ -110,12 +131,19 @@ function appendWeatherSourceNotes(body,i){
   const b=WX._blend.daily[dateStr];
   if(!b) return;
   const notes=[];
+  if(WX._sourceFallbackNote) notes.push(WX._sourceFallbackNote);
+  if(b.contributors!=null&&b.totalSources!=null&&b.contributors<b.totalSources) notes.push(`This day uses ${b.contributors} of ${b.totalSources} available sources.`);
+  if(b.staleExcluded>0) notes.push(`${b.staleExcluded} stale source${b.staleExcluded===1?" was":"s were"} excluded because fresh data was available.`);
+  if(b.usedStaleFallback) notes.push("Only stale provider data was available for this day.");
   for(const [label,key] of [["High","temperature_2m_max"],["Low","temperature_2m_min"],["Feels","apparent_temperature_max"],["Wind","wind_speed_10m_max"],["UV","uv_index_max"]]){
     const st=b[key];
     if(st && st.count>1 && st.dropped>0) notes.push(`${label}: ${st.used}/${st.count} sources used, ${st.dropped} outlier${st.dropped===1?"":"s"} ignored`);
+    else if(st&&st.method==="three-source median") notes.push(`${label}: a three-source disagreement was resolved with the median.`);
   }
+  const total=b.precipitation_sum;
+  if(total&&total.count>1&&total.disagree) notes.push(`Precipitation totals range from ${wxPrecipTotalText(total.min).replace(" total","")} to ${wxPrecipTotalText(total.max).replace(" total","")}; the median is shown.`);
   const pp=b.precipitation_probability_max;
-  if(pp && pp.count>1 && pp.disagree) notes.push(`Precipitation sources disagree: ${wxPercent(pp.min)}–${wxPercent(pp.max)} across ${pp.count} sources; shown value is the average`);
+  if(pp && pp.count>1 && pp.disagree) notes.push(`Precipitation sources disagree: ${wxPercent(pp.min)}–${wxPercent(pp.max)} across ${pp.count} sources; ${pp.count>=3?"the median":"the mean"} is shown.`);
   if(!notes.length) return;
   const card=el("div","wxsourcecompare wxsourcenotes");
   card.appendChild(el("div","wxsourcehead","Source notes"));
@@ -155,16 +183,20 @@ function appendWeatherSourceDetails(body,i){
     if(src.ok===false){
       const state=src.disabled?"Excluded":"Unavailable";
       const detail=src.disabled?"double-tap to include":(src.error||"No response");
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${state}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML(src.tier||"")}</span><span>${escapeHTML(detail)}</span></div>`;
+      const health=weatherSourceHealthText(src.status);
+      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${state}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>${escapeHTML(detail)}</span></div>`;
     }else if(src.disabled){
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>Excluded</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML(src.tier||"")}</span><span>double-tap to include</span></div>`;
+      const health=weatherSourceHealthText(src.status);
+      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>Excluded</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>double-tap to include</span></div>`;
     }else{
       const hi=idx>=0&&dsrc.temperature_2m_max?wxNum(dsrc.temperature_2m_max[idx],1)+"°":"—";
       const lo=idx>=0&&dsrc.temperature_2m_min?wxNum(dsrc.temperature_2m_min[idx],1)+"°":"—";
       const pp=idx>=0&&dsrc.precipitation_probability_max&&dsrc.precipitation_probability_max[idx]!=null?wxPercent(dsrc.precipitation_probability_max[idx]):"—";
+      const total=idx>=0&&dsrc.precipitation_sum&&dsrc.precipitation_sum[idx]!=null?wxPrecipTotalText(dsrc.precipitation_sum[idx]).replace(" total",""):"—";
       const wind=idx>=0&&dsrc.wind_speed_10m_max&&dsrc.wind_speed_10m_max[idx]!=null?wxNum(dsrc.wind_speed_10m_max[idx],1)+" "+CONFIG.windUnit:"—";
       const uv=weatherSourceUvText(dsrc,idx);
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${hi} / ${lo}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML(src.tier||"")}</span><span>rain ${pp} · wind ${wind} · ${uv}</span></div>`;
+      const health=weatherSourceHealthText(src.status);
+      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${hi} / ${lo}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>rain ${pp} · total ${total} · wind ${wind} · ${uv}</span></div>`;
     }
     const toggle=()=>{
       if(typeof toggleWeatherSourceDisabled!=="function") return;
@@ -267,7 +299,9 @@ function wxTimeOnly(v){
 }
 function wxPrecipTotalText(v){
   if(v==null || !Number.isFinite(+v)) return "— total";
-  return wxNum(v,1)+'" total';
+  const mm=Number(v);
+  if(CONFIG.tempUnit==="celsius") return wxNum(mm,1)+" mm total";
+  return wxNum(mm/25.4,2)+'" total';
 }
 function wxMetricCard(row){
   const r=el("div","row wxsummaryrow"+(row.extraClass?" "+row.extraClass:""));

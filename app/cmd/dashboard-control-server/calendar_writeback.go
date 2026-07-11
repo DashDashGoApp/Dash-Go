@@ -130,7 +130,7 @@ func (a *app) configureCalendarWriteback(body map[string]any) (map[string]any, e
 	if err != nil {
 		return nil, err
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
 	a.recordAction("calendars", "Configure calendar edits", "success", fmt.Sprintf("%d registered calendar(s) · %s", len(status.Calendars), map[bool]string{true: "enabled", false: "disabled"}[status.Enabled]), nil)
@@ -300,7 +300,7 @@ func (a *app) handleCalendarWritebackMutation(path string, body map[string]any) 
 			refreshErr = fmt.Errorf("refreshing the local calendar mirror: %w", err)
 			return nil
 		}
-		if _, err = a.refreshEventCache(true, 90, 365); err != nil {
+		if _, err = a.refreshCurrentEventCache(true); err != nil {
 			refreshErr = fmt.Errorf("refreshing Dashboard events: %w", err)
 		}
 		return nil

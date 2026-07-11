@@ -51,6 +51,8 @@ type Service struct {
 
 	radarMu           sync.Mutex
 	radarRequestTimes map[string][]time.Time
+	weatherRateMu     sync.Mutex
+	weatherFetchMu    sync.Mutex
 }
 
 func New(cfg ServiceConfig) *Service {

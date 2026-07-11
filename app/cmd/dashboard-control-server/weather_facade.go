@@ -48,6 +48,9 @@ func (a *app) weatherPayload() any          { return a.weatherService().Payload(
 func (a *app) fetchGoWeather(ctx context.Context) (map[string]any, error) {
 	return a.weatherService().Fetch(ctx)
 }
+func (a *app) refreshGoWeatherLive(ctx context.Context) (map[string]any, error) {
+	return a.weatherService().RefreshLive(ctx)
+}
 
 func (a *app) readWeatherCache(path, cacheKey string) (any, bool) {
 	return a.weatherService().ReadCache(path, cacheKey)

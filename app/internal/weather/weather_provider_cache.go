@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,7 @@ func (s *Service) readWeatherProviderCacheGo(id, cacheKey string, allowStale boo
 		return nil, 0, false
 	}
 	age := int64(time.Since(st.ModTime()).Seconds())
-	freshTTL := int64(s.weatherCacheTTL().Seconds())
+	freshTTL := int64(s.weatherProviderFreshTTLGo(id).Seconds())
 	staleTTL := int64(s.weatherProviderStaleTTLGo(id).Seconds())
 	if !allowStale && age > freshTTL {
 		return nil, age, false
@@ -132,6 +133,8 @@ func (s *Service) writeWeatherRateStateGo(st map[string]any) {
 }
 
 func (s *Service) weatherProviderCooldownGo(id string) (time.Time, string, bool) {
+	s.weatherRateMu.Lock()
+	defer s.weatherRateMu.Unlock()
 	st := s.readWeatherRateStateGo()
 	providers := anyMap(st["providers"])
 	p := anyMap(providers[weatherNormalizeProviderIDGo(id)])
@@ -146,12 +149,32 @@ func (s *Service) weatherProviderCooldownGo(id string) (time.Time, string, bool)
 	return time.Time{}, "", false
 }
 
+func weatherProviderErrorClassGo(err error) (string, time.Duration) {
+	if err == nil {
+		return "provider_error", 0
+	}
+	var httpErr *weatherHTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.StatusCode {
+		case 429:
+			return "rate_limited", httpErr.RetryAfter
+		case 401, 403:
+			return "auth_error", httpErr.RetryAfter
+		case 408, 425, 502, 503, 504:
+			return "temporary_error", httpErr.RetryAfter
+		}
+	}
+	return weatherClassifyProviderErrorGo(err.Error()), 0
+}
+
 func (s *Service) noteWeatherProviderErrorGo(id string, err error) {
 	if err == nil {
 		return
 	}
 	msg := err.Error()
-	status := weatherClassifyProviderErrorGo(msg)
+	status, retryAfter := weatherProviderErrorClassGo(err)
+	s.weatherRateMu.Lock()
+	defer s.weatherRateMu.Unlock()
 	st := s.readWeatherRateStateGo()
 	providers := anyMap(st["providers"])
 	pid := weatherNormalizeProviderIDGo(id)
@@ -162,10 +185,15 @@ func (s *Service) noteWeatherProviderErrorGo(id string, err error) {
 	p["lastStatus"] = status
 	p["lastErrorAt"] = time.Now().Unix()
 	if status == "rate_limited" {
-		p["cooldownUntil"] = time.Now().Add(30 * time.Minute).Unix()
+		if retryAfter <= 0 {
+			retryAfter = 30 * time.Minute
+		}
+		p["cooldownUntil"] = time.Now().Add(retryAfter).Unix()
 	} else if status == "auth_error" {
-		// Do not hammer providers when a saved key is rejected.
-		p["cooldownUntil"] = time.Now().Add(10 * time.Minute).Unix()
+		if retryAfter <= 0 {
+			retryAfter = 10 * time.Minute
+		}
+		p["cooldownUntil"] = time.Now().Add(retryAfter).Unix()
 	} else if int(prev)+1 >= 3 {
 		p["cooldownUntil"] = time.Now().Add(5 * time.Minute).Unix()
 	}
@@ -175,6 +203,8 @@ func (s *Service) noteWeatherProviderErrorGo(id string, err error) {
 }
 
 func (s *Service) clearWeatherProviderCooldownGo(id string) {
+	s.weatherRateMu.Lock()
+	defer s.weatherRateMu.Unlock()
 	st := s.readWeatherRateStateGo()
 	providers := anyMap(st["providers"])
 	pid := weatherNormalizeProviderIDGo(id)

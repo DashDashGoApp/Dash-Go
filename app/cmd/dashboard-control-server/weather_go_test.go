@@ -226,11 +226,19 @@ func TestWeatherRefreshGuardrailsUseConfiguredProviderBudget(t *testing.T) {
 	if err := fileio.WriteJSON(a.settingsFile, map[string]any{"weatherProviders": []any{"weatherbit"}, "refreshWxMinutes": 5, "profile": "balanced"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := a.weatherCacheTTL(); got != time.Duration(weatherRefreshLowQuotaMinimumMinutes)*time.Minute {
-		t.Fatalf("weatherbit effective cache ttl=%s", got)
+	if got := a.weatherCacheTTL(); got != 30*time.Minute {
+		t.Fatalf("balanced aggregate cache ttl=%s, want 30m", got)
 	}
-	if got := a.weatherRefreshMinutes(); got != weatherRefreshLowQuotaMinimumMinutes {
-		t.Fatalf("weatherbit automatic cadence=%d", got)
+	policy := a.weatherRefreshPolicyForSettings(a.loadSettings())
+	providerMinutes, ok := policy["providerMinutes"].(map[string]any)
+	if !ok {
+		t.Fatalf("providerMinutes has type %T", policy["providerMinutes"])
+	}
+	if got, ok := providerMinutes["weatherbit"].(int); !ok || got != weatherRefreshLowQuotaMinimumMinutes {
+		t.Fatalf("weatherbit provider cache minutes=%v", providerMinutes["weatherbit"])
+	}
+	if got := a.weatherRefreshMinutes(); got != 30 {
+		t.Fatalf("weatherbit aggregate cadence=%d, want 30", got)
 	}
 	if _, err := a.updateProfileValues(map[string]any{"refreshWxMinutes": 90}); err == nil {
 		t.Fatal("retired weather cadence must not return to Profile editing")

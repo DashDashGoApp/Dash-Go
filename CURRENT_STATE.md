@@ -4,12 +4,12 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.10-beta.1`
+- **Version:** `1.5.10-beta.2`
 - **Track:** beta
-- **Purpose:** behavior-preserving GUI and runtime cleanup based on 1.5.9 stable. End-user features, displayed content, interaction semantics, refresh cadence, API response content, and persistent file formats remain unchanged.
-- **Primary changes:** stable local no-store URLs, generated CSS minification, one lazy asset loader, canonical Lite-profile recognition, shared confirmation lifecycle, shared OSK rows, member-order-independent Control JSON comparison, semantic major-shell visibility, and an allocation-free static alias path.
+- **Purpose:** Calendar and Weather reliability beta based on 1.5.10-beta.1, preserving the dashboard layout and interaction model while correcting provider units, hardening forecast blending, and reducing redundant Calendar work.
+- **Primary changes:** canonical millimetre precipitation with display-edge conversion, robust freshness-aware Weather blending, per-provider cache and request telemetry, typed rate-limit handling, settings-aware Calendar cache windows, source-digest reuse, serialized cache generation, ETag/304 browser reuse, stable event identities, and corrected ICS cancellation/revision/duration handling.
 - **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified JavaScript and CSS bundles, run the complete source and Chromium layout gates, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, and final-archive validation before publication.
-- **Compatibility:** no settings, file formats, API response content, refresh intervals, or user-facing behavior are intentionally changed. Existing 1.5.9 configuration and cache data remain compatible.
+- **Compatibility:** existing settings, calendar source files, and provider configuration remain compatible. Calendar cache schema 10 rebuilds automatically; Weather precipitation remains canonical millimetres internally and is converted only for display.
 
 ## Current stable release
 

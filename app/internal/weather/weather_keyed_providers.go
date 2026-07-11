@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
@@ -34,7 +36,7 @@ func fetchWeatherAPIGo(ctx context.Context, cfg Config) (map[string]any, error) 
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(choice(unit == "c", day["mintemp_c"], day["mintemp_f"]), unit, cfg.TempUnit))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], nil)
 		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(day["totalprecip_mm"], "mm"))
-		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], day["daily_chance_of_rain"])
+		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], maxProbabilityGo(day["daily_chance_of_rain"], day["daily_chance_of_snow"]))
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(day["maxwind_mph"], "mph", cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], day["uv"])
 		d["sunrise"] = append(d["sunrise"], nil)
@@ -171,6 +173,7 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 		return nil, err
 	}
 	d := emptyDailyGo()
+	visualWindUnit := visualCrossingWindUnitGo(unit)
 	for _, raw := range jsonutil.List(j["days"])[:min(len(jsonutil.List(j["days"])), cfg.Days)] {
 		x := anyMap(raw)
 		d["time"] = append(d["time"], x["datetime"])
@@ -180,13 +183,20 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], x["feelslikemax"])
 		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precip"], choice(unit == "metric", "mm", "in").(string)))
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["precipprob"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windspeed"], "mph", cfg.WindUnit))
+		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windspeed"], visualWindUnit, cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvindex"])
 		d["sunrise"] = append(d["sunrise"], x["sunrise"])
 		d["sunset"] = append(d["sunset"], x["sunset"])
 	}
 	c := anyMap(j["currentConditions"])
-	return weatherOKGo("visualcrossing", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feelslike"], "weather_code": textCodeGo(xOr(c["conditions"], c["icon"])), "wind_speed_10m": toWindGo(c["windspeed"], "mph", cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("visualcrossing", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feelslike"], "weather_code": textCodeGo(xOr(c["conditions"], c["icon"])), "wind_speed_10m": toWindGo(c["windspeed"], visualWindUnit, cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": nil}), nil
+}
+
+func visualCrossingWindUnitGo(unitGroup string) string {
+	if strings.EqualFold(strings.TrimSpace(unitGroup), "metric") {
+		return "kmh"
+	}
+	return "mph"
 }
 
 func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) {
@@ -235,15 +245,21 @@ func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
+	liquidTotals := pirateHourlyLiquidTotalsGo(j, units)
 	d := emptyDailyGo()
 	for _, raw := range jsonutil.List(anyMap(j["daily"])["data"])[:min(len(jsonutil.List(anyMap(j["daily"])["data"])), cfg.Days)] {
 		x := anyMap(raw)
-		d["time"] = append(d["time"], tsDateGo(x["time"]))
+		date := pirateLocalDateGo(j, x["time"])
+		d["time"] = append(d["time"], date)
 		d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(x["summary"], x["icon"])))
 		d["temperature_2m_max"] = append(d["temperature_2m_max"], xOr(x["temperatureHigh"], x["temperatureMax"]))
 		d["temperature_2m_min"] = append(d["temperature_2m_min"], xOr(x["temperatureLow"], x["temperatureMin"]))
 		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], xOr(x["apparentTemperatureHigh"], x["apparentTemperatureMax"]))
-		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precipAccumulation"], choice(units == "si", "cm", "in").(string)))
+		if total, ok := liquidTotals[date]; ok {
+			d["precipitation_sum"] = append(d["precipitation_sum"], total)
+		} else {
+			d["precipitation_sum"] = append(d["precipitation_sum"], nil)
+		}
 		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], mult100(x["precipProbability"]))
 		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windSpeed"], choice(units == "si", "ms", "mph").(string), cfg.WindUnit))
 		d["uv_index_max"] = append(d["uv_index_max"], x["uvIndex"])
@@ -252,6 +268,74 @@ func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 	}
 	c := anyMap(j["currently"])
 	return weatherOKGo("pirateweather", map[string]any{"current": map[string]any{"temperature_2m": c["temperature"], "apparent_temperature": c["apparentTemperature"], "weather_code": textCodeGo(xOr(c["summary"], c["icon"])), "wind_speed_10m": toWindGo(c["windSpeed"], choice(units == "si", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": mult100(c["humidity"])}, "daily": d, "hourly": nil}), nil
+}
+
+func maxProbabilityGo(values ...any) any {
+	best := -1.0
+	for _, value := range values {
+		if number, ok := toFloatGo(value); ok && number >= 0 && number > best {
+			best = number
+		}
+	}
+	if best < 0 {
+		return nil
+	}
+	return best
+}
+
+func pirateLocalDateGo(payload map[string]any, value any) string {
+	seconds, ok := toFloatGo(value)
+	if !ok || seconds <= 0 {
+		return ""
+	}
+	instant := time.Unix(int64(seconds), 0)
+	if zoneName := strings.TrimSpace(jsonutil.StringValue(payload["timezone"])); zoneName != "" {
+		if location, err := time.LoadLocation(zoneName); err == nil {
+			return instant.In(location).Format("2006-01-02")
+		}
+	}
+	// Pirate Weather documents offset in hours, not seconds. Use it only as
+	// a fallback when the IANA timezone is absent or unavailable.
+	offsetHours, _ := toFloatGo(payload["offset"])
+	return instant.Add(time.Duration(offsetHours * float64(time.Hour))).UTC().Format("2006-01-02")
+}
+
+// Pirate Weather's daily precipAccumulation may combine liquid depth with
+// physical snow depth. Canonical Dash-Go precipitation is liquid-water
+// equivalent millimetres, so integrate the hourly precipitation intensity
+// instead and group it by the provider location's local forecast date.
+func pirateHourlyLiquidTotalsGo(payload map[string]any, units string) map[string]float64 {
+	rows := jsonutil.List(anyMap(payload["hourly"])["data"])
+	out := map[string]float64{}
+	unit := "in"
+	if units == "si" {
+		unit = "mm"
+	}
+	for index, raw := range rows {
+		row := anyMap(raw)
+		seconds, ok := toFloatGo(row["time"])
+		if !ok || seconds <= 0 {
+			continue
+		}
+		hours := 1.0
+		if index+1 < len(rows) {
+			if next, ok := toFloatGo(anyMap(rows[index+1])["time"]); ok && next > seconds {
+				hours = (next - seconds) / 3600
+				if hours < 0.25 || hours > 3 {
+					hours = 1
+				}
+			}
+		}
+		mm, ok := toFloatGo(precipitationMMGo(row["precipIntensity"], unit))
+		if !ok || mm < 0 {
+			continue
+		}
+		date := pirateLocalDateGo(payload, seconds)
+		if date != "" {
+			out[date] += mm * hours
+		}
+	}
+	return out
 }
 
 func fetchAccuWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {

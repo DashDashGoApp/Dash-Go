@@ -204,7 +204,7 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 		}
 		a.json(w, res)
 	case "/api/cache/rebuild":
-		res, err := a.refreshEventCache(true, 90, 365)
+		res, err := a.refreshCurrentEventCache(true)
 		if err != nil {
 			a.err(w, "event cache rebuild failed: "+err.Error(), 500)
 			return
@@ -212,12 +212,11 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 		a.recordAction("cache", "Rebuild event cache", "success", fmt.Sprintf("%v events", res["eventCount"]), nil)
 		a.json(w, res)
 	case "/api/weather/refresh":
-		payload, err := a.fetchGoWeather(r.Context())
+		payload, err := a.refreshGoWeatherLive(r.Context())
 		if err != nil {
 			a.err(w, "weather refresh failed: "+err.Error(), 500)
 			return
 		}
-		_ = fileio.WriteJSON(filepath.Join(a.cacheDir, "weather-cache.json"), payload)
 		a.recordAction("weather", "Refresh weather", "success", fmt.Sprintf("%v source(s)", len(jsonutil.List(payload["sources"]))), nil)
 		a.json(w, payload)
 	case "/api/diagnostics":

@@ -3,8 +3,6 @@ package weather
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -48,11 +46,18 @@ func fetchOpenMeteoGo(ctx context.Context, id string, cfg Config) (map[string]an
 		return nil, err
 	}
 	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("Open-Meteo HTTP %d", res.StatusCode)
+	body, err := readWeatherResponse(ctx, res)
+	if err != nil {
+		return nil, err
 	}
 	var payload map[string]any
-	if err := json.NewDecoder(io.LimitReader(res.Body, weatherJSONResponseLimit)).Decode(&payload); err != nil {
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &payload)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, &weatherHTTPError{StatusCode: res.StatusCode, Message: firstErrGo(payload), RetryAfter: parseRetryAfter(res.Header.Get("Retry-After"), time.Now())}
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
 	payload["_source"] = id

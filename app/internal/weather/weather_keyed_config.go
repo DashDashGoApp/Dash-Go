@@ -14,6 +14,19 @@ func weatherHealthOKGo(id string, cfg Config, src map[string]any) map[string]any
 	if d, ok := src["daily"].(map[string]any); ok {
 		item["daysReturned"] = len(jsonutil.List(d["time"]))
 	}
+	if jsonutil.Truthy(src["_providerCacheHit"]) {
+		item["cacheHit"] = true
+		if age := jsonutil.Int(src["_providerCacheAgeSeconds"], 0); age >= 0 {
+			item["providerCacheAgeSeconds"] = age
+		}
+	}
+	if jsonutil.Truthy(src["_stale"]) {
+		item["stale"] = true
+		item["freshness"] = "stale"
+		if reason := jsonutil.TextValue(src["_staleReason"]); reason != "" {
+			item["staleReason"] = reason
+		}
+	}
 	if days := weatherProviderMaxDays(id); days > 0 {
 		item["maxDays"] = days
 	}

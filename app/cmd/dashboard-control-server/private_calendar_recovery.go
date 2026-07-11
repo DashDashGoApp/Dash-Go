@@ -86,7 +86,7 @@ func (a *app) refreshPrivateCalendarRecovery() error {
 	if err := a.generateCalendarManifest(); err != nil {
 		return fmt.Errorf("refresh calendar manifest: %w", err)
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return fmt.Errorf("refresh dashboard events: %w", err)
 	}
 	return nil
@@ -305,7 +305,7 @@ func (a *app) resolvePrivateCalendarConflict(body map[string]any) (map[string]an
 		a.calendarWritebackService().Record(selection.Source, "waiting", "Conflict was resolved, but Dashboard refresh will retry automatically.")
 		return nil, fmt.Errorf("refreshing the local calendar mirror: %w", err)
 	}
-	if _, err := a.refreshEventCache(true, 90, 365); err != nil {
+	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		a.calendarWritebackService().Record(selection.Source, "waiting", "Conflict was resolved, but Dashboard refresh will retry automatically.")
 		return nil, fmt.Errorf("refreshing Dashboard events: %w", err)
 	}

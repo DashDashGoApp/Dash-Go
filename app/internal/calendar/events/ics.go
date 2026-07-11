@@ -8,11 +8,23 @@ import (
 )
 
 var reICSDate = regexp.MustCompile(`^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$`)
+var reICSDuration = regexp.MustCompile(`^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$`)
 
 type icsProperty struct {
 	name   string
 	params map[string]string
 	value  string
+}
+
+type icsDuration struct {
+	days  int
+	clock time.Duration
+}
+
+func (d icsDuration) addTo(start time.Time) time.Time {
+	// RFC 5545 applies weeks and days as nominal calendar days before the
+	// clock portion so a one-day event keeps its local wall time across DST.
+	return start.AddDate(0, 0, d.days).Add(d.clock)
 }
 
 func parseICS(text string, cal CalendarSource) []ICSEvent {
@@ -40,13 +52,27 @@ func parseICS(text string, cal CalendarSource) []ICSEvent {
 			props = append(props, icsProperty{name: name, params: params, value: value})
 		}
 	}
+	events = reconcileEventRevisions(events)
+	cancelledMasters := map[string]bool{}
+	for _, event := range events {
+		if event.Cancelled && event.UID != "" && event.RecurID == nil {
+			cancelledMasters[event.UID] = true
+		}
+	}
 	markMidnightAllDay(events)
 	markRecurrenceOverrides(events)
-	return events
+	out := events[:0]
+	for _, event := range events {
+		if !event.Cancelled && !cancelledMasters[event.UID] {
+			out = append(out, event)
+		}
+	}
+	return out
 }
 
 func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*calendarZone) (ICSEvent, bool) {
 	ev := ICSEvent{Cal: cal}
+	durationRaw := ""
 	for _, prop := range props {
 		if prop.name != "DTSTART" {
 			continue
@@ -67,6 +93,8 @@ func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*ca
 			if dt, _, _, ok := parseICSDateInZone(prop.value, prop.params, zones, ev.zone); ok {
 				ev.End = &dt
 			}
+		case "DURATION":
+			durationRaw = strings.TrimSpace(prop.value)
 		case "SUMMARY":
 			ev.Title = icsUnescape(prop.value)
 		case "DESCRIPTION":
@@ -77,6 +105,19 @@ func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*ca
 			ev.RRule = strings.TrimSpace(prop.value)
 		case "UID":
 			ev.UID = prop.value
+		case "STATUS":
+			ev.Status = strings.ToUpper(strings.TrimSpace(prop.value))
+			ev.Cancelled = ev.Status == "CANCELLED"
+		case "SEQUENCE":
+			ev.Seq = parseIntDefault(prop.value, 0)
+		case "LAST-MODIFIED":
+			if value, _, _, ok := parseICSDateInZone(prop.value, prop.params, zones, utcZone()); ok {
+				ev.LastModified = value
+			}
+		case "DTSTAMP":
+			if value, _, _, ok := parseICSDateInZone(prop.value, prop.params, zones, utcZone()); ok {
+				ev.DTStamp = value
+			}
 		case "X-DASHGO-APP-OWNER":
 			ev.AppOwner = strings.TrimSpace(icsUnescape(prop.value))
 		case "X-DASHGO-MANAGED-SCHEDULE", "X-DASHGO-SCHEDULE-RULE-ID", "X-DASHGO-NOMINAL-DATE", "X-DASHGO-SCHEDULE-ACTUAL-DATE", "X-DASHGO-SCHEDULE-REASON":
@@ -100,7 +141,84 @@ func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*ca
 			}
 		}
 	}
+	if ev.End == nil && durationRaw != "" {
+		if duration, ok := parseICSDuration(durationRaw); ok {
+			end := duration.addTo(ev.Start)
+			ev.End = &end
+		}
+	}
 	return ev, true
+}
+
+func parseICSDuration(raw string) (icsDuration, bool) {
+	match := reICSDuration.FindStringSubmatch(strings.ToUpper(strings.TrimSpace(raw)))
+	if match == nil {
+		return icsDuration{}, false
+	}
+	parts := make([]int, 5)
+	for index := 0; index < len(parts); index++ {
+		parts[index] = parseIntDefault(match[index+2], 0)
+	}
+	duration := icsDuration{
+		days:  parts[0]*7 + parts[1],
+		clock: time.Duration(parts[2])*time.Hour + time.Duration(parts[3])*time.Minute + time.Duration(parts[4])*time.Second,
+	}
+	if match[1] == "-" || (duration.days == 0 && duration.clock <= 0) {
+		return icsDuration{}, false
+	}
+	return duration, true
+}
+
+func revisionTime(event ICSEvent) time.Time {
+	if !event.LastModified.IsZero() {
+		return event.LastModified
+	}
+	return event.DTStamp
+}
+
+func recurrenceRevisionKey(event ICSEvent) string {
+	if event.UID == "" {
+		return ""
+	}
+	if event.RecurID != nil {
+		return event.UID + "|" + strconv.FormatInt(*event.RecurID, 10)
+	}
+	if event.RecurIDDay != "" {
+		return event.UID + "|" + event.RecurIDDay
+	}
+	return event.UID + "|master"
+}
+
+func newerRevision(candidate, current ICSEvent) bool {
+	if candidate.Seq != current.Seq {
+		return candidate.Seq > current.Seq
+	}
+	candidateTime, currentTime := revisionTime(candidate), revisionTime(current)
+	if !candidateTime.Equal(currentTime) {
+		return candidateTime.After(currentTime)
+	}
+	return false
+}
+
+func reconcileEventRevisions(events []ICSEvent) []ICSEvent {
+	selected := map[string]int{}
+	out := make([]ICSEvent, 0, len(events))
+	for _, event := range events {
+		key := recurrenceRevisionKey(event)
+		if key == "" {
+			out = append(out, event)
+			continue
+		}
+		if index, ok := selected[key]; ok {
+			if newerRevision(event, out[index]) {
+				out[index] = event
+			}
+			continue
+		}
+		selected[key] = len(out)
+		out = append(out, event)
+	}
+	return out
 }
 
 func parseExdates(ev *ICSEvent, prop icsProperty, zones map[string]*calendarZone) {

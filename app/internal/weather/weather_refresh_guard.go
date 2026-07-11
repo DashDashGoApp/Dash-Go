@@ -1,6 +1,11 @@
 package weather
 
-import "strings"
+import (
+	"strings"
+	"time"
+
+	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
+)
 
 const weatherRefreshHardMinimumMinutes = 15
 const weatherRefreshAPIKeyMinimumMinutes = 30
@@ -65,8 +70,9 @@ func (s *Service) weatherRefreshMinimumForSettings(settings map[string]any) int 
 	return minimum
 }
 
-// weatherRefreshProfileDefaultMinutes is intentionally small and predictable.
-// Provider minimums always win, so a low-quota source cannot be over-polled.
+// weatherRefreshProfileDefaultMinutes controls how often the dashboard checks
+// the aggregate forecast. Each provider cache separately enforces its own
+// quota-safe minimum before a live request is attempted.
 func weatherRefreshProfileDefaultMinutes(profile string) int {
 	if normalizeProfileName(profile) == "lite" {
 		return 45
@@ -81,26 +87,39 @@ func (s *Service) weatherRefreshPolicyForSettings(settings map[string]any) map[s
 	providers := weatherRefreshProviders(settings["weatherProviders"], cfg.Providers)
 	minimum, guarded := weatherRefreshMinimumForProviders(providers)
 	base := weatherRefreshProfileDefaultMinutes(s.profileBaseForSettings(settings))
+	providerMinutes := map[string]any{}
+	for _, id := range providers {
+		providerMinutes[id] = max(base, weatherProviderRefreshMinimumMinutes(id))
+	}
 	return map[string]any{
-		"automatic":             true,
-		"minimumMinutes":        minimum,
-		"profileDefaultMinutes": base,
-		"guardedProviders":      guarded,
-		"effectiveMinutes":      weatherRefreshEffectiveMinutes(settings, minimum),
+		"automatic":              true,
+		"minimumMinutes":         weatherRefreshHardMinimumMinutes,
+		"profileDefaultMinutes":  base,
+		"guardedProviders":       guarded,
+		"providerMinutes":        providerMinutes,
+		"slowestProviderMinutes": minimum,
+		"effectiveMinutes":       weatherRefreshEffectiveMinutes(settings, weatherRefreshHardMinimumMinutes),
 	}
 }
 
-// weatherRefreshEffectiveMinutes deliberately ignores legacy user-selected
-// settings. Refresh cadence is now automatic: the selected profile establishes
-// a normal budget and provider limits can only slow it further.
+// The dashboard checks the aggregate forecast at its profile cadence. Each
+// provider cache independently enforces its own quota-safe minimum, so a
+// low-quota source no longer makes every other selected source equally stale.
 func weatherRefreshEffectiveMinutes(settings map[string]any, minimum int) int {
 	profile := normalizeProfileName(strOr(settings["profile"], "balanced"))
-	requested := weatherRefreshProfileDefaultMinutes(profile)
-	requested = max(requested, minimum)
-	return requested
+	return max(weatherRefreshProfileDefaultMinutes(profile), minimum)
 }
 
 func (s *Service) weatherRefreshMinutes() int {
 	settings := s.loadSettings()
-	return weatherRefreshEffectiveMinutes(settings, s.weatherRefreshMinimumForSettings(settings))
+	return weatherRefreshEffectiveMinutes(settings, weatherRefreshHardMinimumMinutes)
+}
+
+func (s *Service) weatherProviderFreshTTLGo(id string) time.Duration {
+	profile := normalizeProfileName(jsonutil.StringValue(s.profilePayload()["base"]))
+	if profile == "" {
+		profile = normalizeProfileName(jsonutil.StringValue(s.profilePayload()["current"]))
+	}
+	minutes := max(weatherRefreshProfileDefaultMinutes(profile), weatherProviderRefreshMinimumMinutes(id))
+	return time.Duration(minutes) * time.Minute
 }

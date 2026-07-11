@@ -16,11 +16,13 @@ assert.match(guard,/weatherRefreshLowQuotaMinimumMinutes = 90/,"low-quota provid
 assert.match(guard,/weatherRefreshProfileDefaultMinutes/,"profile defaults must own normal automatic cadence");
 assert.match(guard,/if normalizeProfileName\(profile\) == "lite"[\s\S]*return 45/,"Lite must use a quieter automatic weather cadence");
 assert.match(guard,/return 30/,"Balanced and Enhanced must use a normal 30-minute default");
-assert.match(guard,/deliberately ignores legacy user-selected/,"old saved cadence must not override automatic policy");
-assert.match(payload,/s\.weatherRefreshMinutes\(\)/,"weather cache TTL must use provider-aware automatic minutes");
+assert.match(guard,/low-quota source no longer makes every other selected source equally stale/,"provider TTLs must be independent");
+assert.match(guard,/providerMinutes/,"weather policy must expose per-provider cadence");
+assert.match(guard,/slowestProviderMinutes/,"weather policy may still report the slowest source without using it as aggregate cadence");
+assert.match(payload,/s\.weatherRefreshMinutes\(\)/,"aggregate weather cache TTL must use profile-aware automatic minutes");
 assert.ok(!validation.includes("refreshWxMinutes"),"Profile validation must no longer expose weather cadence");
 assert.ok(display.includes("Automatic five-minute checks are separate from the temporary banner mute."),"Weather & alerts must explain automatic alert cadence");
-assert.match(boot,/effectiveWeatherRefreshMinutes/,"browser scheduler must retain provider-aware fallback policy");
-assert.match(client,/weatherbit:.*refreshMin:90/,"browser fallback metadata must protect low-quota Weatherbit refreshes");
+assert.match(boot,/effectiveWeatherRefreshMinutes/,"browser scheduler must retain the profile-aware aggregate cadence");
+assert.match(client,/weatherbit:.*refreshMin:90/,"browser metadata must retain Weatherbit quota guidance");
 assert.match(client,/function weatherRefreshProfileDefaultMinutes\(/,"browser fallback must mirror profile defaults");
-console.log("PASS: beta.63 weather refresh follows automatic profile/provider policy without a family-facing cadence control");
+console.log("PASS: beta.2 weather refresh follows aggregate profile cadence with provider-specific cache policy");

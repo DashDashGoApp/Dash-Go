@@ -28,7 +28,7 @@ func (a *app) runDefaultCalendarsCLI(args []string) int {
 func (a *app) runHolidayUpdateCLI(args []string) int {
 	result := a.updateHolidayCalendars()
 	_ = a.generateCalendarManifest()
-	_, _ = a.refreshEventCache(true, 90, 365)
+	_, _ = a.refreshCurrentEventCache(true)
 	body, _ := json.Marshal(result)
 	fmt.Println(string(body))
 	if result["ok"] == false {
@@ -39,7 +39,7 @@ func (a *app) runHolidayUpdateCLI(args []string) int {
 func (a *app) runISSPassesCLI(args []string) int {
 	result := a.updateISSPasses()
 	_ = a.generateCalendarManifest()
-	_, _ = a.refreshEventCache(true, 90, 365)
+	_, _ = a.refreshCurrentEventCache(true)
 	body, _ := json.Marshal(result)
 	fmt.Println(string(body))
 	if result["ok"] == false {

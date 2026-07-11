@@ -12,10 +12,10 @@ import (
 )
 
 func (s *Service) fetchGoWeather(parent context.Context) (map[string]any, error) {
-	return s.fetchGoWeatherWithConfig(parent, s.Config())
+	return s.fetchGoWeatherWithConfig(parent, s.Config(), false)
 }
 
-func (s *Service) fetchGoWeatherWithConfig(parent context.Context, cfg Config) (map[string]any, error) {
+func (s *Service) fetchGoWeatherWithConfig(parent context.Context, cfg Config, forceLive bool) (map[string]any, error) {
 	jobs := []weatherFetchJobGo{}
 	selected := normalizeWeatherProviderListGo(cfg.Providers)
 	if len(selected) == 0 {
@@ -35,7 +35,7 @@ func (s *Service) fetchGoWeatherWithConfig(parent context.Context, cfg Config) (
 				defer func() { <-sem }()
 				ctx, cancel := context.WithTimeout(parent, weatherProviderTimeoutGo(job.ID))
 				defer cancel()
-				results[job.Index] = s.fetchOneWeatherProviderGo(ctx, job, cfg)
+				results[job.Index] = s.fetchOneWeatherProviderGo(ctx, job, cfg, forceLive)
 			})
 		}
 		wg.Wait()
@@ -99,29 +99,40 @@ func weatherProviderTimeoutGo(id string) time.Duration {
 	}
 }
 
-func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetchJobGo, cfg Config) weatherFetchResultGo {
+func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetchJobGo, cfg Config, forceLive bool) weatherFetchResultGo {
 	id := weatherNormalizeProviderIDGo(job.ID)
 	pcfg := weatherProviderFetchConfigGo(id, cfg)
 	result := weatherFetchResultGo{Index: job.Index, ID: id}
 	requestedDays := cfg.Days
 	effectiveDays := pcfg.Days
 	cacheKey := weatherProviderCacheKeyGo(id, pcfg)
+	startedAt := time.Now()
+	requestCtx, requestMetrics := withWeatherRequestMetrics(ctx)
+	liveAttempted := false
 	enrich := func(m map[string]any) map[string]any {
+		calls, bytes, status := requestMetrics.Snapshot()
 		m["requestedDays"] = requestedDays
 		m["effectiveDays"] = effectiveDays
 		m["timeoutSeconds"] = int(weatherProviderTimeoutGo(id).Seconds())
-		m["providerCacheKey"] = cacheKey
+		m["durationMs"] = time.Since(startedAt).Milliseconds()
+		m["networkCalls"] = calls
+		m["responseBytes"] = bytes
+		m["liveAttempted"] = liveAttempted
+		if status > 0 {
+			m["httpStatus"] = status
+		}
 		return m
 	}
 
 	fetchLive := func() (map[string]any, error) {
+		liveAttempted = true
 		switch id {
 		case "openmeteo", "openmeteo-custom":
-			return fetchOpenMeteoGo(ctx, id, pcfg)
+			return fetchOpenMeteoGo(requestCtx, id, pcfg)
 		case "nws":
-			return fetchNWSGo(ctx, pcfg)
+			return fetchNWSGo(requestCtx, pcfg)
 		case "weatherapi", "openweather", "googleweather", "tomorrow", "visualcrossing", "weatherbit", "pirateweather", "accuweather", "xweather":
-			return fetchKeyedWeatherGo(ctx, id, pcfg)
+			return fetchKeyedWeatherGo(requestCtx, id, pcfg)
 		default:
 			return nil, fmt.Errorf("unknown weather provider")
 		}
@@ -158,11 +169,13 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 		return result
 	}
 
-	if src, age, ok := s.readWeatherProviderCacheGo(id, cacheKey, false); ok {
-		weatherMarkProviderCacheHitGo(src, age)
-		result.Source = src
-		result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"cacheHit": true, "freshness": "fresh", "reason": "Using fresh provider cache"}))
-		return result
+	if !forceLive {
+		if src, age, ok := s.readWeatherProviderCacheGo(id, cacheKey, false); ok {
+			weatherMarkProviderCacheHitGo(src, age)
+			result.Source = src
+			result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"cacheHit": true, "freshness": "fresh", "reason": "Using fresh provider cache"}))
+			return result
+		}
 	}
 
 	if !s.networkLikelyAvailable() {

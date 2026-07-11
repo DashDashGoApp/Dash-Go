@@ -191,6 +191,6 @@ func (a *app) seedDemoMode() error {
 	if _, err := a.generateDefaultCalendars(true); err != nil {
 		return err
 	}
-	_, _ = a.refreshEventCache(true, 90, 365)
+	_, _ = a.refreshCurrentEventCache(true)
 	return nil
 }

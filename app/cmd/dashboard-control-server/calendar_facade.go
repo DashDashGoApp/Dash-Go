@@ -71,7 +71,7 @@ func (a *app) refreshEventCacheAfterCalendarWrite() error {
 // transaction lock. Tests inject a no-op directly through ServiceConfig before
 // constructing their Calendar service.
 func (a *app) refreshCalendarCacheAsync() {
-	go func() { _, _ = a.refreshEventCache(true, 90, 365) }()
+	go func() { _, _ = a.refreshCurrentEventCache(true) }()
 }
 func (a *app) recordCalendarIndexWarning(owner string, err error) {
 	label := map[string]string{"chore-wheel": "Chores", "maintenance": "Maintenance", "routines": "Routines"}[owner]

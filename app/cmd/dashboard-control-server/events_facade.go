@@ -41,7 +41,10 @@ func (a *app) eventService() *eventspkg.Service {
 			KnownWritebackSource:  a.calendarWritebackService().RegisteredSource,
 			DeleteAllowed:         a.calendarWritebackDeleteAllowed,
 			CapabilityFingerprint: a.calendarWritebackCacheFingerprint,
-			Now:                   time.Now,
+			FirstDayOfWeek: func() int {
+				return jsonutil.Int(a.loadSettings()["firstDayOfWeek"], 0)
+			},
+			Now: time.Now,
 		})
 	}
 	return a.events
@@ -61,7 +64,7 @@ func (a *app) eventURLToPath(url string) string     { return a.eventService().UR
 
 func (a *app) runEventCacheCLI(args []string) int {
 	force := false
-	daysPast, daysFuture := 90, 365
+	daysPast, daysFuture := a.currentEventCacheWindow()
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--force":
@@ -103,6 +106,23 @@ func (a *app) runEventCacheCLI(args []string) int {
 		fmt.Fprintln(os.Stderr, "WARN", fmt.Sprint(raw))
 	}
 	return 0
+}
+
+func (a *app) currentEventCacheWindow() (int, int) {
+	settings := a.loadSettings()
+	weeksAbove := min(max(jsonutil.Int(settings["weeksAbove"], 1), 0), 26)
+	weeksBelow := min(max(jsonutil.Int(settings["weeksBelow"], 8), 0), 26)
+	agendaDays := min(max(jsonutil.Int(settings["agendaDays"], 10), 1), 90)
+	// Include a complete safety week on both sides so a geometry change or
+	// week-boundary rollover remains covered until the next scheduled refresh.
+	daysPast := max(14, weeksAbove*7+14)
+	daysFuture := max(14, max((weeksBelow+1)*7, agendaDays)+7)
+	return daysPast, daysFuture
+}
+
+func (a *app) refreshCurrentEventCache(force bool) (map[string]any, error) {
+	daysPast, daysFuture := a.currentEventCacheWindow()
+	return a.refreshEventCache(force, daysPast, daysFuture)
 }
 
 func (a *app) refreshEventCache(force bool, daysPast int, daysFuture int) (map[string]any, error) {

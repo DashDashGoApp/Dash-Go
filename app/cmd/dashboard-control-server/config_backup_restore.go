@@ -393,7 +393,7 @@ func (a *app) restoreConfigBackup(name string) (map[string]any, error) {
 		return nil, fmt.Errorf("restore terminal access setting failed; pre-restore backup retained: %w", err)
 	}
 	a.invalidateSettingsCache()
-	_, _ = a.refreshEventCache(true, 90, 365)
+	_, _ = a.refreshCurrentEventCache(true)
 	pruned := a.pruneConfigBackups(a.configBackupKeepLimit())
 	return map[string]any{"ok": true, "name": chosen.Name, "restored": restored, "preBackup": pre["name"], "pruned": pruned["removedCount"], "backups": a.listConfigBackups()}, nil
 }

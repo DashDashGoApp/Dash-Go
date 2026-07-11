@@ -41,6 +41,8 @@ type weatherFetchResultGo struct {
 }
 
 func (s *Service) weatherPayload() any {
+	s.weatherFetchMu.Lock()
+	defer s.weatherFetchMu.Unlock()
 	cachePath := filepath.Join(s.cacheDir, "weather-cache.json")
 	cfg := s.Config()
 	cacheKey := weatherCacheKeyGo(cfg)
@@ -50,7 +52,7 @@ func (s *Service) weatherPayload() any {
 			return cached
 		}
 	}
-	payload, err := s.fetchGoWeatherWithConfig(context.Background(), cfg)
+	payload, err := s.fetchGoWeatherWithConfig(context.Background(), cfg, false)
 	if err == nil {
 		priorSuccess := weatherLastSuccessMillis(cachePath)
 		weatherMarkCacheGo(payload, cfg, false, "")
@@ -88,6 +90,31 @@ func (s *Service) weatherPayload() any {
 		"error":              err.Error(),
 		"source":             "go-weather-unavailable",
 	}
+}
+
+func (s *Service) refreshWeatherLive(ctx context.Context) (map[string]any, error) {
+	s.weatherFetchMu.Lock()
+	defer s.weatherFetchMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	cfg := s.Config()
+	payload, err := s.fetchGoWeatherWithConfig(ctx, cfg, true)
+	if err != nil {
+		return nil, err
+	}
+	cachePath := filepath.Join(s.cacheDir, "weather-cache.json")
+	priorSuccess := weatherLastSuccessMillis(cachePath)
+	weatherMarkCacheGo(payload, cfg, false, "manual live refresh")
+	if !weatherPayloadHasFreshSuccessGo(payload) && priorSuccess > 0 {
+		cache := anyMap(payload["cache"])
+		cache["lastSuccessAt"] = priorSuccess
+		payload["cache"] = cache
+	}
+	if err := fileio.WriteJSON(cachePath, payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 func (s *Service) readWeatherCache(path, cacheKey string) (any, bool) {
