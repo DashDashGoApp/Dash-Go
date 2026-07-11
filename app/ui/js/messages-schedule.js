@@ -108,7 +108,7 @@ function defaultMessageEdit(item,edits){
 }
 async function fetchLocalJson(path, fallback){
   try{
-    const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch(path,{cache:"no-store"});
     if(!res.ok) return fallback;
     return await res.json();
   }catch(_){ return fallback; }

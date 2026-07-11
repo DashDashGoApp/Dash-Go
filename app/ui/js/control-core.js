@@ -32,7 +32,7 @@ function ctrlActivePageName(){
   const p=document.querySelector(".ctrlpage.show");
   return p&&p.id?p.id.replace("ctrlpage-",""):"overview";
 }
-function ctrlLiteProfile(){ return ["lite","zero2","low","low-power"].includes(String(CONFIG.profile||"").toLowerCase()); }
+function ctrlLiteProfile(){ return dashboardLiteProfile(); }
 let CTRL_PAGE_RENDER_SEQ=0;
 function ctrlClearNode(node){
   if(!node) return;
@@ -41,7 +41,7 @@ function ctrlClearNode(node){
   if(node.classList && node.classList.contains("ctrloutputconsole")){
     const pre=node.querySelector("pre");
     if(pre) ctrlHideOutputConsole(pre.id);
-    else node.style.display="none";
+    else node.hidden=true;
     return;
   }
   node.innerHTML="";
@@ -64,7 +64,7 @@ function ensureCtrlOutputConsole(id,label,target){
     pre=document.createElement("pre");
     pre.id=id;
     pre.dataset.scrollPolicy="console";
-    pre.style.display="none";
+    pre.hidden=true;
     const panel=$("#ctrlpanel") || document.body;
     panel.appendChild(pre);
   }
@@ -72,7 +72,7 @@ function ensureCtrlOutputConsole(id,label,target){
   if(!wrap){
     wrap=el("div","ctrloutputconsole");
     wrap.id=id+"wrap";
-    wrap.style.display="none";
+    wrap.hidden=true;
     const head=el("div","ctrloutputhead");
     head.appendChild(el("div","ctrloutputtitle",label||"Output"));
     const close=cbtn("× Close","ctrloutputclose",()=>ctrlHideOutputConsole(id));
@@ -93,8 +93,8 @@ function ctrlShowOutputConsole(id,label,text,target){
   const c=ensureCtrlOutputConsole(id,label,target);
   if(!c) return;
   document.querySelectorAll(".ctrlsecbody.hasoutputconsole").forEach(n=>n.classList.remove("hasoutputconsole"));
-  c.wrap.style.display="block";
-  c.pre.style.display="block";
+  c.wrap.hidden=false;
+  c.pre.hidden=false;
   c.pre.textContent=text||"";
   if(c.wrap.parentElement && c.wrap.parentElement.classList) c.wrap.parentElement.classList.add("hasoutputconsole");
 }
@@ -103,11 +103,11 @@ function ctrlHideOutputConsole(id){
   const pre=$("#"+id);
   if(!pre) return;
   pre.textContent="";
-  pre.style.display="none";
+  pre.hidden=true;
   const wrap=pre.parentElement;
   if(wrap && wrap.classList && wrap.classList.contains("ctrloutputconsole")){
     if(wrap.parentElement && wrap.parentElement.classList) wrap.parentElement.classList.remove("hasoutputconsole");
-    wrap.style.display="none";
+    wrap.hidden=true;
   }
 }
 function ctrlHideAllOutputConsoles(){

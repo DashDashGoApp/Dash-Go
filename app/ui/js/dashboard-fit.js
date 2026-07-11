@@ -33,14 +33,7 @@ function dashboardFitTier(view){
   if(v.width>=860&&v.height>=520)return "dense";
   return "min";
 }
-function dashboardFitLiteProfile(){
-  try{
-    if(typeof liteVisualProfile==="function")return !!liteVisualProfile();
-    if(typeof startupLiteProfile==="function")return !!startupLiteProfile();
-  }catch(_){}
-  const profile=typeof CONFIG!=="undefined"&&CONFIG?String(CONFIG.profile||"").toLowerCase():"";
-  return ["lite","zero2","low","low-power"].includes(profile);
-}
+function dashboardFitLiteProfile(){ return dashboardLiteProfile(); }
 function dashboardFitGeometryPreference(key,fallback){
   const value=typeof CONFIG!=="undefined"&&CONFIG?Number(CONFIG[key]):NaN;
   return Number.isFinite(value)?Math.round(value):fallback;

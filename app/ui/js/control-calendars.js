@@ -37,12 +37,11 @@ function ctrlCalendarManagerConfirmAction(label,desc,armedLabel,fn){
   const b=ctrlCalendarManagerAction(label,desc,"danger requiresconfirm",async()=>{
     const normal=b.dataset.normalHtml||b.innerHTML;
     b.dataset.normalHtml=normal;
-    if(!b.classList.contains("armed")){
-      b.classList.add("armed");b.innerHTML=`<span class="bt">${escapeHTML(armedLabel)}</span><span class="bd">Tap once more to confirm.</span>`;
-      setTimeout(()=>{if(!b.isConnected)return;b.classList.remove("armed");b.innerHTML=b.dataset.normalHtml||normal;},5000);
-      return;
-    }
-    b.classList.remove("armed");b.innerHTML=b.dataset.normalHtml||normal;
+    const confirmed=dashConfirmTap(b,{duration:5000,
+      renderArmed:()=>{b.innerHTML=`<span class="bt">${escapeHTML(armedLabel)}</span><span class="bd">Tap once more to confirm.</span>`;},
+      renderNormal:()=>{b.innerHTML=b.dataset.normalHtml||normal;}
+    });
+    if(!confirmed)return;
     return await fn(b);
   });
   return b;

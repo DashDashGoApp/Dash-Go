@@ -187,6 +187,8 @@ const context = vm.createContext({
     lat: 41.8781,
     lon: -87.6298,
   },
+  dashboardProfileName: value => String(value===undefined?"lite":value).toLowerCase(),
+  dashboardLiteProfile: value => ["lite","zero2","low","low-power"].includes(String(value===undefined?"lite":value).toLowerCase()),
   setTimeout: shortTimeout,
   clearTimeout: shortClearTimeout,
   setInterval,

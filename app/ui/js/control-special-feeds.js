@@ -13,7 +13,7 @@ function specialDateRow(item,kind,handlers){
   row.appendChild(el("span","cm",item.date||""));
   row.appendChild(cbtn("Edit","",handlers.edit));
   const del=cbtn("Del","danger",async()=>{
-    if(!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent="Sure?"; setTimeout(()=>{del.classList.remove("armed");del.textContent="Del";},3000); return; }
+    if(!dashConfirmTap(del,{duration:3000,renderArmed:()=>{del.textContent="Sure?";},renderNormal:()=>{del.textContent="Del";}}))return;
     await handlers.del();
   });
   row.appendChild(del);
@@ -39,7 +39,7 @@ async function renderCtrlBirthdays(){
     }}));
   }
   function editor(item){
-    list.innerHTML=""; actions.style.display="none"; hideOSK();
+    list.innerHTML=""; actions.hidden=true; hideOSK();
     const form=el("div","compeditor");
     const name=oskInput("name",item?item.name:"");
     const date=oskInput("MM-DD",item?item.date:"",{mode:"mmdd"});
@@ -83,7 +83,7 @@ async function renderCtrlCelebrations(){
     }}));
   }
   function editor(item){
-    list.innerHTML=""; actions.style.display="none"; hideOSK();
+    list.innerHTML=""; actions.hidden=true; hideOSK();
     const form=el("div","compeditor");
     const label=oskInput("celebration label",item?item.label:"");
     const date=oskInput("MM-DD or YYYY-MM-DD",item?item.date:"",{mode:(item&&/^\d{4}-/.test(item.date))?"date":"mmdd"});
@@ -220,7 +220,7 @@ async function renderCtrlFeeds(){
       row.appendChild(el("span","cm",[it.source||"source",it.edited?"edited":"",msgWeightLabel(it.weight||1)].filter(Boolean).join(" · ")));
       row.appendChild(cbtn("Edit","",()=>editFeedItem(it)));
       const del=cbtn("Del","danger",async()=>{
-        if(!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent="Sure?"; setTimeout(()=>{del.classList.remove("armed");del.textContent="Del";},3000); return; }
+        if(!dashConfirmTap(del,{duration:3000,renderArmed:()=>{del.textContent="Sure?";},renderNormal:()=>{del.textContent="Del";}}))return;
         try{ await api("/api/message-sources/item/delete","POST",{id:it.id}); await loadCompliments(); ctrlMsg("Pulled item deleted. It will stay removed after refresh."); await stableMessageAction(()=>renderCtrlFeeds()); }
         catch(e){ ctrlMsg(e.message); }
       });

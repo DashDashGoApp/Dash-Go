@@ -75,13 +75,7 @@ function complimentFloorSize(metrics){
   // absolute 12px fallback is reserved for a genuinely constrained box.
   return Math.max(COMP_FIT.hardFloor,Math.round(complimentVisualCap(metrics)*.39*complimentTypographyMultiplier()));
 }
-function complimentLiteProfile(){
-  try{
-    if(typeof liteVisualProfile==="function")return liteVisualProfile();
-    if(typeof startupLiteProfile==="function")return startupLiteProfile();
-  }catch(_){}
-  return ["lite","zero2","low","low-power"].includes(String(CONFIG.profile||"").toLowerCase());
-}
+function complimentLiteProfile(){ return dashboardLiteProfile(); }
 function complimentTypographyBucket(){
   const root=document.documentElement;
   const preset=root.getAttribute("data-font-preset")||String(CONFIG.fontPreset||"default");

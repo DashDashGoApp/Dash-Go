@@ -2,9 +2,9 @@
 let CTRL_BUNDLE_PROMISE=null,CTRL_SCRIPT_PROMISE=null,CTRL_STYLES_PROMISE=null,CTRL_OPEN_GUARD_UNTIL=0,CTRL_WARM_TIMER=0,CTRL_LAZY_OPEN_TOKEN=0;
 function markCtrlOpenGesture(ms){CTRL_OPEN_GUARD_UNTIL=Math.max(CTRL_OPEN_GUARD_UNTIL,Date.now()+(ms||850));}
 function shouldIgnoreCtrlBackdropClose(){return Date.now()<CTRL_OPEN_GUARD_UNTIL;}
-function controlAssetVersion(){return encodeURIComponent(CONFIG.version||"1.5.9");}
+function controlAssetVersion(){return encodeURIComponent(CONFIG.version||"1.5.10-beta.1");}
 function controlAssetURL(path){return path+"?v="+controlAssetVersion();}
-function controlLiteProfile(){return ["lite","zero2","low","low-power"].includes(String((CONFIG||{}).profile||"").toLowerCase());}
+function controlLiteProfile(){return dashboardLiteProfile();}
 function ctrlShellStatus(text,retry){
   const node=document.getElementById("ctrlshellstatus");if(!node)return;
   node.replaceChildren(document.createTextNode(text||"Loading Dashboard Control…"));

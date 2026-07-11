@@ -3,6 +3,12 @@
 // Theme variables are replaced in one dedicated stylesheet operation. Runtime inline
 // sizing values remain on :root and are never cleared during a color swap.
 const THEME_VARS=(()=>{const v=new Set();for(const t of Object.values(THEMES))for(const k of Object.keys(t))v.add(k);return [...v];})();
+const DASH_LITE_PROFILE_NAMES=new Set(["lite","zero2","low","low-power"]);
+function dashboardProfileName(value){
+  const profile=value===undefined?(typeof CONFIG!=="undefined"&&CONFIG?CONFIG.profile:"balanced"):value;
+  return String(profile||"balanced").toLowerCase();
+}
+function dashboardLiteProfile(value){return DASH_LITE_PROFILE_NAMES.has(dashboardProfileName(value));}
 let CURRENT_THEME="basic";
 // Early source modules load before 08-settings-00-runtime.js declares its lexical
 // SETTINGS binding. Read the deliberately mirrored window property here so an
@@ -54,7 +60,7 @@ async function checkTheme(force){
       // Its matching revision is still enough to skip a body download.
       if(revision && revision===_themeConfigRevision) return;
     }
-    const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch(path,{cache:"no-store"});
     if(!res.ok) return;
     _themeConfigRevision=res.headers.get("ETag")||"";
     const m=(await res.text()).match(/theme:\s*"([^"]*)"/);

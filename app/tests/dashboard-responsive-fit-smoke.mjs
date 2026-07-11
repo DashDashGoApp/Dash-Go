@@ -84,6 +84,7 @@ assert.match(runtime,/dashboardFitSchedule\("settings",0\)/,"settings refresh mu
 const context={
   window:{innerWidth:1920,innerHeight:1080,devicePixelRatio:1},
   document:{documentElement:{},getElementById(){return null;}},
+  dashboardLiteProfile:()=>false,
   Math,Number,String,Object,Array,Set,console,setTimeout,clearTimeout,requestAnimationFrame:fn=>fn(),
 };
 context.globalThis=context;

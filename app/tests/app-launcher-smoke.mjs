@@ -74,8 +74,10 @@ vm.runInContext(launcher+"\nthis.__apps=availableDashboardApps; this.__update=up
 assert.deepEqual(Array.from(sandbox.__apps(),app=>app.id),["chalkboard","radar","todo","grocery","family-board","chore-wheel","maintenance","routines","dashboard-control"],"all seven apps must have stable launcher order");
 sandbox.__update();
 assert.equal(elements.get("cblaunch").hidden,false,"Apps trigger must remain visible");
-assert.equal(elements.get("cblaunch").style.display,"inline-flex","Apps trigger must use touch layout");
+assert.equal(elements.get("cblaunch").style.display,"","Apps trigger display must remain CSS-owned");
 const launcherCss=fs.readFileSync(root+"ui/css/dashboard/app-launcher.css","utf8");
+const messageCss=fs.readFileSync(root+"ui/css/dashboard/sidebar-weather-messages.css","utf8");
+assert.match(messageCss,/#compliment \.cb-launch\{[\s\S]*?display:inline-flex;/,"Apps trigger touch layout must remain stylesheet-owned");
 assert.match(launcherCss,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/,"launcher must use a fixed 3-column grid");
 assert.match(launcherCss,/grid-template-rows:repeat\(3,minmax\(0,1fr\)\)/,"launcher must use a fixed 3-row grid");
 assert.ok(!/overflow:auto/.test(launcherCss),"launcher must not scroll to reveal permanent apps");

@@ -11,23 +11,12 @@ function confirmBtn(label,armedLabel,fn){
   const b=cbtn(label,"danger",async()=>{
     const normalHTML=b.dataset.normalHtml || b.innerHTML || escapeHTML(label);
     b.dataset.normalHtml=normalHTML;
-    if(!b.classList.contains("armed")){
-      b.classList.add("armed");
-      if(b.classList.contains("actionbtn")){
-        b.innerHTML=`<span class="bt">${escapeHTML(armedLabel)}</span><span class="bd">Tap once more to confirm.</span>`;
-      }else{
-        b.textContent=armedLabel;
-      }
-      setTimeout(()=>{
-        b.classList.remove("armed");
-        if(b.classList.contains("actionbtn")) b.innerHTML=b.dataset.normalHtml || normalHTML;
-        else b.textContent=label;
-      },5000);
-      return;
-    }
-    b.classList.remove("armed");
-    if(b.classList.contains("actionbtn")) b.innerHTML=b.dataset.normalHtml || normalHTML;
-    else b.textContent=label;
+    const actionButton=b.classList.contains("actionbtn");
+    const confirmed=dashConfirmTap(b,{duration:5000,
+      renderArmed:()=>{if(actionButton)b.innerHTML=`<span class="bt">${escapeHTML(armedLabel)}</span><span class="bd">Tap once more to confirm.</span>`;else b.textContent=armedLabel;},
+      renderNormal:()=>{if(actionButton)b.innerHTML=b.dataset.normalHtml||normalHTML;else b.textContent=label;}
+    });
+    if(!confirmed)return;
     await fn(b);
   });
   return b;

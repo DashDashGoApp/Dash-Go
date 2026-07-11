@@ -166,9 +166,7 @@ function applyDashboardTypographyTarget(target){
   if(target==="weather"){ if(typeof renderWeather==="function") renderWeather(); return; }
   if(target==="messages") refitComplimentForVisualChange();
 }
-function liteVisualProfile(){
-  return ["lite","zero2","low","low-power"].includes(String(CONFIG.profile||"").toLowerCase());
-}
+function liteVisualProfile(){ return dashboardLiteProfile(); }
 let _VISUAL_STATE={fontPreset:null, weatherIconStyle:null, seasonalDecor:null, profile:null};
 function refitComplimentForVisualChange(){
   const run=()=>{
@@ -270,7 +268,7 @@ function applySettings(s){
 }
 async function loadSettings(){
   try{
-    const res=await fetch("config/settings.json?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch("config/settings.json",{cache:"no-store"});
     if(res.ok) applySettings(await res.json());
   }catch(err){ /* server may not be the control server yet — defaults apply */ }
 }

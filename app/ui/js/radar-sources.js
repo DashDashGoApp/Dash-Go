@@ -10,8 +10,8 @@ const RADAR_SOURCE_META={
 };
 const RADAR_DEFAULT_PROVIDER="rainviewer";
 function radarBaseProfileTier(){
-  const p=String((CONFIG&&CONFIG.profile)||"balanced").toLowerCase();
-  if(["lite","zero2","low","low-power"].includes(p)) return "lite";
+  const p=dashboardProfileName();
+  if(dashboardLiteProfile(p)) return "lite";
   if(["enhanced","maximum","x86","high"].includes(p)) return "enhanced";
   return "balanced";
 }

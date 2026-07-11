@@ -206,45 +206,38 @@ function updateAppLauncherTrigger(){
   const trigger=document.getElementById("cblaunch"),footer=document.getElementById("compliment");
   if(trigger){
     trigger.hidden=false;
-    trigger.style.display="inline-flex";
     trigger.setAttribute("aria-hidden","false");
     trigger.setAttribute("aria-label","Open apps");
   }
   if(footer) footer.classList.add("has-app-launcher");
 }
 
-function appendLauncherStyle(src,dataName){
-  const selector=`link[data-${dataName}="1"]`;
+function loadDashboardLazyAsset(kind,src,dataName,errorMessage){
+  const style=kind==="style",tag=style?"link":"script",attr=`data-${dataName}`,selector=`${tag}[${attr}="1"]`;
   const prior=document.querySelector(selector);
-  if(prior&&prior.dataset.ready==="1")return Promise.resolve();
+  if(prior&&prior.dataset.ready==="1")return Promise.resolve(prior);
   if(prior&&prior.dataset.failed==="1")prior.remove();
   return new Promise((resolve,reject)=>{
-    const link=document.querySelector(selector)||document.createElement("link");
-    const ready=()=>{link.dataset.ready="1";delete link.dataset.failed;resolve();};
-    const fail=()=>{link.dataset.failed="1";link.remove();reject(new Error("app stylesheet failed to load"));};
-    if(!link.getAttribute(`data-${dataName}`)){link.rel="stylesheet";link.href=src;link.setAttribute(`data-${dataName}`,"1");document.head.appendChild(link);}
-    if(link.sheet){ready();return;}
-    link.addEventListener("load",ready,{once:true});
-    link.addEventListener("error",fail,{once:true});
+    const node=document.querySelector(selector)||document.createElement(tag);
+    const ready=()=>{node.dataset.ready="1";delete node.dataset.failed;resolve(node);};
+    const fail=()=>{node.dataset.failed="1";node.remove();reject(new Error(errorMessage||"app asset failed to load"));};
+    if(!node.getAttribute(attr)){
+      node.setAttribute(attr,"1");
+      if(style){node.rel="stylesheet";node.href=src;document.head.appendChild(node);}
+      else{node.src=src;document.body.appendChild(node);}
+    }
+    if(style&&node.sheet){ready();return;}
+    node.addEventListener("load",ready,{once:true});
+    node.addEventListener("error",fail,{once:true});
   });
 }
-function appendLauncherScript(src,dataName){
-  const selector=`script[data-${dataName}="1"]`;
-  const prior=document.querySelector(selector);
-  if(prior&&prior.dataset.ready==="1")return Promise.resolve();
-  if(prior&&prior.dataset.failed==="1")prior.remove();
-  return new Promise((resolve,reject)=>{
-    const script=document.querySelector(selector)||document.createElement("script");
-    const fail=()=>{script.dataset.failed="1";script.remove();reject(new Error("app assets failed to load"));};
-    if(!script.getAttribute(`data-${dataName}`)){script.src=src;script.setAttribute(`data-${dataName}`,"1");document.body.appendChild(script);}
-    script.addEventListener("load",()=>{script.dataset.ready="1";delete script.dataset.failed;resolve();},{once:true});
-    script.addEventListener("error",fail,{once:true});
-  });
-}
+function appendLauncherStyle(src,dataName){return loadDashboardLazyAsset("style",src,dataName,"app stylesheet failed to load");}
+function appendLauncherScript(src,dataName){return loadDashboardLazyAsset("script",src,dataName,"app assets failed to load");}
+function appendListsScript(src,dataName){return loadDashboardLazyAsset("script",src,dataName,"Lists app assets failed to load");}
 function loadChalkboardAssets(){
   if(window.openChalkboardImpl) return Promise.resolve();
   if(_chalkboardLoading) return _chalkboardLoading;
-  const version=CONFIG.version||"1.5.9";
+  const version=CONFIG.version||"1.5.10-beta.1";
   _chalkboardLoading=appendLauncherStyle("ui/chalkboard.css?v="+version,"chalkboard").then(()=>appendLauncherScript("ui/chalkboard.js?v="+version,"chalkboard-script"));
   _chalkboardLoading.catch(()=>{_chalkboardLoading=null;});return _chalkboardLoading;
 }
@@ -254,22 +247,10 @@ function openChalkboard(){
     return window.openChalkboardImpl();
   });
 }
-function appendListsScript(src,dataName){
-  const attr="data-"+dataName,selector=`script[${attr}="1"]`,prior=document.querySelector(selector);
-  if(prior&&prior.dataset.ready==="1")return Promise.resolve();
-  if(prior&&prior.dataset.failed==="1")prior.remove();
-  return new Promise((resolve,reject)=>{
-    const script=document.querySelector(selector)||document.createElement("script");
-    const fail=()=>{script.dataset.failed="1";script.remove();reject(new Error("Lists app assets failed to load"));};
-    if(!script.getAttribute(attr)){script.src=src;script.setAttribute(attr,"1");document.body.appendChild(script);}
-    script.addEventListener("load",()=>{script.dataset.ready="1";delete script.dataset.failed;resolve();},{once:true});
-    script.addEventListener("error",fail,{once:true});
-  });
-}
 function loadListsAssets(){
   if(window.openListsImpl&&window.DashGoGroceryQuickAdd&&window.DashGoListsPeople) return Promise.resolve();
   if(_listsLoading) return _listsLoading;
-  const version=CONFIG.version||"1.5.9";
+  const version=CONFIG.version||"1.5.10-beta.1";
   _listsLoading=appendLauncherStyle("ui/lists.css?v="+version,"listsapp").then(()=>appendListsScript("ui/lists-core.js?v="+version,"listsapp-core-script")).then(()=>appendListsScript("ui/lists-actions.js?v="+version,"listsapp-actions-script")).then(()=>appendListsScript("ui/lists-people.js?v="+version,"lists-people-script")).then(()=>appendListsScript("ui/lists-grocery.js?v="+version,"lists-grocery-script"));
   _listsLoading.catch(()=>{_listsLoading=null;});return _listsLoading;
 }

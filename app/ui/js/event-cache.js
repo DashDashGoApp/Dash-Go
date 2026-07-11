@@ -17,8 +17,8 @@ function maybePrewarmEventMaps(winStart,winEnd){
   // just warms visible-range event maps so popups open with an instant image.
   if(now-MAP_PREWARM_LAST<10*60000) return;
   MAP_PREWARM_LAST=now;
-  const prof=String(CONFIG.profile||"balanced").toLowerCase();
-  if(["lite","zero2","low","low-power"].includes(prof) && typeof BOOT_TS!=="undefined" && Date.now()-BOOT_TS<120000) return;
+  const prof=dashboardProfileName();
+  if(dashboardLiteProfile(prof) && typeof BOOT_TS!=="undefined" && Date.now()-BOOT_TS<120000) return;
   const limit=(prof==="enhanced"||prof==="maximum")?36:(prof==="balanced")?24:12;
   fetch("/api/maps/prewarm",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({windowStart:+winStart,windowEnd:+winEnd,limit,eventMaps:true,interactiveMaps:!!CONFIG.showInteractiveMaps})}).catch(()=>{});

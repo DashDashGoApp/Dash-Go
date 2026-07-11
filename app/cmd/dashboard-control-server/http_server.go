@@ -286,10 +286,16 @@ func (a *app) static(w http.ResponseWriter, r *http.Request, requestPath string)
 	if requestPath == "/" || requestPath == "" {
 		requestPath = "/index.html"
 	}
-	aliases := map[string]string{"/dashboard.css": "/ui/dashboard.css", "/control-layout.css": "/ui/control-layout.css", "/dashboard.js": "/ui/js/app.bundle.js"}
-	aliased := false
-	if v, ok := aliases[requestPath]; ok {
-		requestPath, aliased = v, true
+	aliased := true
+	switch requestPath {
+	case "/dashboard.css":
+		requestPath = "/ui/dashboard.css"
+	case "/control-layout.css":
+		requestPath = "/ui/control-layout.css"
+	case "/dashboard.js":
+		requestPath = "/ui/js/app.bundle.js"
+	default:
+		aliased = false
 	}
 	rel, valid := staticURLRelativePath(requestPath)
 	if !valid {

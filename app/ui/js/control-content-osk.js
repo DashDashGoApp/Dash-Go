@@ -151,7 +151,7 @@ async function renderCtrlComp(){
     catch(e){ ctrlMsg(e.message); }
   }
   function editor(c){
-    list.innerHTML=""; top.style.display="none"; hideOSK();
+    list.innerHTML=""; top.hidden=true; hideOSK();
     const form=el("div","compeditor");
     const f1=oskInput("message text",c?c.text:"");
     const f2=oskInput("date MM-DD (optional — shows only that day)",c&&c.date?c.date:"");
@@ -174,7 +174,7 @@ async function renderCtrlComp(){
     oskSetSubmit(f1,c?"Save":"Add",()=>saveMessage.click());
     oskSetSubmit(f2,c?"Save":"Add",()=>saveMessage.click());
     btns.appendChild(saveMessage);
-    btns.appendChild(cbtn("Cancel","",()=>{top.style.display="";drawList();})); form.appendChild(btns); list.appendChild(form);
+    btns.appendChild(cbtn("Cancel","",()=>{top.hidden=false;drawList();})); form.appendChild(btns); list.appendChild(form);
   }
   search._oninput=drawList; drawList();
 }
@@ -186,7 +186,7 @@ function messageRow(c,handlers){
   if(handlers.edit) row.appendChild(cbtn("Edit","",handlers.edit));
   if(handlers.del){
     const del=cbtn("Del","danger",async()=>{
-      if(!del.classList.contains("armed")){ del.classList.add("armed"); del.textContent="Sure?"; setTimeout(()=>{del.classList.remove("armed");del.textContent="Del";},3000); return; }
+      if(!dashConfirmTap(del,{duration:3000,renderArmed:()=>{del.textContent="Sure?";},renderNormal:()=>{del.textContent="Del";}}))return;
       await handlers.del();
     });
     row.appendChild(del);
@@ -223,7 +223,7 @@ async function renderCtrlBuiltins(){
     catch(e){ ctrlMsg("Could not restore defaults: "+e.message); }
   });
   const removeAll=cbtn("Hide all","danger",async()=>{
-    if(!removeAll.classList.contains("armed")){ removeAll.classList.add("armed"); removeAll.textContent="Sure?"; setTimeout(()=>{removeAll.classList.remove("armed");removeAll.textContent="Hide all";},3000); return; }
+    if(!dashConfirmTap(removeAll,{duration:3000,renderArmed:()=>{removeAll.textContent="Sure?";},renderNormal:()=>{removeAll.textContent="Hide all";}}))return;
     try{ delete CTRL_CACHE["/api/compliments"]; await api("/api/compliments/defaults/remove-all","POST",{keys}); await loadCompliments(); ctrlMsg("All default messages hidden."); await stableMessageAction(()=>renderCtrlBuiltins()); }
     catch(e){ ctrlMsg("Could not hide defaults: "+e.message); }
   });

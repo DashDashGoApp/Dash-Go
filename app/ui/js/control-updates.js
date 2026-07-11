@@ -139,7 +139,7 @@ function ctrlUpdateSetActionState(ui,progress,options){
   ctrlUpdateSetButtonDisabled(ui.checkButton,busy);
   ctrlUpdateSetButtonDisabled(ui.updateButton,busy||ui.preflight.canStart!==true);
   if(typeof ctrlUpdateSetBackupMutationLocked==="function")ctrlUpdateSetBackupMutationLocked(ui,busy,updateBusy);
-  ui.updateButton.classList.remove("armed");
+  if(typeof dashResetConfirmation==="function")dashResetConfirmation(ui.updateButton,()=>{ui.updateButton.innerHTML=ui.updateButtonNormalHTML;});else{ui.updateButton.classList.remove("armed");ui.updateButton.innerHTML=ui.updateButtonNormalHTML;}
   if(updateBusy){
     ui.updateButton.innerHTML=`<span class="bt">${escapeHTML(opts.finalizing?"Finalizing update":"Update in progress")}</span><span class="bd">${escapeHTML(opts.finalizing?"Refreshing the final dashboard status.":"The dedicated updater is working. Controls stay locked until it reaches a terminal state.")}</span>`;
   }else{

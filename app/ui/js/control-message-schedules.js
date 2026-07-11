@@ -70,7 +70,7 @@ async function renderCtrlScheduledMessages(){
     }
   }
   function editor(m){
-    list.innerHTML=""; top.style.display="none"; _oskTarget=null;
+    list.innerHTML=""; top.hidden=true; _oskTarget=null;
     const form=el("div","schededitor messageform");
     const text=oskInput("scheduled message text",m?m.text:"");
     const startDate=oskInput("start date YYYY-MM-DD",m&&m.startDate?m.startDate:localDateISO(),{mode:"date"});

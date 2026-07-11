@@ -32,7 +32,7 @@ function birthdayEvents(winStart,winEnd){
 // edits here. Falls back silently to CONFIG.calendars if absent/invalid.
 async function discoverCalendars(){
   try{
-    const res=await fetch("calendars/calendars.json?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch("calendars/calendars.json",{cache:"no-store"});
     if(!res.ok) return;
     const list=await res.json();
     // An empty array is a VALID manifest ("no calendars yet") — use it, so we

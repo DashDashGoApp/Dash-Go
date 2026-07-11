@@ -28,14 +28,17 @@ assert.match(tap,/requestIdleCallback\(run,\{timeout:1500\}\)/,"tap primitive pr
 assert.equal((tap.match(/document\.addEventListener\("visibilitychange"/g)||[]).length,1,"tap primitive must install one shared visibility listener");
 assert.match(tap,/DASHGO_TAP_BINDINGS\.delete\(binding\)/,"tap disposer must remove its central binding record");
 
-// Failed lazy tags must be removed so a later open gets a new network request
-// rather than a listener attached to an already-failed element.
-for(const [name,source] of [["household app loader",household],["launcher loader",launcher]]){
-  assert.match(source,/dataset\.failed="1";(?:script|link)\.remove\(\);reject\(/,"${name} must remove failed lazy elements before rejecting");
-  assert.match(source,/prior&&prior\.dataset\.failed==="1"\)prior\.remove\(\)/,"${name} must discard a previously failed lazy element on retry");
-}
-assert.match(launcher,/function appendLauncherScript\(/,"chalkboard must use the same retry-safe script helper as other apps");
-assert.match(launcher,/function appendListsScript\(/,"Lists must retain retry-safe lazy scripts");
+// Every lazy household app now uses one retry-safe loader. Failed tags are
+// removed so a later open gets a new network request rather than listeners on
+// an already-failed element.
+assert.match(launcher,/function loadDashboardLazyAsset\(kind,src,dataName,errorMessage\)/,"launcher must own the shared lazy asset helper");
+assert.match(launcher,/node\.dataset\.failed="1";node\.remove\(\);reject\(/,"shared lazy loader must remove failed elements before rejecting");
+assert.match(launcher,/prior&&prior\.dataset\.failed==="1"\)prior\.remove\(\)/,"shared lazy loader must discard a previously failed element on retry");
+assert.match(launcher,/function appendLauncherScript\([^)]*\)\{return loadDashboardLazyAsset\("script"/,"Chalkboard must use the shared script helper");
+assert.match(launcher,/function appendListsScript\([^)]*\)\{return loadDashboardLazyAsset\("script"/,"Lists must use the shared script helper");
+assert.doesNotMatch(household,/function appendLazy(?:Script|Style)\(/,"household loader must not retain duplicate lazy asset implementations");
+assert.match(household,/loadDashboardLazyAsset\("style","ui\/chore-wheel\.css/,"household styles must use the shared lazy asset helper");
+assert.match(household,/loadDashboardLazyAsset\("script","ui\/routines\.js/,"household scripts must use the shared lazy asset helper");
 
 // Dynamic household strings must enter through DOM text nodes rather than
 // concatenated HTML. This removes the remaining hand-escaped XSS surface.

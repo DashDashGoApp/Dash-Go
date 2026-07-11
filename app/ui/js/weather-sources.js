@@ -137,7 +137,7 @@ function owCode(id){
 
 async function fetchServerWeatherSources(){
   try{
-    const res=await fetch("/api/weather?t="+Date.now(),{cache:"no-store"});
+    const res=await fetch("/api/weather",{cache:"no-store"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     const payload=await res.json();
     if(payload && Array.isArray(payload.status)) WEATHER_LAST_SOURCE_STATUS=payload.status;

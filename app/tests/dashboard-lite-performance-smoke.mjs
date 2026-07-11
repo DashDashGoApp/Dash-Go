@@ -92,6 +92,7 @@ function fitContext(profile){
   window.window=window;
   const context={
     CONFIG:{profile,layoutProfile:"balanced"},window,document,Math,Number,String,Object,Array,Set,console,
+    dashboardLiteProfile:value=>["lite","zero2","low","low-power"].includes(String(value===undefined?profile:value).toLowerCase()),
     setTimeout,clearTimeout,requestAnimationFrame:fn=>fn(),
   };
   context.globalThis=context;

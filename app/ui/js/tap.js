@@ -220,6 +220,34 @@ function attachTaps(elm,opts){
     elm.removeEventListener("click",onClick);
   };
 }
+const DASH_CONFIRM_TIMERS=new WeakMap();
+function dashResetConfirmation(button,renderNormal){
+  if(!button)return;
+  const timer=DASH_CONFIRM_TIMERS.get(button);
+  if(timer)clearTimeout(timer);
+  DASH_CONFIRM_TIMERS.delete(button);
+  button.classList.remove("armed");
+  if(typeof renderNormal==="function")renderNormal();
+}
+function dashConfirmTap(button,options){
+  const opts=options||{},renderNormal=opts.renderNormal,renderArmed=opts.renderArmed;
+  if(button.classList.contains("armed")){
+    dashResetConfirmation(button,renderNormal);
+    return true;
+  }
+  dashResetConfirmation(button,renderNormal);
+  button.classList.add("armed");
+  if(typeof renderArmed==="function")renderArmed();
+  const duration=Math.max(1,Number(opts.duration)||3000);
+  const timer=setTimeout(()=>{
+    DASH_CONFIRM_TIMERS.delete(button);
+    if(!button.isConnected)return;
+    button.classList.remove("armed");
+    if(typeof renderNormal==="function")renderNormal();
+  },duration);
+  DASH_CONFIRM_TIMERS.set(button,timer);
+  return false;
+}
 function bindTap(elm,fn,opts){
   return attachTaps(elm,{...(opts||{}),maxTaps:1,onTaps:fn});
 }

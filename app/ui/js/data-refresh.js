@@ -24,7 +24,7 @@ async function loadCalendars(){
   const CACHE = loadCalendars._cache || (loadCalendars._cache=new Map());
   const results=await Promise.all(ACTIVE_CALENDARS.map(async cal=>{
     try{
-      const res=await fetch(cal.url+"?t="+Date.now(),{cache:"no-store"});
+      const res=await fetch(cal.url,{cache:"no-store"});
       if(!res.ok) throw new Error(res.status);
       const lm=res.headers&&res.headers.get?res.headers.get("last-modified"):null;
       const cached=CACHE.get(cal.url);

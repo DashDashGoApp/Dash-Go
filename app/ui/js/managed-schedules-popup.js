@@ -22,12 +22,9 @@ function managedScheduleAction(label,detail,cls,fn){
   b.append(el("span","managed-schedule-action-title",label),el("span","managed-schedule-action-detail",detail));return b;
 }
 function managedScheduleConfirm(label,armedLabel,fn){
-  let timer=0;const b=managedScheduleButton(label,"danger",()=>{
-    if(!b.classList.contains("armed")){
-      b.classList.add("armed");b.textContent=armedLabel;clearTimeout(timer);
-      timer=setTimeout(()=>{b.classList.remove("armed");b.textContent=label;},3200);return;
-    }
-    clearTimeout(timer);fn();
+  const b=managedScheduleButton(label,"danger",()=>{
+    if(!dashConfirmTap(b,{duration:3200,renderArmed:()=>{b.textContent=armedLabel;},renderNormal:()=>{b.textContent=label;}}))return;
+    fn();
   });return b;
 }
 function managedScheduleDateInput(value){

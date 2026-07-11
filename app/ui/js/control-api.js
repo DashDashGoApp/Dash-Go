@@ -19,11 +19,21 @@ function ctrlHandleLockedApi(status,payload){const err=String((payload&&payload.
 function ctrlObserveCachedPayload(path,payload){
   if(path==="/api/status"&&typeof ctrlObserveCacheBudgetStatus==="function")ctrlObserveCacheBudgetStatus(payload);
 }
+function jsonValueEqual(left,right){
+  if(Object.is(left,right))return true;
+  if(left===null||right===null||typeof left!=="object"||typeof right!=="object")return false;
+  if(Array.isArray(left)||Array.isArray(right)){
+    return Array.isArray(left)&&Array.isArray(right)&&left.length===right.length&&left.every((value,index)=>jsonValueEqual(value,right[index]));
+  }
+  const leftKeys=Object.keys(left),rightKeys=Object.keys(right);
+  if(leftKeys.length!==rightKeys.length)return false;
+  return leftKeys.every(key=>Object.prototype.hasOwnProperty.call(right,key)&&jsonValueEqual(left[key],right[key]));
+}
 async function cachedApi(path,onData,opts){
   opts=opts||{};const scope=opts.scope||ctrlPageRequestScope(),had=CTRL_CACHE[path];
   if(had){ctrlObserveCachedPayload(path,had);if(ctrlPageScopeCurrent(scope))onData(had,true);}
   if(had&&ctrlLiteProfile()&&CTRL_OPEN&&!opts.force)return;
-  try{const fresh=await api(path,"GET",null,scope);const same=had&&JSON.stringify(had)===JSON.stringify(fresh);CTRL_CACHE[path]=fresh;ctrlObserveCachedPayload(path,fresh);if(!same&&ctrlPageScopeCurrent(scope))onData(fresh,false);}catch(e){if(ctrlCancelledError(e))return;if(String(e.message).toLowerCase().includes("locked")||!had)throw e;}
+  try{const fresh=await api(path,"GET",null,scope);const same=had&&jsonValueEqual(had,fresh);CTRL_CACHE[path]=fresh;ctrlObserveCachedPayload(path,fresh);if(!same&&ctrlPageScopeCurrent(scope))onData(fresh,false);}catch(e){if(ctrlCancelledError(e))return;if(String(e.message).toLowerCase().includes("locked")||!had)throw e;}
 }
 function apiXhr(path,method,body,headers,scope){
   return new Promise((resolve,reject)=>{

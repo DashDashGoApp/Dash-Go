@@ -117,10 +117,7 @@ function dtScrollInitialView(body,view,kind,model){
     body.scrollTop=Math.max(0,grid.offsetTop+withinGrid-offset);
   });
 }
-function dtLiteDayPopupProfile(){
-  const profile=typeof CONFIG!=="undefined"&&CONFIG?String(CONFIG.profile||"").toLowerCase():"";
-  return ["lite","zero2","low","low-power"].includes(profile);
-}
+function dtLiteDayPopupProfile(){ return dashboardLiteProfile(); }
 
 // App-owned household calendar entries use a focused, actionable popup. The
 // specialized renderer lives in the adjacent module so Timeline/List behavior

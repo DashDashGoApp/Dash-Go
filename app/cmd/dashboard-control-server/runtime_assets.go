@@ -11,6 +11,7 @@ import (
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
+	minifycss "github.com/tdewolff/minify/v2/css"
 	minifyjs "github.com/tdewolff/minify/v2/js"
 )
 
@@ -184,15 +185,23 @@ func verifyGeneratedAssets(root string, write bool) error {
 		}
 		return bundleBody.String(), nil
 	}
-	buildCSS := func(bundle, target string) string {
-		var b strings.Builder
-		fmt.Fprintf(&b, "/* Dash-Go %s %s browser bundle.\n   GENERATED from ui/css/%s split source files; edit split files, not this bundle. */\n", version, target, bundle)
+	buildCSS := func(bundle, target string) (string, error) {
+		var source strings.Builder
 		for _, p := range cssBundles[bundle] {
-			rel, _ := filepath.Rel(root, p)
-			fmt.Fprintf(&b, "\n/* ---- %s ---- */\n", filepath.ToSlash(rel))
-			b.WriteString(readNorm(p))
+			source.WriteString(readNorm(p))
 		}
-		return b.String()
+		var minified bytes.Buffer
+		minifier := minifycss.Minifier{}
+		if err := minifier.Minify(nil, &minified, strings.NewReader(source.String()), nil); err != nil {
+			return "", fmt.Errorf("minify generated %s: %w", target, err)
+		}
+		var bundleBody strings.Builder
+		fmt.Fprintf(&bundleBody, "/* Dash-Go %s %s browser bundle. GENERATED from ui/css/%s split source files; edit split files, not this bundle. */\n", version, target, bundle)
+		bundleBody.WriteString(minified.String())
+		if !strings.HasSuffix(minified.String(), "\n") {
+			bundleBody.WriteByte('\n')
+		}
+		return bundleBody.String(), nil
 	}
 	appBundle, err := buildJS("app")
 	if err != nil {
@@ -202,11 +211,19 @@ func verifyGeneratedAssets(root string, write bool) error {
 	if err != nil {
 		return err
 	}
+	dashboardCSS, err := buildCSS("dashboard", "dashboard.css")
+	if err != nil {
+		return err
+	}
+	controlCSS, err := buildCSS("control", "control-layout.css")
+	if err != nil {
+		return err
+	}
 	checks := map[string]string{
 		filepath.Join(root, "ui/js/app.bundle.js"):         appBundle,
 		filepath.Join(root, "ui/js/app.control.bundle.js"): controlBundle,
-		filepath.Join(root, "ui/dashboard.css"):            buildCSS("dashboard", "dashboard.css"),
-		filepath.Join(root, "ui/control-layout.css"):       buildCSS("control", "control-layout.css"),
+		filepath.Join(root, "ui/dashboard.css"):            dashboardCSS,
+		filepath.Join(root, "ui/control-layout.css"):       controlCSS,
 	}
 	for p, exp := range checks {
 		if write {

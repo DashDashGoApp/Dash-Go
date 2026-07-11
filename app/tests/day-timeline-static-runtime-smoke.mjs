@@ -37,7 +37,7 @@ function flushOne(){
 }
 function flushAll(){while(flushOne()){} }
 const context=vm.createContext({
-  console,Map,Math,window:{innerHeight:1080,innerWidth:1920},CONFIG:{profile:"lite"},
+  console,Map,Math,window:{innerHeight:1080,innerWidth:1920},CONFIG:{profile:"lite"},dashboardLiteProfile:()=>true,
   document:{createDocumentFragment(){const f=fakeNode("#fragment");f._fragment=true;return f;}},
   popupDefer,popupNextFrame(fn){fn();},popupIsCurrent:()=>true,
   el:(tag,cls,text)=>fakeNode(tag,cls,text),

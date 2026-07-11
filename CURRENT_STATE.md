@@ -2,6 +2,15 @@
 
 **Dash-Go** is pronounced **“Dash Dash Go.”**
 
+## Current beta release candidate
+
+- **Version:** `1.5.10-beta.1`
+- **Track:** beta
+- **Purpose:** behavior-preserving GUI and runtime cleanup based on 1.5.9 stable. End-user features, displayed content, interaction semantics, refresh cadence, API response content, and persistent file formats remain unchanged.
+- **Primary changes:** stable local no-store URLs, generated CSS minification, one lazy asset loader, canonical Lite-profile recognition, shared confirmation lifecycle, shared OSK rows, member-order-independent Control JSON comparison, semantic major-shell visibility, and an allocation-free static alias path.
+- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified JavaScript and CSS bundles, run the complete source and Chromium layout gates, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, and final-archive validation before publication.
+- **Compatibility:** no settings, file formats, API response content, refresh intervals, or user-facing behavior are intentionally changed. Existing 1.5.9 configuration and cache data remain compatible.
+
 ## Current stable release
 
 - **Version:** `1.5.9`

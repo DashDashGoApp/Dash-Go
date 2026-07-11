@@ -28,7 +28,7 @@ function ctrlPageHasHeavyResidentContent(page){
   for(const d of page.querySelectorAll("details.ctrlsec[data-lazy]")){
     if(d.dataset&&d.dataset.loaded==="1"&&CTRL_HEAVY_LAZY_KEYS.has(d.dataset.lazy||""))return true;
   }
-  return !!page.querySelector(".ctrloutputconsole[style*='block']");
+  return !!page.querySelector(".ctrloutputconsole:not([hidden])");
 }
 function ctrlPageCanHibernate(page){
   const name=ctrlPageName(page);

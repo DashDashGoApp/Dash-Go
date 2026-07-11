@@ -3,20 +3,7 @@ let _mapOskLayer="letters";
 let _mapOskShift=false;
 let _mapOskCapsLock=false;
 let _mapOskLastShiftTap=0;
-function mapKeyboardRows(){
-  const letterRows=[
-    ["1","2","3","4","5","6","7","8","9","0"],
-    ["q","w","e","r","t","y","u","i","o","p"],
-    ["a","s","d","f","g","h","j","k","l","'"],
-    ["z","x","c","v","b","n","m",",",".",":"],
-  ];
-  const symbolRows=[
-    ["!","@","#","$","%","&","*","(",")","/"],
-    ["-","_","=","+","\\","?",";",":","'","\""],
-    [",",".","<",">","[","]","{","}","|","`"],
-  ];
-  return _mapOskLayer==="symbols"?symbolRows:letterRows;
-}
+function mapKeyboardRows(){return _mapOskLayer==="symbols"?DASH_OSK_SYMBOL_ROWS:DASH_OSK_LETTER_ROWS;}
 function mapKeyboardButton(label,cls,fn){
   const b=el("button","oskkey"+(cls?" "+cls:""),label);
   b.type="button";

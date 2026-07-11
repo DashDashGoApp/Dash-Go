@@ -35,7 +35,7 @@ assert.doesNotMatch(nav,/setTimeout\(open,ctrlLiteProfile\(\)\?70:0\)/,
   "contextual route opening must not retain the Lite all-collapsed delay");
 assert.doesNotMatch(comp,/ctrlAfterNextPaint\(\)/,
   "Personal messages must not deliberately paint a compact loader during warm refresh");
-assert.match(comp,/btns\.appendChild\(cbtn\("Cancel","",\(\)=>\{top\.style\.display="";drawList\(\);\}\)\)/,
+assert.match(comp,/btns\.appendChild\(cbtn\("Cancel","",\(\)=>\{top\.hidden=false;drawList\(\);\}\)\)/,
   "Personal-message Cancel must restore the resident list without a network redraw");
 assert.match(tap,/const duplicate=Date\.now\(\)<suppressClickUntil;/,
   "detail-zero touch clicks must use the accepted pointer-release duplicate window");

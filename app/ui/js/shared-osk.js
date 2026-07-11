@@ -104,21 +104,21 @@ function buildOSK(){
   refreshOSKKeys(osk);
   return osk;
 }
+const DASH_OSK_LETTER_ROWS=Object.freeze([
+  Object.freeze(["1","2","3","4","5","6","7","8","9","0"]),
+  Object.freeze(["q","w","e","r","t","y","u","i","o","p"]),
+  Object.freeze(["a","s","d","f","g","h","j","k","l","'"]),
+  Object.freeze(["z","x","c","v","b","n","m",",",".",":"]),
+]);
+const DASH_OSK_SYMBOL_ROWS=Object.freeze([
+  Object.freeze(["!","@","#","$","%","&","*","(",")","/"]),
+  Object.freeze(["-","_","=","+","\\","?",";",":","'","\""]),
+  Object.freeze([",",".","<",">","[","]","{","}","|","`"]),
+]);
 function oskRowsForMode(){
   const mode=_oskMode();
   if(mode==="date" || mode==="mmdd" || mode==="time" || mode==="numbers") return [["1","2","3"],["4","5","6"],["7","8","9"],["⌫","0","hide","submit"]];
-  const letterRows=[
-    ["1","2","3","4","5","6","7","8","9","0"],
-    ["q","w","e","r","t","y","u","i","o","p"],
-    ["a","s","d","f","g","h","j","k","l","'"],
-    ["z","x","c","v","b","n","m",",",".",":"],
-  ];
-  const symbolRows=[
-    ["!","@","#","$","%","&","*","(",")","/"],
-    ["-","_","=","+","\\","?",";",":","'","\""],
-    [",",".","<",">","[","]","{","}","|","`"],
-  ];
-  return _oskLayer==="symbols"?symbolRows:letterRows;
+  return _oskLayer==="symbols"?DASH_OSK_SYMBOL_ROWS:DASH_OSK_LETTER_ROWS;
 }
 function refreshOSKKeys(osk){
   if(!osk) return;

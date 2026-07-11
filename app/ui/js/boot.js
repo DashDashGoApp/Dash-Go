@@ -2,10 +2,8 @@
 /* =====================================================================
    ============================  BOOT  =================================
    ===================================================================== */
-function startupProfileName(){ return String(CONFIG.profile||"balanced").toLowerCase(); }
-function startupLiteProfile(){
-  return ["lite","zero2","low","low-power"].includes(startupProfileName());
-}
+function startupProfileName(){ return dashboardProfileName(); }
+function startupLiteProfile(){ return dashboardLiteProfile(); }
 function startupBalancedProfile(){ return startupProfileName()==="balanced"; }
 function deferStartup(fn,ms){ setTimeout(()=>{ try{ fn(); }catch(e){ console.warn("startup task failed",e); } }, Math.max(0,ms||0)); }
 let DASH_REFRESH_TIMERS={calendar:null,weather:null,alerts:null};

@@ -1,5 +1,29 @@
 # Dash-Go Changelog
 
+## [1.5.10-beta.1] — 2026-07-10
+
+Dash-Go 1.5.10-beta.1 is a behavior-preserving cleanup beta based on 1.5.9 stable. It keeps the same end-user features, displayed content, interaction semantics, refresh cadence, API response content, and persistent file formats while reducing duplicated frontend infrastructure and small amounts of unnecessary browser and server work.
+
+### Improvements
+
+- Consolidated all lazy household-app stylesheet and script loading onto one retry-safe asset lifecycle while preserving each app's existing load order, failure cleanup, and retry behavior.
+- Centralized Lite and Pi Zero profile recognition so Calendar, messages, radar, Dashboard Control, and responsive layout use one canonical profile classification.
+- Centralized two-tap destructive-action arming and timer cleanup while preserving each control's existing label, confirmation window, and action behavior.
+- Shared the regular and interactive-map on-screen keyboard character rows so both touch keyboards retain identical keys without duplicate definitions.
+- Replaced Dashboard Control's serialized JSON equality check with member-order-independent JSON-value comparison in preparation for Go JSON v2 behavior.
+- Moved major Dashboard Control visibility state from inline `display` mutations to semantic `hidden` state while preserving the same computed layout and focus lifecycle.
+
+### Performance and reliability
+
+- Removed redundant timestamp query parameters from local no-store settings, calendar, weather, ICS, and message requests, keeping stable resource identities without changing freshness.
+- Added deterministic minification for builder-generated dashboard and Dashboard Control CSS while retaining release identity headers and readable split CSS sources.
+- Removed a per-request static alias-map allocation from the Go HTTP path by using the same fixed alias contract through a switch.
+
+### Build and release integrity
+
+- Added focused source coverage for stable no-store URLs, CSS minification, shared lazy loading, canonical profile classification, confirmation cleanup, shared keyboard rows, semantic JSON equality, hidden-state shells, and the allocation-free static alias path.
+- Kept generated browser assets builder-owned and excluded from the source handoff; the local builder must regenerate and verify both minified JavaScript and minified CSS before publication.
+
 ## [1.5.9] — 2026-07-10
 
 Dash-Go 1.5.9 expands the native Showcase contract, improves Debian security-maintenance recognition, refreshes calendar and weather artwork, and reduces background work on the Pi Zero 2 W while strengthening the source, builder, SBOM, and GitHub release workflow.

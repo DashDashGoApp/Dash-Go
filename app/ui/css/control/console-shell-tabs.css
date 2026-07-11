@@ -1,7 +1,7 @@
 /* 1.1.0 alpha: inline Control output consoles should be dismissible and transient.
    These are the in-panel diagnostic/log consoles, not the external xterm. */
 #ctrl .ctrloutputconsole{
-  display:none;
+  display:block;
   margin:14px 0 4px;
   border:1px solid var(--line-soft);
   border-radius:14px;
@@ -11,6 +11,8 @@
   box-sizing:border-box;
   clear:both;
 }
+#ctrl .ctrloutputconsole[hidden],
+#ctrl .ctrloutputconsole > pre[hidden]{display:none!important;}
 #ctrl .ctrlsecbody.hasoutputconsole{
   padding-bottom:18px;
 }
