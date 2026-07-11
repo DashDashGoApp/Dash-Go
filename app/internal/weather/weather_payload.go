@@ -23,10 +23,12 @@ type Config struct {
 	WindUnit          string
 	Days              int
 	WxAPI             string
+	AQAPI             string
 	APIKey            string
 	Providers         []string
 	ProviderKeys      map[string]string
 	AllowPrivateWxAPI bool
+	CacheDir          string
 }
 
 type weatherFetchJobGo struct {
@@ -221,7 +223,15 @@ func weatherCacheKeyGo(cfg Config) string {
 		// configuration, and HMAC markers are appended afterward.
 		fingerprints = append(fingerprints, key+":"+weatherProviderKeyFingerprintGo(value))
 	}
-	parts := map[string]any{"lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI, "providers": cfg.Providers}
+	parts := struct {
+		Lat       float64  `json:"lat"`
+		Lon       float64  `json:"lon"`
+		TempUnit  string   `json:"tempUnit"`
+		WindUnit  string   `json:"windUnit"`
+		Days      int      `json:"days"`
+		WxAPI     string   `json:"wxApi"`
+		Providers []string `json:"providers"`
+	}{cfg.Lat, cfg.Lon, cfg.TempUnit, cfg.WindUnit, cfg.Days, cfg.WxAPI, cfg.Providers}
 	b, _ := json.Marshal(parts)
 	sum := sha256.Sum256(b)
 	base := hex.EncodeToString(sum[:])

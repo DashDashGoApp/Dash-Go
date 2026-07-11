@@ -54,11 +54,11 @@ func (s *Service) fetchGoWeatherWithConfig(parent context.Context, cfg Config, f
 		}
 	}
 	if len(sources) == 0 && !stringListContains(selected, "openmeteo") {
-		fcfg := weatherProviderFetchConfigGo("openmeteo", cfg)
+		fcfg := weatherProviderFetchConfigGo("openmeteo", weatherCanonicalFetchConfigGo(cfg))
 		ctx, cancel := context.WithTimeout(parent, weatherProviderTimeoutGo("openmeteo"))
 		defer cancel()
 		if src, err := fetchOpenMeteoGo(ctx, "openmeteo", fcfg); err == nil {
-			sources = append(sources, src)
+			sources = append(sources, weatherDisplaySourceGo(src, cfg))
 			status = append(status, mapMerge(weatherHealthOKGo("openmeteo", fcfg, src), map[string]any{"fallback": true, "tier": "fallback · free", "reason": "Fallback source returned data"}))
 		} else {
 			status = append(status, mapMerge(weatherHealthErrorGo("openmeteo", fcfg, err.Error(), false), map[string]any{"tier": "fallback · free"}))
@@ -101,7 +101,7 @@ func weatherProviderTimeoutGo(id string) time.Duration {
 
 func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetchJobGo, cfg Config, forceLive bool) weatherFetchResultGo {
 	id := weatherNormalizeProviderIDGo(job.ID)
-	pcfg := weatherProviderFetchConfigGo(id, cfg)
+	pcfg := weatherProviderFetchConfigGo(id, weatherCanonicalFetchConfigGo(cfg))
 	result := weatherFetchResultGo{Index: job.Index, ID: id}
 	requestedDays := cfg.Days
 	effectiveDays := pcfg.Days
@@ -150,7 +150,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 	if until, reason, _, ok := s.providerBackoffActive("weather-" + id); ok {
 		if src, age, cacheOK := s.readWeatherProviderCacheGo(id, cacheKey, true); cacheOK {
 			weatherMarkProviderStaleGo(src, age, "provider backoff: "+reason)
-			result.Source = src
+			result.Source = weatherDisplaySourceGo(src, cfg)
 			result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"freshness": "stale", "stale": true, "cacheHit": true, "status": "backoff", "reason": "Using stale provider cache during retry backoff", "backoffUntil": until.Unix(), "lastError": reason}))
 			return result
 		}
@@ -161,7 +161,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 	if until, reason, ok := s.weatherProviderCooldownGo(id); ok {
 		if src, age, cacheOK := s.readWeatherProviderCacheGo(id, cacheKey, true); cacheOK {
 			weatherMarkProviderStaleGo(src, age, "provider in cooldown: "+reason)
-			result.Source = src
+			result.Source = weatherDisplaySourceGo(src, cfg)
 			result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"freshness": "stale", "stale": true, "cacheHit": true, "status": "stale_cache", "reason": "Using stale provider cache during cooldown", "cooldownUntil": until.Unix(), "lastError": reason}))
 			return result
 		}
@@ -172,7 +172,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 	if !forceLive {
 		if src, age, ok := s.readWeatherProviderCacheGo(id, cacheKey, false); ok {
 			weatherMarkProviderCacheHitGo(src, age)
-			result.Source = src
+			result.Source = weatherDisplaySourceGo(src, cfg)
 			result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"cacheHit": true, "freshness": "fresh", "reason": "Using fresh provider cache"}))
 			return result
 		}
@@ -181,7 +181,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 	if !s.networkLikelyAvailable() {
 		if src, age, ok := s.readWeatherProviderCacheGo(id, cacheKey, true); ok {
 			weatherMarkProviderStaleGo(src, age, "network unavailable")
-			result.Source = src
+			result.Source = weatherDisplaySourceGo(src, cfg)
 			result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"freshness": "stale", "stale": true, "cacheHit": true, "status": "network_unavailable", "reason": "Using last-good provider cache while network is unavailable"}))
 			return result
 		}
@@ -194,7 +194,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 		_ = s.writeWeatherProviderCacheGo(id, cacheKey, src)
 		s.clearWeatherProviderCooldownGo(id)
 		s.clearProviderBackoff("weather-" + id)
-		result.Source = src
+		result.Source = weatherDisplaySourceGo(src, cfg)
 		result.Status = enrich(weatherHealthOKGo(id, pcfg, src))
 		return result
 	}
@@ -203,7 +203,7 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 	s.noteProviderBackoff("weather-"+id, err)
 	if src, age, ok := s.readWeatherProviderCacheGo(id, cacheKey, true); ok {
 		weatherMarkProviderStaleGo(src, age, err.Error())
-		result.Source = src
+		result.Source = weatherDisplaySourceGo(src, cfg)
 		result.Status = enrich(mapMerge(weatherHealthOKGo(id, pcfg, src), map[string]any{"freshness": "stale", "stale": true, "cacheHit": true, "status": "stale_cache", "reason": "Using stale provider cache after live fetch failed", "lastError": err.Error()}))
 		return result
 	}

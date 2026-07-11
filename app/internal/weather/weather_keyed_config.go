@@ -20,6 +20,15 @@ func weatherHealthOKGo(id string, cfg Config, src map[string]any) map[string]any
 			item["providerCacheAgeSeconds"] = age
 		}
 	}
+	if jsonutil.Truthy(src["_partial"]) {
+		item["partial"] = true
+		item["status"] = "partial"
+		item["reason"] = "Source returned usable partial data"
+		item["available"] = jsonutil.List(src["_available"])
+		if partialErrors := jsonutil.Map(src["_partialErrors"]); len(partialErrors) > 0 {
+			item["partialErrors"] = partialErrors
+		}
+	}
 	if jsonutil.Truthy(src["_stale"]) {
 		item["stale"] = true
 		item["freshness"] = "stale"

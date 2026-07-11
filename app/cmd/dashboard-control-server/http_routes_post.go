@@ -3,9 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -44,6 +42,12 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	if a.handleCalendarPost(w, r, path, body) {
+		return
+	}
+	if a.handleOperationsPost(w, r, path, body) {
+		return
+	}
+	if a.handlePresentationPost(w, path, body) {
 		return
 	}
 	switch path {
@@ -203,174 +207,6 @@ func (a *app) handlePost(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 		a.json(w, res)
-	case "/api/cache/rebuild":
-		res, err := a.refreshCurrentEventCache(true)
-		if err != nil {
-			a.err(w, "event cache rebuild failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("cache", "Rebuild event cache", "success", fmt.Sprintf("%v events", res["eventCount"]), nil)
-		a.json(w, res)
-	case "/api/weather/refresh":
-		payload, err := a.refreshGoWeatherLive(r.Context())
-		if err != nil {
-			a.err(w, "weather refresh failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("weather", "Refresh weather", "success", fmt.Sprintf("%v source(s)", len(jsonutil.List(payload["sources"]))), nil)
-		a.json(w, payload)
-	case "/api/diagnostics":
-		res, err := a.buildDiagnostics()
-		if err != nil {
-			a.err(w, "diagnostics failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("diagnostics", "Export diagnostics", "success", fmt.Sprintf("%v (%v bytes)", res["file"], res["size"]), nil)
-		a.json(w, res)
-	case "/api/backup":
-		res, err := a.createConfigBackup("manual", "Manual backup from Dashboard Control", "", true)
-		if err != nil {
-			a.err(w, "backup failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("backup", "Create backup", "success", fmt.Sprint(res["name"]), map[string]any{"files": res["files"], "size": res["size"]})
-		a.json(w, res)
-	case "/api/backup/prune":
-		res := a.pruneConfigBackups(jsonutil.Int(body["keep"], a.configBackupKeepLimit()))
-		a.recordAction("backup", "Clean old backups", "success", fmt.Sprintf("kept %v newest · removed %v", res["keep"], res["removedCount"]), nil)
-		a.json(w, res)
-	case "/api/backup/restore":
-		res, err := a.restoreConfigBackup(jsonutil.BodyString(body, "name"))
-		if err != nil {
-			a.err(w, "restore failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("restore", "Restore backup", "success", fmt.Sprintf("%v · %v files", res["name"], res["restored"]), nil)
-		a.json(w, res)
-	case "/api/backup/delete":
-		res, err := a.deleteConfigBackup(jsonutil.BodyString(body, "name"))
-		if err != nil {
-			a.err(w, "backup delete failed: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("backup", "Delete backup", "success", fmt.Sprint(res["deleted"]), nil)
-		a.json(w, res)
-	case "/api/system-update":
-		res, err := a.startSystemUpdate()
-		if err != nil {
-			a.recordAction("system-update", "System update", "failed", err.Error(), nil)
-			a.err(w, "system update unavailable: "+err.Error(), 500)
-			return
-		}
-		a.recordAction("system-update", "System update", "running", "started apt-get update && apt-get -y upgrade", nil)
-		a.json(w, res)
-	case "/api/doctor":
-		repair := jsonutil.Truthy(body["fix"])
-		plan := jsonutil.Truthy(body["plan"])
-		if plan {
-			repair = false
-		}
-		health := a.runDoctorSummaryMode(repair, plan)
-		state := "check"
-		if health["ok"] == true {
-			state = "success"
-		}
-		action := "Run health check"
-		if plan {
-			action = "Review Doctor repair plan"
-		} else if repair {
-			action = "Run safe doctor repairs"
-		}
-		a.recordAction("health", action, state, fmt.Sprintf("%v · %v fixed · %v fail · %v warn", health["label"], health["fixCount"], health["failCount"], health["warnCount"]), nil)
-		a.json(w, map[string]any{"ok": health["ok"], "summary": health, "output": health["outputTail"]})
-	case "/api/update/track/toggle":
-		res, err := a.toggleUpdateTrack()
-		if err != nil {
-			code := http.StatusInternalServerError
-			if errors.Is(err, errDashboardUpdateTrackBusy) {
-				code = http.StatusConflict
-			}
-			a.err(w, "could not switch update track: "+err.Error(), code)
-			return
-		}
-		a.json(w, res)
-	case "/api/update":
-		res, err := a.startDashboardUpdate()
-		if err != nil {
-			code := http.StatusInternalServerError
-			if errors.Is(err, errDashboardUpdateRunning) {
-				// The existing active job already owns the only live update row.
-				// A rejected repeat tap must not manufacture another In progress item.
-				code = http.StatusConflict
-			} else if !updateActionAlreadyRecorded(err) {
-				a.recordAction("update", "Update dashboard", "failed", err.Error(), nil)
-			}
-			a.err(w, "could not safely start the updater: "+err.Error(), code)
-			return
-		}
-		a.json(w, res)
-	case "/api/reboot":
-		rc := runCmd("sudo", "-n", "/sbin/reboot")
-		if rc != 0 {
-			a.err(w, "reboot not permitted", 500)
-		} else {
-			a.json(w, map[string]any{"rebooting": true})
-		}
-	case "/api/poweroff":
-		rc := runCmd("sudo", "-n", "/sbin/poweroff")
-		if rc != 0 {
-			a.err(w, "shutdown not permitted", 500)
-		} else {
-			a.json(w, map[string]any{"poweroff": true})
-		}
-	case "/api/theme":
-		theme := a.themeNameFromBody(body)
-		if theme == "" {
-			a.err(w, "theme name required", 400)
-			return
-		}
-		if ok, reason := a.themeIsAvailable(theme); !ok {
-			a.err(w, reason, 400)
-			return
-		}
-		if err := a.writeTheme(theme); err != nil {
-			a.err(w, "could not write theme: "+err.Error(), 500)
-			return
-		}
-		a.json(w, map[string]any{"ok": true, "theme": theme})
-	case "/api/seasonal":
-		enabled := jsonutil.Truthy(body["enabled"])
-		if err := a.setSeasonalThemesEnabled(enabled); err != nil {
-			a.err(w, "could not update seasonal rotation: "+err.Error(), 500)
-			return
-		}
-		a.json(w, map[string]any{"ok": true, "seasonal": enabled})
-	case "/api/theme/base":
-		name := jsonutil.BodyString(body, "name")
-		if name == "" {
-			a.err(w, "theme name required", 400)
-			return
-		}
-		if ok, reason := a.themeIsAvailable(name); !ok {
-			a.err(w, reason, 400)
-			return
-		}
-		if err := os.WriteFile(filepath.Join(a.home, ".dashboard-base-theme"), []byte(name+"\n"), 0644); err != nil {
-			// Preserve the existing successful response contract while making a
-			// user-visible preference persistence failure diagnosable.
-			log.Printf("could not persist base theme: %v", err)
-		}
-		a.json(w, map[string]any{"ok": true, "base": name})
-	case "/api/compliments/add", "/api/compliments/delete", "/api/compliments/import", "/api/compliments/update", "/api/compliments/defaults/toggle", "/api/compliments/defaults/remove-all", "/api/compliments/defaults/add-all", "/api/compliments/clear-defaults", "/api/compliments/restore-defaults", "/api/compliments/reconcile-defaults":
-		a.handleCompliments(w, path, body)
-	case "/api/message-sources", "/api/message-sources/refresh", "/api/message-sources/item/delete", "/api/message-sources/item/update", "/api/temporary-messages/add", "/api/temporary-messages/delete", "/api/scheduled-messages/add", "/api/scheduled-messages/update", "/api/scheduled-messages/delete":
-		a.handleMessages(w, path, body)
-	case "/api/maps/prewarm":
-		a.json(w, a.startMapPrewarm(body))
-	case "/api/maps/cleanup":
-		a.json(w, map[string]any{"ok": true, "cache": a.cleanMapImageCache(), "tileCache": a.cleanMapTileCache()})
-	case "/api/maps/clear":
-		a.json(w, a.clearMapCache(jsonutil.Truthy(body["clearGeocodes"]), jsonutil.Truthy(body["clearProvider"]), jsonutil.Truthy(body["clearTiles"])))
 	default:
 		a.err(w, "unknown endpoint", 404)
 	}

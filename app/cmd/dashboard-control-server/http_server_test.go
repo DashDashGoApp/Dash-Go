@@ -191,3 +191,40 @@ func TestStaticRootRejectsEscapingSymlink(t *testing.T) {
 		t.Fatal("escaping symlink content was served")
 	}
 }
+
+func TestDashboardCSPUsesNarrowProviderDestinations(t *testing.T) {
+	a := testProfileApp(t)
+	settings := `{"radarCustomTiles":"https://radar.example.test:8443/tiles/{z}/{x}/{y}.png","radarCustomWms":"http://private.invalid/wms"}`
+	if err := os.WriteFile(a.settingsFile, []byte(settings), 0600); err != nil {
+		t.Fatal(err)
+	}
+	policy := a.dashboardContentSecurityPolicy()
+	for _, want := range []string{
+		"connect-src 'self' https://api.rainviewer.com",
+		"frame-src https://maps.google.com",
+		"https://tile.openstreetmap.org",
+		"https://opengeo.ncep.noaa.gov",
+		"https://radar.example.test:8443",
+	} {
+		if !strings.Contains(policy, want) {
+			t.Fatalf("CSP missing %q: %s", want, policy)
+		}
+	}
+	directives := map[string][]string{}
+	for _, raw := range strings.Split(policy, ";") {
+		fields := strings.Fields(raw)
+		if len(fields) > 0 {
+			directives[fields[0]] = fields[1:]
+		}
+	}
+	for _, name := range []string{"connect-src", "img-src"} {
+		for _, source := range directives[name] {
+			if source == "https:" {
+				t.Fatalf("CSP retained broad HTTPS source in %s: %s", name, policy)
+			}
+		}
+	}
+	if strings.Contains(policy, "http://private.invalid") {
+		t.Fatalf("CSP retained insecure custom source: %s", policy)
+	}
+}

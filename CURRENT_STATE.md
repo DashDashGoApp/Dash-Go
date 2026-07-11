@@ -4,12 +4,14 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.10-beta.3`
+- **Version:** `1.5.10-beta.5`
 - **Track:** beta
-- **Purpose:** Security-hardening follow-up to the Calendar and Weather reliability beta, preserving the dashboard layout, interaction model, and optional-PIN behavior while strengthening browser, HTTP, filesystem, outbound-network, and resource-abuse boundaries.
-- **Primary changes:** rooted static serving, strict loopback Host/Origin validation against DNS rebinding, CSP and same-origin resource isolation, SSRF-resistant custom Weather networking, expensive-operation cooldowns, full CodeQL alert corrections, plus the canonical Weather units and Calendar reliability work inherited from beta.2.
-- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified JavaScript and CSS bundles, run the complete source and Chromium layout gates, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, and final-archive validation before publication.
-- **Compatibility:** existing settings, calendar source files, and provider configuration remain compatible. Calendar cache schema 10 rebuilds automatically; Weather precipitation remains canonical millimetres internally and is converted only for display.
+- **Purpose:** Correct the independent beta.4 stable-review blockers while preserving the reconstructed 1.5.10 beta union and its user-visible behavior.
+- **Primary changes:** success-based display sleep state with manual, scheduled, physical-input, failed-request, and request-race recovery; complete special-use and translation-range Weather destination denial; corrected Seasonal Décor option wording; behavioral lineage gates for display wake and outbound policy; and one repository-ready source-handoff contract shared by durable guidance, CI, the Local Builder, and the GitHub Publisher.
+- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, extract and validate this exact repository-ready source handoff, prove the 24-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
+- **Physical beta proof:** on the Pi kiosk, verify scheduled screen-off, failed/offline screen-off recovery, touch wake, manual wake, scheduled wake, disabling the schedule while asleep, and one dashboard reconciliation after wake.
+- **Compatibility:** existing settings, calendar source files, private-calendar mappings, provider configuration, local app data, four-digit PINs, and the repository-style source workflow remain compatible. No user-visible feature or data format is removed.
+- **Current release boundary:** this is a source candidate only. It is not a deployable release until the local Windows/WSL builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, and final-ZIP gates.
 
 ## Current stable release
 

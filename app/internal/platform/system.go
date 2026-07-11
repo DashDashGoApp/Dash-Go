@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
@@ -218,7 +219,44 @@ func CommandText(timeout time.Duration, name string, args ...string) string {
 	return txt
 }
 func MemoryStatus() map[string]any {
-	return map[string]any{"ok": true, "capturedAt": time.Now().Unix(), "free": CommandText(5*time.Second, "free", "-h"), "swap": CommandText(5*time.Second, "swapon", "--show"), "vmstat": CommandText(6*time.Second, "vmstat", "1", "3"), "top": CommandText(8*time.Second, "bash", "-lc", "ps -eo pid,comm,rss,%mem,args --sort=-rss | head -25"), "tree": CommandText(8*time.Second, "bash", "-lc", "ps -ef | grep -E 'surf|WebKit|dashboard-control-server|control-server|Xorg|lightdm|openbox|gvfs|at-spi' | grep -v grep"), "cache": CommandText(8*time.Second, "bash", "-lc", "du -sh ~/.cache/surf ~/.local/share/webkit* ~/.cache/webkit* ~/dashboard/cache ~/dashboard/logs 2>/dev/null")}
+	// Start vmstat first because its three bounded samples intentionally take
+	// roughly two seconds. The inexpensive process/memory probes run alongside
+	// it, while disk-cache sizing waits until the sample is complete so du does
+	// not distort the measurement on small SD cards.
+	type probeResult struct {
+		key   string
+		value string
+	}
+	probes := []struct {
+		key     string
+		timeout time.Duration
+		name    string
+		args    []string
+	}{
+		{key: "vmstat", timeout: 6 * time.Second, name: "vmstat", args: []string{"1", "3"}},
+		{key: "free", timeout: 5 * time.Second, name: "free", args: []string{"-h"}},
+		{key: "swap", timeout: 5 * time.Second, name: "swapon", args: []string{"--show"}},
+		{key: "top", timeout: 8 * time.Second, name: "bash", args: []string{"-c", "ps -eo pid,comm,rss,%mem,args --sort=-rss | head -25"}},
+		{key: "tree", timeout: 8 * time.Second, name: "bash", args: []string{"-c", "ps -ef | grep -E 'surf|WebKit|dashboard-control-server|control-server|Xorg|lightdm|openbox|gvfs|at-spi' | grep -v grep"}},
+	}
+	results := make(chan probeResult, len(probes))
+	var wg sync.WaitGroup
+	for _, probe := range probes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results <- probeResult{key: probe.key, value: CommandText(probe.timeout, probe.name, probe.args...)}
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	out := map[string]any{"ok": true, "capturedAt": time.Now().Unix()}
+	for result := range results {
+		out[result.key] = result.value
+	}
+	out["cache"] = CommandText(8*time.Second, "bash", "-c", "nice -n 10 du -sh ~/.cache/surf ~/.local/share/webkit* ~/.cache/webkit* ~/dashboard/cache ~/dashboard/logs 2>/dev/null")
+	return out
 }
 func MemorySnapshotMB() (availableMB, swapUsedMB int) {
 	b, e := os.ReadFile("/proc/meminfo")

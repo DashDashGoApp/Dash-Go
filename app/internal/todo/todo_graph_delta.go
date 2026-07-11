@@ -73,6 +73,36 @@ func todoGraphString(raw map[string]any, key string) (string, bool) {
 	return jsonutil.StringValue(value), true
 }
 
+func todoDateTimeFromValue(value any) *todoDateTimeTimeZone {
+	raw, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := &todoDateTimeTimeZone{
+		DateTime: jsonutil.StringValue(raw["dateTime"]),
+		TimeZone: jsonutil.StringValue(raw["timeZone"]),
+	}
+	if out.DateTime == "" && out.TimeZone == "" {
+		return nil
+	}
+	return out
+}
+
+func todoItemBodyFromValue(value any) *todoItemBody {
+	raw, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := &todoItemBody{
+		Content:     jsonutil.StringValue(raw["content"]),
+		ContentType: jsonutil.StringValue(raw["contentType"]),
+	}
+	if out.Content == "" && out.ContentType == "" {
+		return nil
+	}
+	return out
+}
+
 // todoTaskPatchFromGraph applies only properties present in a delta row. Graph
 // can send sparse updates, so replacing a cached task wholesale would erase a
 // title, body, or due date that the response intentionally omitted.
@@ -97,18 +127,10 @@ func todoTaskPatchFromGraph(current todoTask, raw map[string]any) todoTask {
 		}
 	}
 	if value, exists := raw["dueDateTime"]; exists {
-		if due, ok := value.(map[string]any); ok {
-			next.DueDateTime = due
-		} else {
-			next.DueDateTime = nil
-		}
+		next.DueDateTime = todoDateTimeFromValue(value)
 	}
 	if value, exists := raw["body"]; exists {
-		if body, ok := value.(map[string]any); ok {
-			next.Body = body
-		} else {
-			next.Body = nil
-		}
+		next.Body = todoItemBodyFromValue(value)
 	}
 	if value, ok := todoGraphString(raw, "lastModifiedDateTime"); ok {
 		next.LastModifiedDateTime = value

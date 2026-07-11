@@ -9,7 +9,7 @@ let SETTINGS={ alertsMutedUntil:0, alertsDocked:false, alertsDockedRank:0,
                nightDimEnabled:true, pixelShiftEnabled:true,
                rowHeight:210, sidebarWidth:380, weatherDetailMode:"expanded",
                weeksAbove:2, weeksBelow:10, firstDayOfWeek:0, showIsoWeekNumbers:false,
-               displaySleepEnabled:false, displaySleepOff:"22:30", displaySleepOn:"06:00",
+               displaySleepEnabled:false, displaySleepOff:"22:30", displaySleepOn:"06:00", allowPrivateWxApi:false,
                fontPreset:"default", weatherIconStyle:"soft", seasonalDecor:"off",
                calendarTextWeight:700, calendarTextSize:0, calendarTextFont:"default",
                clockTextSize:0, clockTextWeight:600, clockTextFont:"default",
@@ -48,8 +48,8 @@ const WEATHER_ICON_STYLES={
 };
 const SEASONAL_DECOR_MODES={
   off:{label:"Off",summary:"No holiday decoration layer."},
-  subtle:{label:"Subtle",summary:"Five quiet static SVG accents in empty cells."},
-  standard:{label:"Standard",summary:"Up to ten visible static accents in empty cells, including Lite."}
+  subtle:{label:"Subtle",summary:"Five quiet static SVG accents in empty days and event days with enough clear space."},
+  standard:{label:"Standard",summary:"Up to ten visible static accents in empty days and event days with enough clear space, including Lite."}
 };
 function visualChoice(map,value,fallback){ return map[value] ? value : fallback; }
 // Dashboard typography is intentionally target-scoped. Legacy fontPreset still
@@ -218,8 +218,36 @@ function applyVisualSettings(){
   _VISUAL_STATE={fontPreset:fp, weatherIconStyle:wi, seasonalDecor:dec, profile};
   return {changed:true,...changed};
 }
+const DASHBOARD_SETTINGS_IMPACT={
+  clock:new Set(["clock24","showSeconds","clockTextSize","clockTextWeight","clockTextFont"]),
+  weather:new Set(["lat","lon","tempUnit","weatherDetailMode","showUV","showAQI","weatherIconStyle","weatherTextSize","weatherTextWeight","weatherTextFont"]),
+  calendar:new Set(["weeksAbove","weeksBelow","firstDayOfWeek","showIsoWeekNumbers","rowHeight","sidebarWidth","calendarTextSize","calendarTextWeight","calendarTextFont","seasonalDecor"]),
+  agenda:new Set(["weeksAbove","weeksBelow","firstDayOfWeek","calendarTextSize","calendarTextWeight","calendarTextFont"]),
+  alerts:new Set(["alertsMutedUntil","alertsDocked","alertsDockedRank","weatherAlerts"]),
+  typography:new Set(["fontPreset",...DASHBOARD_TYPOGRAPHY_FONT_KEYS,...Object.keys(DASHBOARD_TYPOGRAPHY_NUMERIC_VALUES)]),
+  visual:new Set(["fontPreset","weatherIconStyle","seasonalDecor"]),
+  geometry:new Set(["rowHeight","sidebarWidth","weeksAbove","weeksBelow","firstDayOfWeek","showIsoWeekNumbers","calendarTextSize","calendarTextWeight","calendarTextFont","fontPreset"]),
+  display:new Set(["displaySleepEnabled","displaySleepOff","displaySleepOn","nightDimEnabled"]),
+  launcher:new Set(["profile"]),
+  lists:new Set(["alertsDocked","alertsDockedRank"])
+};
+const DASHBOARD_SETTINGS_KNOWN_KEYS=new Set([
+  ...Object.values(DASHBOARD_SETTINGS_IMPACT).flatMap(set=>[...set]),
+  "showInteractiveMaps","mapImageStyle","radarCustomTiles","radarCustomWms","pixelShiftEnabled","allowPrivateWxApi"
+]);
+function dashboardSettingsImpact(patch){
+  const keys=Object.keys(patch||{});
+  const impact={full:false};
+  for(const name of Object.keys(DASHBOARD_SETTINGS_IMPACT)) impact[name]=false;
+  if(keys.some(key=>!DASHBOARD_SETTINGS_KNOWN_KEYS.has(key))) impact.full=true;
+  for(const key of keys){
+    for(const [name,set] of Object.entries(DASHBOARD_SETTINGS_IMPACT)) if(set.has(key)) impact[name]=true;
+  }
+  return impact;
+}
 function applySettings(s){
   if(!s) return;
+  const impact=dashboardSettingsImpact(s);
   SETTINGS={...SETTINGS, ...s};
   syncDashboardRuntimeSettings();
   if(typeof s.profile==="string" && s.profile) CONFIG.profile=s.profile;
@@ -228,11 +256,10 @@ function applySettings(s){
   for(const k of ["clock24","showSeconds","showInteractiveMaps","showIsoWeekNumbers"]) if(k in s) CONFIG[k]=!!s[k];
   // Weather detail replaces the two tiny UV/AQI switches. Legacy saved flags
   // migrate once on read; both renderer helpers remain derived from this mode.
-  let detailMode=String(s.weatherDetailMode||"").toLowerCase();
+  let detailMode=String(s.weatherDetailMode||SETTINGS.weatherDetailMode||"").toLowerCase();
   if(detailMode!=="standard"&&detailMode!=="expanded") detailMode=(s.showUV===false&&s.showAQI===false)?"standard":"expanded";
   SETTINGS.weatherDetailMode=detailMode;CONFIG.weatherDetailMode=detailMode;
   CONFIG.showUV=detailMode==="expanded";CONFIG.showAQI=detailMode==="expanded";
-  // Source/provider choice is automatic; historical saved choices are inert.
   CONFIG.radarProvider="auto";
   if(typeof s.radarCustomTiles==="string") CONFIG.radarCustomTiles=s.radarCustomTiles;
   if(typeof s.radarCustomWms==="string") CONFIG.radarCustomWms=s.radarCustomWms;
@@ -246,26 +273,32 @@ function applySettings(s){
     SETTINGS[key]=dashboardTypographyFont(SETTINGS[key]);
   }
   for(const key of Object.keys(DASHBOARD_TYPOGRAPHY_NUMERIC_VALUES)) SETTINGS[key]=dashboardTypographyNumber(key,SETTINGS[key]);
-  // Timing, refresh cadence, forecast horizon, static maps, and pixel shift
-  // are automatic defaults. Only geometry remains a deliberate profile control.
   for(const k of ["rowHeight","sidebarWidth"]) if(Number.isFinite(+s[k])) CONFIG[k]=+s[k];
   SETTINGS.pixelShiftEnabled=true;CONFIG.pixelShift=2;CONFIG.showEventMaps=true;
   if(s.weatherAlerts && typeof s.weatherAlerts==="object") CONFIG.weatherAlerts={...(CONFIG.weatherAlerts||{}),...s.weatherAlerts,refreshMinutes:5};
-  applyVisualSettings();
   for(const k of ["weeksAbove","weeksBelow","firstDayOfWeek"]) if(Number.isFinite(+s[k])) CONFIG[k]=+s[k];
   const root=document.documentElement;
   if(Number.isFinite(+CONFIG.rowHeight)) root.style.setProperty("--dash-rowheight-preference",(+CONFIG.rowHeight)+"px");
   if(Number.isFinite(+CONFIG.sidebarWidth)) root.style.setProperty("--dash-sidebarwidth-preference",(+CONFIG.sidebarWidth)+"px");
   if(Number.isFinite(+CONFIG.complimentFadeMs)) root.style.setProperty("--compfade",(+CONFIG.complimentFadeMs)+"ms");
-  applyDashboardTypographySettings();
-  buildFormatters();                  // time format may have changed
-  _clockEls=null; tickClock(); if(typeof armClockTimer==="function") armClockTimer();        // rebuild clock structure
-  if(typeof updateAppLauncherTrigger==="function") updateAppLauncherTrigger();
-  if(typeof dashboardListsDockSettingsChanged==="function") dashboardListsDockSettingsChanged();
-  renderWeather(); renderCalendar(); renderAgenda(); renderAlerts();
-  if(typeof dashboardFitSchedule==="function")dashboardFitSchedule("settings",0);
-  checkDisplaySleep();
+
+  if(impact.full||impact.visual) applyVisualSettings();
+  if(impact.full||impact.typography) applyDashboardTypographySettings();
+  if(impact.full||impact.clock){
+    buildFormatters();
+    _clockEls=null; tickClock();
+    if(typeof armClockTimer==="function") armClockTimer();
+  }
+  if((impact.full||impact.launcher) && typeof updateAppLauncherTrigger==="function") updateAppLauncherTrigger();
+  if((impact.full||impact.lists) && typeof dashboardListsDockSettingsChanged==="function") dashboardListsDockSettingsChanged();
+  if(impact.full||impact.weather) renderWeather();
+  if(impact.full||impact.calendar) renderCalendar();
+  if(impact.full||impact.agenda) renderAgenda();
+  if(impact.full||impact.alerts) renderAlerts();
+  if((impact.full||impact.geometry||impact.typography||impact.visual) && typeof dashboardFitSchedule==="function") dashboardFitSchedule("settings",0);
+  if(impact.full||impact.display) checkDisplaySleep();
 }
+
 async function loadSettings(){
   try{
     const res=await fetch("config/settings.json",{cache:"no-store"});
@@ -311,7 +344,8 @@ async function postSettings(){
                  firstDayOfWeek:+(CONFIG.firstDayOfWeek||0),
                  displaySleepEnabled:!!SETTINGS.displaySleepEnabled,
                  displaySleepOff:SETTINGS.displaySleepOff||"22:30",
-                 displaySleepOn:SETTINGS.displaySleepOn||"06:00"};
+                 displaySleepOn:SETTINGS.displaySleepOn||"06:00",
+                 allowPrivateWxApi:!!SETTINGS.allowPrivateWxApi};
   try{
     // Use the Dashboard Control API wrapper when available so settings saves
     // include the active PIN/session token. A raw fetch silently failed on

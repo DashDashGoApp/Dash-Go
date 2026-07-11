@@ -49,20 +49,33 @@ type todoTaskAssignment struct {
 	AssignedAt         int64  `json:"assignedAt"`
 }
 
+// todoDateTimeTimeZone and todoItemBody are closed Microsoft Graph
+// boundaries. Keeping them typed makes JSON-v2 behavior deterministic and
+// prevents cache fingerprints from depending on map iteration or unknown keys.
+type todoDateTimeTimeZone struct {
+	DateTime string `json:"dateTime,omitempty"`
+	TimeZone string `json:"timeZone,omitempty"`
+}
+
+type todoItemBody struct {
+	Content     string `json:"content,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+}
+
 type todoTask struct {
-	ID                   string              `json:"id"`
-	Title                string              `json:"title"`
-	Status               string              `json:"status"`
-	Importance           string              `json:"importance,omitempty"`
-	DueDateTime          map[string]any      `json:"dueDateTime,omitempty"`
-	Body                 map[string]any      `json:"body,omitempty"`
-	ChecklistItems       []todoChecklistItem `json:"checklistItems,omitempty"`
-	LastModifiedDateTime string              `json:"lastModifiedDateTime,omitempty"`
-	Pending              string              `json:"_pending,omitempty"`
-	SyncFailed           bool                `json:"_syncFailed,omitempty"`
-	CloudIgnored         bool                `json:"_cloudIgnored,omitempty"`
-	ETag                 int64               `json:"_etag,omitempty"`
-	DashGoAssignment     *todoTaskAssignment `json:"dashgoAssignment,omitempty"`
+	ID                   string                `json:"id"`
+	Title                string                `json:"title"`
+	Status               string                `json:"status"`
+	Importance           string                `json:"importance,omitempty"`
+	DueDateTime          *todoDateTimeTimeZone `json:"dueDateTime,omitempty"`
+	Body                 *todoItemBody         `json:"body,omitempty"`
+	ChecklistItems       []todoChecklistItem   `json:"checklistItems,omitempty"`
+	LastModifiedDateTime string                `json:"lastModifiedDateTime,omitempty"`
+	Pending              string                `json:"_pending,omitempty"`
+	SyncFailed           bool                  `json:"_syncFailed,omitzero"`
+	CloudIgnored         bool                  `json:"_cloudIgnored,omitzero"`
+	ETag                 int64                 `json:"_etag,omitzero"`
+	DashGoAssignment     *todoTaskAssignment   `json:"dashgoAssignment,omitempty"`
 }
 
 type todoChecklistItem struct {

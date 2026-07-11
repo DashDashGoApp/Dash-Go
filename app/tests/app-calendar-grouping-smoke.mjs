@@ -22,7 +22,7 @@ const choreReconcile=read("internal/household/chores/reconcile.go");
 const maintenanceCalendar=read("internal/household/maintenance/calendar.go");
 const routinesCalendar=read("internal/household/routines/calendar.go");
 const routinesSchedule=read("internal/household/routines/schedule.go");
-const eventCache=read("internal/calendar/events/cache.go");
+const eventCache=read("internal/calendar/events/cache.go")+read("internal/calendar/events/serialize.go");
 const eventTypes=read("internal/calendar/events/types.go");
 const manifest=read("internal/calendar/manifest.go");
 
@@ -49,9 +49,9 @@ assert.match(actions,/openChoreWheel/,"Chores action popup must hand off to its 
 assert.match(actions,/openMaintenance/,"Maintenance action popup must hand off to its app");
 assert.match(actions,/showRoutinesCalendarActionPopup/,"Routines group must use person-first checklist popup");
 assert.match(actions,/openRoutines\(\{date:appCalendarActionDate\(day\)\}\)/,"Routines group action must hand off to the selected day");
-assert.match(cache,/cache\.version!==10/,"browser must reject pre-group cache payloads");
+assert.match(cache,/cache\.version!==11/,"browser must reject pre-group cache payloads");
 assert.match(parser,/X-DASHGO-APP-OWNER/,"direct ICS fallback must retain app owner metadata");
-assert.match(eventTypes,/const CacheVersion = 10/,"server cache version must invalidate pre-owner records");
+assert.match(eventTypes,/const CacheVersion = 11/,"server cache version must invalidate pre-owner records");
 assert.match(eventCache,/item\["appOwner"\] = owner/,"cache event serialization must expose app owner metadata");
 assert.match(manifest,/obj\["owner"\] = owner/,"manifest must carry canonical app owner metadata");
 assert.match(choreCalendar,/AppOwner: "chore-wheel"/,"Chore Wheel calendar projection must declare owner metadata");

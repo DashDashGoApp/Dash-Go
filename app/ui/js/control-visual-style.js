@@ -31,7 +31,7 @@ function renderCtrlVisualStyle(){
   ctrlApplyBalancedGridCount(icons.grid);
   wrap.appendChild(icons.group);
 
-  const decor=actionGroup("Seasonal décor","Five reviewed SVGs per active occasion; static accents stay inside empty calendar cells on every profile.","visualstylegroup");
+  const decor=actionGroup("Seasonal décor","Five reviewed SVGs per active occasion; static accents use empty days and event days with enough clear space on every profile.","visualstylegroup");
   const curDecor=SETTINGS.seasonalDecor||CONFIG.seasonalDecor||"off";
   for(const key of ["off","subtle","standard"]){
     decor.grid.appendChild(visualStyleButton(SEASONAL_DECOR_MODES,key,curDecor,(value)=>{

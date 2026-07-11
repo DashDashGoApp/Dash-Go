@@ -60,6 +60,15 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 		}
 		a.json(w, result)
 	case "/api/calendars/private/discover":
+		if err := a.validatePrivateCalendarDiscovery(); err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		finish, ok := a.beginLimitedOperation(w, path)
+		if !ok {
+			return true
+		}
+		defer finish()
 		result, err := a.discoverPrivateCalendars()
 		if err != nil {
 			code := http.StatusBadRequest
@@ -92,6 +101,15 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 		}
 		a.json(w, result)
 	case "/api/calendars/private/sync":
+		if err := a.validatePrivateCalendarSync(body); err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		finish, ok := a.beginLimitedOperation(w, path)
+		if !ok {
+			return true
+		}
+		defer finish()
 		result, err := a.syncPrivateCalendar(body)
 		if err != nil {
 			code := http.StatusBadRequest
@@ -103,6 +121,15 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 		}
 		a.json(w, result)
 	case "/api/calendars/private/repair":
+		if err := a.validatePrivateCalendarRepair(body); err != nil {
+			a.err(w, err.Error(), http.StatusBadRequest)
+			return true
+		}
+		finish, ok := a.beginLimitedOperation(w, path)
+		if !ok {
+			return true
+		}
+		defer finish()
 		result, err := a.repairPrivateCalendar(body)
 		if err != nil {
 			code := http.StatusBadRequest
@@ -135,6 +162,11 @@ func (a *app) handleCalendarPost(w http.ResponseWriter, r *http.Request, path st
 		a.recordAction("settings", "Update moon/sky calendars", "success", fmt.Sprintf("%v moon events", moon["eventCount"]), nil)
 		a.json(w, map[string]any{"ok": true, "moon": moon, "sky": sky, "generator": "go"})
 	case "/api/calendars/sync":
+		finish, ok := a.beginLimitedOperation(w, path)
+		if !ok {
+			return true
+		}
+		defer finish()
 		res, err := a.generateDefaultCalendars(true)
 		if err != nil {
 			a.err(w, "calendar sync failed: "+err.Error(), http.StatusInternalServerError)

@@ -336,7 +336,30 @@ func (s *Service) handleMapImage(w http.ResponseWriter, r *http.Request) {
 		s.err(w, "map render failed", 502)
 		return
 	}
+	rootDir := s.mapImageDir()
+	rel, err := filepath.Rel(rootDir, p)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		s.err(w, "map render failed", http.StatusBadGateway)
+		return
+	}
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		s.err(w, "map render failed", http.StatusBadGateway)
+		return
+	}
+	defer root.Close()
+	file, err := root.Open(filepath.ToSlash(rel))
+	if err != nil {
+		s.err(w, "map render failed", http.StatusBadGateway)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		s.err(w, "map render failed", http.StatusBadGateway)
+		return
+	}
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", "public, max-age=604800")
-	http.ServeFile(w, r, p)
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }

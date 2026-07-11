@@ -45,6 +45,9 @@ func (a *app) weatherService() *weatherpkg.Service {
 
 func (a *app) weatherConfig() weatherConfig { return a.weatherService().Config() }
 func (a *app) weatherPayload() any          { return a.weatherService().Payload() }
+func (a *app) weatherAQIPayload(ctx context.Context) map[string]any {
+	return a.weatherService().AQI(ctx)
+}
 func (a *app) fetchGoWeather(ctx context.Context) (map[string]any, error) {
 	return a.weatherService().Fetch(ctx)
 }

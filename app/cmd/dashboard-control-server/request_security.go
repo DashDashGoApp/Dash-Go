@@ -51,45 +51,86 @@ func (p requestSecurityPolicy) validOrigin(raw string) bool {
 	return ok
 }
 
+type operationClass string
+
+const (
+	operationWeather  operationClass = "weather-refresh"
+	operationCalendar operationClass = "calendar-operation"
+	operationSystem   operationClass = "system-operation"
+)
+
+type operationPolicy struct {
+	Class    operationClass
+	Cooldown time.Duration
+}
+
+var operationPolicies = map[string]operationPolicy{
+	"/api/weather/refresh":            {Class: operationWeather, Cooldown: 15 * time.Second},
+	"/api/cache/rebuild":              {Class: operationCalendar, Cooldown: 20 * time.Second},
+	"/api/calendars/sync":             {Class: operationCalendar, Cooldown: 20 * time.Second},
+	"/api/calendars/private/sync":     {Class: operationCalendar, Cooldown: 20 * time.Second},
+	"/api/calendars/private/discover": {Class: operationCalendar, Cooldown: 20 * time.Second},
+	"/api/calendars/private/repair":   {Class: operationCalendar, Cooldown: 20 * time.Second},
+	"/api/backup":                     {Class: operationSystem, Cooldown: 30 * time.Second},
+	"/api/backup/restore":             {Class: operationSystem, Cooldown: 30 * time.Second},
+	"/api/system-update":              {Class: operationSystem, Cooldown: 30 * time.Second},
+	"/api/update":                     {Class: operationSystem, Cooldown: 30 * time.Second},
+	"/api/diagnostics":                {Class: operationSystem, Cooldown: 30 * time.Second},
+	"/api/doctor":                     {Class: operationSystem, Cooldown: 30 * time.Second},
+}
+
 type operationLimiter struct {
 	mu     sync.Mutex
-	active map[string]bool
-	last   map[string]time.Time
+	active map[operationClass]bool
+	last   map[operationClass]time.Time
+}
+
+type operationLease struct {
+	limiter  *operationLimiter
+	policy   operationPolicy
+	started  bool
+	finished bool
 }
 
 func newOperationLimiter() *operationLimiter {
-	return &operationLimiter{active: map[string]bool{}, last: map[string]time.Time{}}
+	return &operationLimiter{active: map[operationClass]bool{}, last: map[operationClass]time.Time{}}
 }
 
-func expensiveOperation(path string) (string, time.Duration, bool) {
-	switch path {
-	case "/api/weather/refresh":
-		return "weather-refresh", 15 * time.Second, true
-	case "/api/cache/rebuild", "/api/calendars/sync", "/api/calendars/private/sync", "/api/calendars/private/discover", "/api/calendars/private/repair":
-		return "calendar-operation", 20 * time.Second, true
-	case "/api/backup", "/api/backup/restore", "/api/system-update", "/api/update", "/api/diagnostics", "/api/doctor":
-		return "system-operation", 30 * time.Second, true
-	default:
-		return "", 0, false
-	}
-}
-
-func (l *operationLimiter) begin(path string) (func(), time.Duration, bool) {
-	key, cooldown, limited := expensiveOperation(path)
+func (l *operationLimiter) acquire(path string) (*operationLease, time.Duration, bool) {
+	policy, limited := operationPolicies[path]
 	if !limited {
-		return func() {}, 0, true
+		return &operationLease{}, 0, true
 	}
 	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.active[key] {
-		return nil, cooldown, false
+	if l.active[policy.Class] {
+		return nil, policy.Cooldown, false
 	}
-	if prior := l.last[key]; !prior.IsZero() && now.Sub(prior) < cooldown {
-		return nil, cooldown - now.Sub(prior), false
+	if prior := l.last[policy.Class]; !prior.IsZero() && now.Sub(prior) < policy.Cooldown {
+		return nil, policy.Cooldown - now.Sub(prior), false
 	}
-	l.active[key] = true
-	return func() { l.mu.Lock(); delete(l.active, key); l.last[key] = time.Now(); l.mu.Unlock() }, 0, true
+	l.active[policy.Class] = true
+	return &operationLease{limiter: l, policy: policy}, 0, true
+}
+
+func (lease *operationLease) Start() {
+	if lease != nil {
+		lease.started = true
+	}
+}
+
+func (lease *operationLease) Finish() {
+	if lease == nil || lease.finished || lease.limiter == nil {
+		return
+	}
+	lease.finished = true
+	lease.limiter.mu.Lock()
+	delete(lease.limiter.active, lease.policy.Class)
+	if lease.started {
+		lease.limiter.last[lease.policy.Class] = time.Now()
+	}
+	lease.limiter.mu.Unlock()
 }
 
 func writeRateLimited(w http.ResponseWriter, wait time.Duration) {
@@ -99,4 +140,17 @@ func writeRateLimited(w http.ResponseWriter, wait time.Duration) {
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	http.Error(w, "operation temporarily rate limited", http.StatusTooManyRequests)
+}
+
+func (a *app) beginLimitedOperation(w http.ResponseWriter, path string) (func(), bool) {
+	if a.operationLimiter == nil {
+		return func() {}, true
+	}
+	lease, wait, ok := a.operationLimiter.acquire(path)
+	if !ok {
+		writeRateLimited(w, wait)
+		return nil, false
+	}
+	lease.Start()
+	return lease.Finish, true
 }

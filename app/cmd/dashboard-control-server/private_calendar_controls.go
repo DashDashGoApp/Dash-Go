@@ -305,7 +305,11 @@ func (a *app) discoverPrivateCalendars() (map[string]any, error) {
 		return nil, fmt.Errorf("save calendar discovery: %w", err)
 	}
 	out := a.privateCalendarStatus()
-	a.recordAction("calendars", "Discover private calendars", "success", fmt.Sprintf("%d calendar%s found; nothing was activated", len(payload.Candidates), map[bool]string{true: "", false: "s"}[len(payload.Candidates) == 1]), nil)
+	plural := "s"
+	if len(payload.Candidates) == 1 {
+		plural = ""
+	}
+	a.recordAction("calendars", "Discover private calendars", "success", fmt.Sprintf("%d calendar%s found; nothing was activated", len(payload.Candidates), plural), nil)
 	return out, nil
 }
 

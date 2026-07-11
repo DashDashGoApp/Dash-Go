@@ -262,7 +262,7 @@ function renderCalendar(opts){
       }
       dnum.appendChild(dwrap);
       const wx=wxForDay(day);
-      if(wx){ const w2=el("span","wx"); w2.innerHTML=`<b>${wx.hi}°</b>/${wx.lo}°`; dnum.appendChild(w2); }
+      if(wx){ const w2=el("span","wx"),hi=el("b",null,wx.hi+"°"); w2.append(hi,document.createTextNode("/"+wx.lo+"°")); dnum.appendChild(w2); }
       cell.appendChild(dnum);
       // events — render candidates, then auto-fit them to the real cell height.
       // "+N more" reserves its own row when needed; tapping the cell (or the

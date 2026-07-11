@@ -26,31 +26,34 @@ function weatherDayLabel(date,now){
   if(String(date||"").slice(0,10)===weatherLocalDateKey(now)) return "Today";
   return FMT.wxDay.format(new Date(String(date||"").slice(0,10)+"T00:00"));
 }
+async function refreshAQINonblocking(attempt){
+  if(!CONFIG.showAQI)return;
+  const tries=Number(attempt)||0;
+  try{
+    const res=await fetch("/api/weather/aqi",{cache:"no-store"});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const payload=await res.json();
+    const value=payload&&payload.current?cleanAqi(payload.current.us_aqi):null;
+    if(value!=null){
+      payload.current.us_aqi=value;
+      AQI=payload;
+      renderWeather();
+      return;
+    }
+  }catch(_){ }
+  if(tries<2)setTimeout(()=>refreshAQINonblocking(tries+1),[1500,3000,6000][tries]);
+}
 async function loadWeather(){
   if(typeof deferDashboardWork==="function" && deferDashboardWork("weather-refresh",()=>loadWeather())) return;
   if(loadWeather._busy) return;
   loadWeather._busy=true;
   try{
     try{
-      const aqiReq = CONFIG.showAQI
-        ? fetch(CONFIG.aqApi+"/v1/air-quality?latitude="+
-                CONFIG.lat+"&longitude="+CONFIG.lon+"&current=us_aqi&timezone=auto"+
-                (CONFIG.apiKey?"&apikey="+encodeURIComponent(CONFIG.apiKey):""))
-            .then(r=>r.ok?r.json():null)
-            .then(j=>{
-              const v=j&&j.current?cleanAqi(j.current.us_aqi):null;
-              if(v==null) return null;
-              j.current.us_aqi=v;
-              return j;
-            }).catch(()=>null)
-        : Promise.resolve(null);
       const sources=await fetchWeatherSources();
-      if(!sources.length) throw new Error("no selected weather source answered");
       const beforeWeatherSignature=typeof calendarWeatherSignature==="function"?calendarWeatherSignature():"";
       setWeatherPayload(normalizeWeatherDayRollover(blendWeatherSources(sources),new Date()));
       const afterWeatherSignature=typeof calendarWeatherSignature==="function"?calendarWeatherSignature():"";
       const calendarWeatherChanged=beforeWeatherSignature!==afterWeatherSignature;
-      AQI=await aqiReq;
       lastWxOK=Date.now();
       loadWeather._retry=0;
       const paint=()=>{
@@ -58,14 +61,29 @@ async function loadWeather(){
         if(!loadWeather._didCal || calendarWeatherChanged){ loadWeather._didCal=true; renderCalendar(); }
       };
       if(!(typeof deferDashboardWork==="function" && deferDashboardWork("weather-render",paint))) paint();
+      // Forecast paint never waits on AQI. A bounded same-origin follow-up can
+      // add the pill as soon as the server cache is available.
+      refreshAQINonblocking(0);
     }catch(err){
       console.warn("weather failed",err);
       const retryNo=Math.min((loadWeather._retry||0)+1,8);
       const delay=Math.min(15000*retryNo,120000);
       const paint=()=>{
         updateStale();
-        $("#wxnow").innerHTML='<div class="dashstate warn"><div class="title">Weather is catching up</div><div class="detail">Network or weather service did not answer. Retrying in '+Math.round(delay/1000)+' seconds.</div></div>';
-        const strip=$("#wx14"); if(strip) strip.innerHTML='<div class="dashstate warn"><div class="title">Forecast unavailable</div><div class="detail">The dashboard will refill this automatically when weather data returns.</div></div>';
+        const current=$("#wxnow");
+        if(current){
+          current.replaceChildren();
+          const state=el("div","dashstate warn");
+          state.append(el("div","title","Weather is catching up"),el("div","detail","Network or weather service did not answer. Retrying in "+Math.round(delay/1000)+" seconds."));
+          current.appendChild(state);
+        }
+        const strip=$("#wx14");
+        if(strip){
+          strip.replaceChildren();
+          const state=el("div","dashstate warn");
+          state.append(el("div","title","Forecast unavailable"),el("div","detail","The dashboard will refill this automatically when weather data returns."));
+          strip.appendChild(state);
+        }
       };
       if(!(typeof deferDashboardWork==="function" && deferDashboardWork("weather-error",paint))) paint();
       loadWeather._retry=retryNo;
@@ -74,6 +92,7 @@ async function loadWeather(){
     }
   } finally { loadWeather._busy=false; }
 }
+
 function uvCategory(v){
   v=Math.round(v);
   if(v<=2)  return ["Low","uv-low"];
@@ -112,26 +131,23 @@ function weatherBindDelegatedOpen(strip){
 function renderWeather(){
   if(!WX)return;
   const c=WX.current,[desc,ic]=wmo(c.weather_code);
-  let pills="";
-  if(CONFIG.showUV&&WX.daily&&WX.daily.uv_index_max&&cleanUv(WX.daily.uv_index_max[0])!=null){
-    const v=cleanUv(WX.daily.uv_index_max[0]),[lbl,cls]=uvCategory(v);
-    pills+=`<span class="pill ${cls}">UV ${Math.round(v)} ${lbl}</span>`;
+  const now=$("#wxnow");
+  if(now){
+    now.replaceChildren();
+    const icon=el("div","ico");icon.innerHTML=ic;
+    const meta=el("div","meta"),metrics=el("span","sub wx-current-metrics");
+    meta.appendChild(el("b",null,desc));
+    metrics.append(el("span","wx-metric-token wx-feels-token","Feels "+Math.round(c.apparent_temperature)+"°"));
+    const wind=el("span","wx-metric-token wx-wind-token");
+    const sep=el("span","wx-metric-sep","·");sep.setAttribute("aria-hidden","true");
+    wind.append(sep,document.createTextNode(Math.round(c.wind_speed_10m)+" "+CONFIG.windUnit));metrics.appendChild(wind);
+    meta.append(metrics,el("span","sub",c.relative_humidity_2m!=null?Math.round(c.relative_humidity_2m)+"% humidity":"Humidity —"));
+    const pills=el("span","wxpills");
+    if(CONFIG.showUV&&WX.daily&&WX.daily.uv_index_max&&cleanUv(WX.daily.uv_index_max[0])!=null){const v=cleanUv(WX.daily.uv_index_max[0]),[lbl,cls]=uvCategory(v);pills.appendChild(el("span","pill "+cls,"UV "+Math.round(v)+" "+lbl));}
+    if(CONFIG.showAQI&&AQI&&AQI.current&&cleanAqi(AQI.current.us_aqi)!=null){const v=cleanAqi(AQI.current.us_aqi),[lbl,cls]=aqiCategory(v);pills.appendChild(el("span","pill "+cls,"AQI "+Math.round(v)+" "+lbl));}
+    if(pills.childNodes.length)meta.appendChild(pills);
+    now.append(icon,el("div","big",Math.round(c.temperature_2m)+"°"),meta);
   }
-  if(CONFIG.showAQI&&AQI&&AQI.current&&cleanAqi(AQI.current.us_aqi)!=null){
-    const v=cleanAqi(AQI.current.us_aqi),[lbl,cls]=aqiCategory(v);
-    pills+=`<span class="pill ${cls}">AQI ${Math.round(v)} ${lbl}</span>`;
-  }
-  $("#wxnow").innerHTML=
-    `<div class="ico">${ic}</div>`+
-    `<div class="big">${Math.round(c.temperature_2m)}°</div>`+
-    `<div class="meta"><b>${desc}</b>`+
-    `<span class="sub wx-current-metrics">`+
-      `<span class="wx-metric-token wx-feels-token">Feels&nbsp;${Math.round(c.apparent_temperature)}°</span>`+
-      `<span class="wx-metric-token wx-wind-token"><span class="wx-metric-sep" aria-hidden="true">·</span>${Math.round(c.wind_speed_10m)}&nbsp;${CONFIG.windUnit}</span>`+
-    `</span>`+
-    `<span class="sub">${c.relative_humidity_2m!=null?Math.round(c.relative_humidity_2m)+"% humidity":"Humidity —"}</span>`+
-    (pills?`<span class="wxpills">${pills}</span>`:"")+
-    `</div>`;
 
   const strip=$("#wx14");
   if(!strip)return;
@@ -157,11 +173,10 @@ function renderWeather(){
     const cell=el("div","wxday");
     cell.dataset.weatherDay=dayKey;cell.dataset.weatherIndex=String(i);
     strip._weatherIndexByDay[dayKey]=i;
-    cell.innerHTML=`<div class="dd">${weatherDayLabel(dayKey,WX._weatherLocalDay||new Date())}</div>`+
-      `<div class="ic">${dic}</div>`+
-      `<div class="desc">${ddesc}</div>`+
-      `<div class="temps"><span class="hi">${Math.round(d.temperature_2m_max[i])}°</span>`+
-      `<span class="lo">${Math.round(d.temperature_2m_min[i])}°</span></div>`;
+    const dayIcon=el("div","ic");dayIcon.innerHTML=dic;
+    const temps=el("div","temps");
+    temps.append(el("span","hi",Math.round(d.temperature_2m_max[i])+"°"),el("span","lo",Math.round(d.temperature_2m_min[i])+"°"));
+    cell.append(el("div","dd",weatherDayLabel(dayKey,WX._weatherLocalDay||new Date())),dayIcon,el("div","desc",ddesc),temps);
     frag.appendChild(cell);
   }
   strip.appendChild(frag);

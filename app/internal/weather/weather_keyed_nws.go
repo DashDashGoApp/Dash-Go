@@ -17,48 +17,55 @@ func fetchXWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	}
 	place := trimFloat(cfg.Lat) + "," + trimFloat(cfg.Lon)
 	auth := map[string]string{"client_id": cid, "client_secret": secret, "format": "json"}
-	vals := mapCopy(auth)
-	vals["limit"] = strconv.Itoa(clamp(cfg.Days, 1, 15))
-	vals["filter"] = "day"
-	daily, err := fetchJSONGo(ctx, "https://data.api.xweather.com/forecasts/"+url.PathEscape(place)+"?"+weatherURLValues(vals))
-	if err != nil {
-		return nil, err
-	}
-	vals = mapCopy(auth)
-	vals["limit"] = "1"
-	obs, err := fetchJSONGo(ctx, "https://data.api.xweather.com/observations/"+url.PathEscape(place)+"?"+weatherURLValues(vals))
-	if err != nil {
-		return nil, err
-	}
+	dailyVals := mapCopy(auth)
+	dailyVals["limit"] = strconv.Itoa(clamp(cfg.Days, 1, 15))
+	dailyVals["filter"] = "day"
+	obsVals := mapCopy(auth)
+	obsVals["limit"] = "1"
+	results := weatherParallelCalls(
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://data.api.xweather.com/forecasts/"+url.PathEscape(place)+"?"+weatherURLValues(dailyVals))
+		},
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://data.api.xweather.com/observations/"+url.PathEscape(place)+"?"+weatherURLValues(obsVals))
+		},
+	)
 	d := emptyDailyGo()
-	periods := []any{}
-	for _, resp := range jsonutil.List(daily["response"]) {
-		periods = append(periods, jsonutil.List(anyMap(resp)["periods"])...)
+	if daily, ok := results[0].Value.(map[string]any); ok {
+		periods := []any{}
+		for _, resp := range jsonutil.List(daily["response"]) {
+			periods = append(periods, jsonutil.List(anyMap(resp)["periods"])...)
+		}
+		for _, raw := range periods[:min(len(periods), cfg.Days)] {
+			x := anyMap(raw)
+			d["time"] = append(d["time"], firstN(fmt.Sprint(xOr(x["dateTimeISO"], x["timestamp"])), 10))
+			d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(x["weather"], xOr(x["weatherPrimary"], x["icon"]))))
+			d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["maxTempF"], "f", cfg.TempUnit))
+			d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["minTempF"], "f", cfg.TempUnit))
+			d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(xOr(x["feelslikeF"], x["maxFeelslikeF"]), "f", cfg.TempUnit))
+			d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precipIN"], "in"))
+			d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
+			d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windSpeedMPH"], "mph", cfg.WindUnit))
+			d["uv_index_max"] = append(d["uv_index_max"], x["uvi"])
+			d["sunrise"] = append(d["sunrise"], x["sunriseISO"])
+			d["sunset"] = append(d["sunset"], x["sunsetISO"])
+		}
 	}
-	for _, raw := range periods[:min(len(periods), cfg.Days)] {
-		x := anyMap(raw)
-		d["time"] = append(d["time"], firstN(fmt.Sprint(xOr(x["dateTimeISO"], x["timestamp"])), 10))
-		d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(x["weather"], xOr(x["weatherPrimary"], x["icon"]))))
-		d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["maxTempF"], "f", cfg.TempUnit))
-		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["minTempF"], "f", cfg.TempUnit))
-		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(xOr(x["feelslikeF"], x["maxFeelslikeF"]), "f", cfg.TempUnit))
-		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precipIN"], "in"))
-		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["windSpeedMPH"], "mph", cfg.WindUnit))
-		d["uv_index_max"] = append(d["uv_index_max"], x["uvi"])
-		d["sunrise"] = append(d["sunrise"], x["sunriseISO"])
-		d["sunset"] = append(d["sunset"], x["sunsetISO"])
+	current := map[string]any{}
+	if obs, ok := results[1].Value.(map[string]any); ok {
+		resp := obs["response"]
+		var ob map[string]any
+		if arr := jsonutil.List(resp); len(arr) > 0 {
+			ob = anyMap(anyMap(arr[0])["ob"])
+		} else {
+			ob = anyMap(anyMap(resp)["ob"])
+		}
+		if len(ob) > 0 {
+			current = map[string]any{"temperature_2m": toTempGo(ob["tempF"], "f", cfg.TempUnit), "apparent_temperature": toTempGo(ob["feelslikeF"], "f", cfg.TempUnit), "weather_code": textCodeGo(xOr(ob["weather"], ob["weatherShort"])), "wind_speed_10m": toWindGo(ob["windSpeedMPH"], "mph", cfg.WindUnit), "relative_humidity_2m": ob["humidity"]}
+		}
 	}
-	resp := obs["response"]
-	var ob map[string]any
-	if arr := jsonutil.List(resp); len(arr) > 0 {
-		ob = anyMap(anyMap(arr[0])["ob"])
-	} else {
-		ob = anyMap(anyMap(resp)["ob"])
-	}
-	return weatherOKGo("xweather", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(ob["tempF"], "f", cfg.TempUnit), "apparent_temperature": toTempGo(ob["feelslikeF"], "f", cfg.TempUnit), "weather_code": textCodeGo(xOr(ob["weather"], ob["weatherShort"])), "wind_speed_10m": toWindGo(ob["windSpeedMPH"], "mph", cfg.WindUnit), "relative_humidity_2m": ob["humidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherPartialSourceGo("xweather", current, d, nil, results[1].Err, results[0].Err)
 }
-
 func xweatherCredsGo(raw string) (string, string) {
 	raw = strings.TrimSpace(raw)
 	for _, sep := range []string{":", ",", "|"} {
@@ -74,14 +81,18 @@ func fetchNWSGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	if !insideNWSCoverageGo(cfg.Lat, cfg.Lon) {
 		return nil, fmt.Errorf("NWS / NOAA is US-only and is unavailable for this location; source will be skipped")
 	}
-	pointsURL := fmt.Sprintf("https://api.weather.gov/points/%s,%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon))
-	points, err := fetchJSONGo(ctx, pointsURL)
-	if err != nil {
-		return nil, err
-	}
-	forecastURL := jsonutil.StringValue(anyMap(points["properties"])["forecast"])
-	if forecastURL == "" {
-		return nil, fmt.Errorf("NWS did not return a forecast grid for this location")
+	forecastURL, cached := weatherLocationCacheRead(cfg, "nws")
+	if !cached {
+		pointsURL := fmt.Sprintf("https://api.weather.gov/points/%s,%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon))
+		points, err := fetchJSONGo(ctx, pointsURL)
+		if err != nil {
+			return nil, err
+		}
+		forecastURL = jsonutil.StringValue(anyMap(points["properties"])["forecast"])
+		if forecastURL == "" {
+			return nil, fmt.Errorf("NWS did not return a forecast grid for this location")
+		}
+		weatherLocationCacheWrite(cfg, "nws", forecastURL)
 	}
 	fc, err := fetchJSONGo(ctx, forecastURL)
 	if err != nil {

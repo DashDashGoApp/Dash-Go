@@ -32,7 +32,7 @@ function renderCtrlUiSettings(){
   ]);
   const general=el("div","settinggrid settinggrid-calendar-general"),startLabels={0:"Sunday",6:"Saturday",1:"Monday"},startDesc={0:"Normal view",6:"Weekend start",1:"Weekday start"};
   let startValue=+(SETTINGS.firstDayOfWeek!=null?SETTINGS.firstDayOfWeek:CONFIG.firstDayOfWeek||0);
-  const setStartDay=v=>{if(v===startValue)return;SETTINGS.firstDayOfWeek=v;CONFIG.firstDayOfWeek=v;applySettings(SETTINGS);postSettings();startValue=v;if(!ctrlUpdateSettingCard("firstDayOfWeek",{value:startLabels[v]||"Sunday",selectedChoice:v}))renderCtrlUiSettings();loadCalendars();};
+  const setStartDay=v=>{if(v===startValue)return;applySettings({firstDayOfWeek:v});postSettings();startValue=v;if(!ctrlUpdateSettingCard("firstDayOfWeek",{value:startLabels[v]||"Sunday",selectedChoice:v}))renderCtrlUiSettings();loadCalendars();};
   const startCard=el("div","settingcard settingcard-calendar-start");startCard.dataset.settingKey="firstDayOfWeek";
   startCard.innerHTML=`<div class="settinglabel">Calendar starts</div><div class="settingvalue">${escapeHTML(startLabels[startValue]||"Sunday")}</div><div class="settingsub">Sunday normal · Saturday weekend start · Monday weekday start</div>`;
   const startRow=el("div","ctrlrow compact startdaybuttons");startRow.setAttribute("role","group");startRow.setAttribute("aria-label","Calendar start day");for(const [v,label] of [[0,"Sunday"],[6,"Start Saturday"],[1,"Start Monday"]]){const selected=v===startValue,b=cbtn(label,selected?"on":"",()=>setStartDay(v));b.dataset.settingChoice=String(v);b.setAttribute("aria-label",(startDesc[v]||"Calendar start day")+": "+label);b.setAttribute("aria-pressed",String(selected));startRow.appendChild(b);}startCard.appendChild(startRow);general.appendChild(startCard);
@@ -49,8 +49,8 @@ function renderCtrlUiSettings(){
 function renderCtrlScreenSettings(){
   const wrap=$("#ctrlscreensettings");if(!wrap)return;wrap.replaceChildren();
   const power=actionGroup("Screen controls","Blanking only affects the display; the dashboard keeps running.","displaygroup grid-3-screen");
-  const screenOff=caction("Turn screen off","Touch wakes it.","",async()=>{try{await api("/api/display/off","POST",{});ctrlMsg("Screen off requested. Touch should wake it.");}catch(e){ctrlMsg("Screen off failed: "+e.message);}});
-  const screenOn=caction("Wake screen","Force DPMS on.","",async()=>{try{await api("/api/display/on","POST",{});ctrlMsg("Screen wake requested.");}catch(e){ctrlMsg("Screen wake failed: "+e.message);}});
+  const screenOff=caction("Turn screen off","Touch wakes it.","",async()=>{try{await requestDisplaySleep();ctrlMsg("Screen off requested. Touch should wake it.");}catch(e){ctrlMsg("Screen off failed: "+e.message);}});
+  const screenOn=caction("Wake screen","Force DPMS on.","",async()=>{try{await requestDisplayWake({override:true});ctrlMsg("Screen wake requested.");}catch(e){ctrlMsg("Screen wake failed: "+e.message);}});
   const nightDim=caction(`Night dim: ${SETTINGS.nightDimEnabled!==false?"on":"off"}`,"Dim dashboard background after sunset.",SETTINGS.nightDimEnabled!==false?"on":"",()=>{SETTINGS.nightDimEnabled=SETTINGS.nightDimEnabled===false;applyNightDim();postSettings();const on=SETTINGS.nightDimEnabled!==false;if(!ctrlUpdateSettingCard("nightDim",{title:`Night dim: ${on?"on":"off"}`,pressed:on}))renderCtrlScreenSettings();});
   nightDim.dataset.settingKey="nightDim";nightDim.setAttribute("aria-pressed",String(SETTINGS.nightDimEnabled!==false));
   power.grid.append(screenOff,screenOn,nightDim);

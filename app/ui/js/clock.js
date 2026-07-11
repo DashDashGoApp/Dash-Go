@@ -17,7 +17,9 @@ function tickClock(){
   const d=new Date();
   // Build the time structure once, then only poke text nodes each tick.
   if(!_clockEls){
-    const ct=$("#ctime"); ct.innerHTML='<span class="hm"></span><sup class="ss"></sup><span class="ap"></span>';
+    const ct=$("#ctime");
+    if(!ct) return;
+    ct.innerHTML='<span class="hm"></span><sup class="ss"></sup><span class="ap"></span>';
     _clockEls={ hm:ct.querySelector(".hm"), ss:ct.querySelector(".ss"), ap:ct.querySelector(".ap") };
     _lastTickMin=-1;
   }
@@ -32,7 +34,10 @@ function tickClock(){
   _clockEls.ap.textContent=parts.ap;
   // Date string changes once a day — only reformat when it actually differs.
   const ds=_dateFmt.format(d).toUpperCase();
-  if(ds!==_lastDateStr){ _lastDateStr=ds; $("#cdate").textContent=ds; }
+  if(ds!==_lastDateStr){
+    const dateNode=$("#cdate");
+    if(dateNode){ _lastDateStr=ds; dateNode.textContent=ds; }
+  }
 }
 
 let _clockTimer=null;

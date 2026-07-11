@@ -9,8 +9,8 @@ import "time"
 // CacheVersion advances when recurrence expansion semantics change. A previous
 // cache remains structurally readable, but must be rebuilt before it can be
 // reused with the current parser.
-const CacheVersion = 10
-const FingerprintVersion = 8
+const CacheVersion = 11
+const FingerprintVersion = 9
 const maxRecurrenceSteps = 50000
 
 // CalendarSource is the stable source descriptor persisted inside
@@ -39,6 +39,7 @@ type SourceMeta struct {
 	MtimeNs   *int64   `json:"mtimeNs,omitempty"`
 	Size      *int64   `json:"size"`
 	SHA256    *string  `json:"sha256"`
+	HashedAt  *int64   `json:"hashedAt,omitempty"`
 	RealPath  string   `json:"realPath"`
 	IsSymlink bool     `json:"isSymlink"`
 	AgeHours  *float64 `json:"ageHours,omitempty"`
@@ -83,15 +84,32 @@ type ICSEvent struct {
 	zone            *calendarZone
 }
 
+// SourceDiagnostics records bounded per-calendar parser evidence without
+// retaining event bodies. It makes malformed or superseded feeds diagnosable
+// while keeping the normal dashboard payload small.
+type SourceDiagnostics struct {
+	URL                  string `json:"url"`
+	Name                 string `json:"name"`
+	ComponentsFound      int    `json:"componentsFound"`
+	EventsAccepted       int    `json:"eventsAccepted"`
+	InvalidEventsDropped int    `json:"invalidEventsDropped"`
+	CancelledEvents      int    `json:"cancelledEvents"`
+	SupersededRevisions  int    `json:"supersededRevisions"`
+	ExpandedOccurrences  int    `json:"expandedOccurrences"`
+	ParseDurationMs      int64  `json:"parseDurationMs"`
+	Error                string `json:"error,omitempty"`
+}
+
 // CacheOutput is serialized byte-for-byte through the established compact JSON
 // writer. Keep field order and JSON tags stable.
 type CacheOutput struct {
-	Version            int              `json:"version"`
-	FingerprintVersion int              `json:"fingerprintVersion"`
-	GeneratedAt        int64            `json:"generatedAt"`
-	WindowStart        int64            `json:"windowStart"`
-	WindowEnd          int64            `json:"windowEnd"`
-	Sources            []SourceMeta     `json:"sources"`
-	Issues             []string         `json:"issues"`
-	Events             []map[string]any `json:"events"`
+	Version            int                 `json:"version"`
+	FingerprintVersion int                 `json:"fingerprintVersion"`
+	GeneratedAt        int64               `json:"generatedAt"`
+	WindowStart        int64               `json:"windowStart"`
+	WindowEnd          int64               `json:"windowEnd"`
+	Sources            []SourceMeta        `json:"sources"`
+	Issues             []string            `json:"issues"`
+	Diagnostics        []SourceDiagnostics `json:"diagnostics"`
+	Events             []map[string]any    `json:"events"`
 }

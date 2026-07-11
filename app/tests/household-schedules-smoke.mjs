@@ -9,7 +9,7 @@ const generate=read("internal/calendar/household_schedules_generate.go");
 const defaults=read("internal/calendar/defaults.go");
 const pickup=read("internal/calendar/pickup.go");
 const iss=read("internal/calendar/iss.go");
-const cache=read("internal/calendar/events/cache.go");
+const cache=read("internal/calendar/events/cache.go")+read("internal/calendar/events/serialize.go");
 const eventTypes=read("internal/calendar/events/types.go");
 const popup=read("ui/js/managed-schedules-popup.js");
 const parser=read("ui/js/ics-parser.js");
@@ -42,7 +42,7 @@ assert.match(pickup,/celebrationUID/,"celebration UIDs must not depend on file l
 assert.match(iss,/issEnvelopePresent/,"ISS updates must validate the provider response envelope");
 assert.match(iss,/lat\/lon are not configured/,"ISS must reject the 0,0 placeholder location");
 assert.match(cache,/managedSchedule/,"event cache must expose managed schedule metadata to the dashboard");
-assert.match(eventTypes,/const CacheVersion = 10/,"managed schedule metadata must invalidate earlier event caches");
+assert.match(eventTypes,/const CacheVersion = 11/,"managed schedule metadata must invalidate earlier event caches");
 assert.match(popup,/function managedScheduleInfo/,"day popup must validate explicit schedule metadata");
 assert.match(popup,/managedScheduleShiftGrid/,"day popup must offer quick date offsets");
 assert.match(popup,/adjustment&&adjustment\.collision/,"day popup must surface same-rule move collisions");

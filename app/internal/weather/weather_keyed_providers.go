@@ -93,37 +93,42 @@ func fetchGoogleWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 		units = "METRIC"
 	}
 	baseVals := map[string]string{"key": k, "location.latitude": trimFloat(cfg.Lat), "location.longitude": trimFloat(cfg.Lon), "unitsSystem": units}
-	cur, err := fetchJSONGo(ctx, "https://weather.googleapis.com/v1/currentConditions:lookup?"+weatherURLValues(baseVals))
-	if err != nil {
-		return nil, err
-	}
 	vals := mapCopy(baseVals)
 	vals["days"] = strconv.Itoa(days)
 	vals["pageSize"] = strconv.Itoa(days)
-	daily, err := fetchJSONGo(ctx, "https://weather.googleapis.com/v1/forecast/days:lookup?"+weatherURLValues(vals))
-	if err != nil {
-		return nil, err
+	results := weatherParallelCalls(
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://weather.googleapis.com/v1/currentConditions:lookup?"+weatherURLValues(baseVals))
+		},
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://weather.googleapis.com/v1/forecast/days:lookup?"+weatherURLValues(vals))
+		},
+	)
+	current := map[string]any{}
+	if cur, ok := results[0].Value.(map[string]any); ok {
+		current = map[string]any{"temperature_2m": degreesGo(cur["temperature"]), "apparent_temperature": degreesGo(cur["feelsLikeTemperature"]), "weather_code": textCodeGo(conditionTextGo(cur)), "wind_speed_10m": googleWindGo(cur["wind"], cfg), "relative_humidity_2m": cur["relativeHumidity"]}
 	}
 	d := emptyDailyGo()
-	for _, raw := range jsonutil.List(daily["forecastDays"]) {
-		x := anyMap(raw)
-		day := anyMap(x["daytimeForecast"])
-		sun := anyMap(x["sunEvents"])
-		d["time"] = append(d["time"], googleDateGo(x))
-		d["weather_code"] = append(d["weather_code"], textCodeGo(conditionTextGo(day)))
-		d["temperature_2m_max"] = append(d["temperature_2m_max"], degreesGo(x["maxTemperature"]))
-		d["temperature_2m_min"] = append(d["temperature_2m_min"], degreesGo(x["minTemperature"]))
-		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], degreesGo(x["feelsLikeMaxTemperature"]))
-		d["precipitation_sum"] = append(d["precipitation_sum"], googlePrecipitationMMGo(anyMap(day["precipitation"])["qpf"], choice(units == "METRIC", "mm", "in").(string)))
-		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], anyMap(anyMap(day["precipitation"])["probability"])["percent"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], googleWindGo(day["wind"], cfg))
-		d["uv_index_max"] = append(d["uv_index_max"], day["uvIndex"])
-		d["sunrise"] = append(d["sunrise"], sun["sunriseTime"])
-		d["sunset"] = append(d["sunset"], sun["sunsetTime"])
+	if daily, ok := results[1].Value.(map[string]any); ok {
+		for _, raw := range jsonutil.List(daily["forecastDays"]) {
+			x := anyMap(raw)
+			day := anyMap(x["daytimeForecast"])
+			sun := anyMap(x["sunEvents"])
+			d["time"] = append(d["time"], googleDateGo(x))
+			d["weather_code"] = append(d["weather_code"], textCodeGo(conditionTextGo(day)))
+			d["temperature_2m_max"] = append(d["temperature_2m_max"], degreesGo(x["maxTemperature"]))
+			d["temperature_2m_min"] = append(d["temperature_2m_min"], degreesGo(x["minTemperature"]))
+			d["apparent_temperature_max"] = append(d["apparent_temperature_max"], degreesGo(x["feelsLikeMaxTemperature"]))
+			d["precipitation_sum"] = append(d["precipitation_sum"], googlePrecipitationMMGo(anyMap(day["precipitation"])["qpf"], choice(units == "METRIC", "mm", "in").(string)))
+			d["precipitation_probability_max"] = append(d["precipitation_probability_max"], anyMap(anyMap(day["precipitation"])["probability"])["percent"])
+			d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], googleWindGo(day["wind"], cfg))
+			d["uv_index_max"] = append(d["uv_index_max"], day["uvIndex"])
+			d["sunrise"] = append(d["sunrise"], sun["sunriseTime"])
+			d["sunset"] = append(d["sunset"], sun["sunsetTime"])
+		}
 	}
-	return weatherOKGo("googleweather", map[string]any{"current": map[string]any{"temperature_2m": degreesGo(cur["temperature"]), "apparent_temperature": degreesGo(cur["feelsLikeTemperature"]), "weather_code": textCodeGo(conditionTextGo(cur)), "wind_speed_10m": googleWindGo(cur["wind"], cfg), "relative_humidity_2m": cur["relativeHumidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherPartialSourceGo("googleweather", current, d, nil, results[0].Err, results[1].Err)
 }
-
 func fetchTomorrowGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("tomorrow", cfg)
 	units := "imperial"
@@ -201,39 +206,44 @@ func visualCrossingWindUnitGo(unitGroup string) string {
 
 func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("weatherbit", cfg)
-	// Request Weatherbit in metric units regardless of display preference so
-	// daily precipitation has one unambiguous adapter boundary: millimetres.
 	units := "M"
 	base := "https://api.weatherbit.io/v2.0"
-	cur, err := fetchJSONGo(ctx, base+"/current?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units}))
-	if err != nil {
-		return nil, err
-	}
-	daily, err := fetchJSONGo(ctx, base+"/forecast/daily?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units, "days": strconv.Itoa(clamp(cfg.Days, 1, 7))}))
-	if err != nil {
-		return nil, err
+	results := weatherParallelCalls(
+		func() (any, error) {
+			return fetchJSONGo(ctx, base+"/current?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units}))
+		},
+		func() (any, error) {
+			return fetchJSONGo(ctx, base+"/forecast/daily?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units, "days": strconv.Itoa(clamp(cfg.Days, 1, 7))}))
+		},
+	)
+	current := map[string]any{}
+	if cur, ok := results[0].Value.(map[string]any); ok {
+		c := firstMap(jsonutil.List(cur["data"]))
+		cw := anyMap(c["weather"])
+		if len(c) > 0 {
+			current = map[string]any{"temperature_2m": toTempGo(c["temp"], "c", cfg.TempUnit), "apparent_temperature": toTempGo(c["app_temp"], "c", cfg.TempUnit), "weather_code": textCodeGo(xOr(cw["description"], cw["code"])), "wind_speed_10m": toWindGo(c["wind_spd"], "ms", cfg.WindUnit), "relative_humidity_2m": c["rh"]}
+		}
 	}
 	d := emptyDailyGo()
-	for _, raw := range jsonutil.List(daily["data"]) {
-		x := anyMap(raw)
-		w := anyMap(x["weather"])
-		d["time"] = append(d["time"], x["valid_date"])
-		d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(w["description"], w["code"])))
-		d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["max_temp"], "c", cfg.TempUnit))
-		d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["min_temp"], "c", cfg.TempUnit))
-		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(x["app_max_temp"], "c", cfg.TempUnit))
-		d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precip"], "mm"))
-		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["wind_spd"], "ms", cfg.WindUnit))
-		d["uv_index_max"] = append(d["uv_index_max"], x["uv"])
-		d["sunrise"] = append(d["sunrise"], nil)
-		d["sunset"] = append(d["sunset"], nil)
+	if daily, ok := results[1].Value.(map[string]any); ok {
+		for _, raw := range jsonutil.List(daily["data"]) {
+			x := anyMap(raw)
+			w := anyMap(x["weather"])
+			d["time"] = append(d["time"], x["valid_date"])
+			d["weather_code"] = append(d["weather_code"], textCodeGo(xOr(w["description"], w["code"])))
+			d["temperature_2m_max"] = append(d["temperature_2m_max"], toTempGo(x["max_temp"], "c", cfg.TempUnit))
+			d["temperature_2m_min"] = append(d["temperature_2m_min"], toTempGo(x["min_temp"], "c", cfg.TempUnit))
+			d["apparent_temperature_max"] = append(d["apparent_temperature_max"], toTempGo(x["app_max_temp"], "c", cfg.TempUnit))
+			d["precipitation_sum"] = append(d["precipitation_sum"], precipitationMMGo(x["precip"], "mm"))
+			d["precipitation_probability_max"] = append(d["precipitation_probability_max"], x["pop"])
+			d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(x["wind_spd"], "ms", cfg.WindUnit))
+			d["uv_index_max"] = append(d["uv_index_max"], x["uv"])
+			d["sunrise"] = append(d["sunrise"], nil)
+			d["sunset"] = append(d["sunset"], nil)
+		}
 	}
-	c := firstMap(jsonutil.List(cur["data"]))
-	cw := anyMap(c["weather"])
-	return weatherOKGo("weatherbit", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(c["temp"], "c", cfg.TempUnit), "apparent_temperature": toTempGo(c["app_temp"], "c", cfg.TempUnit), "weather_code": textCodeGo(xOr(cw["description"], cw["code"])), "wind_speed_10m": toWindGo(c["wind_spd"], "ms", cfg.WindUnit), "relative_humidity_2m": c["rh"]}, "daily": d, "hourly": nil}), nil
+	return weatherPartialSourceGo("weatherbit", current, d, nil, results[0].Err, results[1].Err)
 }
-
 func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("pirateweather", cfg)
 	units := "us"
@@ -336,59 +346,4 @@ func pirateHourlyLiquidTotalsGo(payload map[string]any, units string) map[string
 		}
 	}
 	return out
-}
-
-func fetchAccuWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
-	k := weatherProviderKeyGo("accuweather", cfg)
-	locURL := "https://dataservice.accuweather.com/locations/v1/cities/geoposition/search?" + weatherURLValues(map[string]string{"apikey": k, "q": fmt.Sprintf("%s,%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon))})
-	loc, err := fetchJSONGo(ctx, locURL)
-	if err != nil {
-		return nil, err
-	}
-	locKey := jsonutil.StringValue(loc["Key"])
-	if locKey == "" {
-		return nil, fmt.Errorf("AccuWeather location lookup failed")
-	}
-	metric := "false"
-	if cfg.TempUnit == "celsius" {
-		metric = "true"
-	}
-	curList, err := fetchJSONAnyGo(ctx, fmt.Sprintf("https://dataservice.accuweather.com/currentconditions/v1/%s?%s", url.PathEscape(locKey), weatherURLValues(map[string]string{"apikey": k, "details": "true"})))
-	if err != nil {
-		return nil, err
-	}
-	daily, err := fetchJSONGo(ctx, fmt.Sprintf("https://dataservice.accuweather.com/forecasts/v1/daily/5day/%s?%s", url.PathEscape(locKey), weatherURLValues(map[string]string{"apikey": k, "details": "true", "metric": metric})))
-	if err != nil {
-		return nil, err
-	}
-	d := emptyDailyGo()
-	for _, raw := range jsonutil.List(daily["DailyForecasts"]) {
-		x := anyMap(raw)
-		temp := anyMap(x["Temperature"])
-		real := anyMap(x["RealFeelTemperature"])
-		day := anyMap(x["Day"])
-		d["time"] = append(d["time"], firstN(fmt.Sprint(x["Date"]), 10))
-		d["weather_code"] = append(d["weather_code"], textCodeGo(day["IconPhrase"]))
-		d["temperature_2m_max"] = append(d["temperature_2m_max"], anyMap(temp["Maximum"])["Value"])
-		d["temperature_2m_min"] = append(d["temperature_2m_min"], anyMap(temp["Minimum"])["Value"])
-		d["apparent_temperature_max"] = append(d["apparent_temperature_max"], anyMap(real["Maximum"])["Value"])
-		d["precipitation_sum"] = append(d["precipitation_sum"], nil)
-		d["precipitation_probability_max"] = append(d["precipitation_probability_max"], day["PrecipitationProbability"])
-		d["wind_speed_10m_max"] = append(d["wind_speed_10m_max"], toWindGo(anyMap(anyMap(day["Wind"])["Speed"])["Value"], choice(metric == "true", "kmh", "mph").(string), cfg.WindUnit))
-		d["uv_index_max"] = append(d["uv_index_max"], nil)
-		d["sunrise"] = append(d["sunrise"], nil)
-		d["sunset"] = append(d["sunset"], nil)
-	}
-	c := map[string]any{}
-	if arr := jsonutil.List(curList); len(arr) > 0 {
-		c = anyMap(arr[0])
-	}
-	unitKey := "Imperial"
-	if cfg.TempUnit == "celsius" {
-		unitKey = "Metric"
-	}
-	temp := anyMap(c["Temperature"])
-	real := anyMap(c["RealFeelTemperature"])
-	wind := anyMap(c["Wind"])
-	return weatherOKGo("accuweather", map[string]any{"current": map[string]any{"temperature_2m": anyMap(temp[unitKey])["Value"], "apparent_temperature": anyMap(real[unitKey])["Value"], "weather_code": textCodeGo(c["WeatherText"]), "wind_speed_10m": toWindGo(anyMap(anyMap(wind["Speed"])[choice(cfg.WindUnit == "kmh", "Metric", "Imperial").(string)])["Value"], cfg.WindUnit, cfg.WindUnit), "relative_humidity_2m": c["RelativeHumidity"]}, "daily": d, "hourly": nil}), nil
 }

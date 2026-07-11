@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 )
@@ -28,6 +30,12 @@ func (a *app) handleGet(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	if path == "/api/weather" {
 		a.json(w, a.weatherPayload())
+		return
+	}
+	if path == "/api/weather/aqi" {
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+		a.json(w, a.weatherAQIPayload(ctx))
 		return
 	}
 	if path == "/api/event-map" {

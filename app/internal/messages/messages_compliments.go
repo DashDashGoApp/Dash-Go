@@ -1,7 +1,6 @@
 package messages
 
 import (
-	"crypto/sha1"
 	"errors"
 	"fmt"
 	"net/http"
@@ -109,15 +108,6 @@ func cleanCompliment(body map[string]any, existing map[string]any) (map[string]a
 		}
 	}
 	return out, nil
-}
-func defaultKeyFromBody(body map[string]any) string {
-	if k := normalizeDefaultMessageKey(body["key"]); k != "" {
-		return k
-	}
-	if text := cleanTextLimit(body["text"], 300); text != "" {
-		return fmt.Sprintf("%x", sha1.Sum([]byte(strings.ToLower(text))))[:12]
-	}
-	return ""
 }
 func (s *Service) handleCompliments(w http.ResponseWriter, path string, body map[string]any) {
 	payload := s.complimentsPayload()

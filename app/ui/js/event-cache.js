@@ -51,7 +51,7 @@ async function loadEventsCache(winStart,winEnd,retryWithoutETag){
     }
     if(!res.ok) return null;
     const cache=await res.json();
-    if(!cache || cache.version!==10 || !Array.isArray(cache.events)) return null;
+    if(!cache || cache.version!==11 || !Array.isArray(cache.events)) return null;
     if(cache.windowStart>+winStart || cache.windowEnd<+winEnd) return null;
     EVENT_CACHE_BASE_EVENTS=[];
     for(const raw of cache.events){
@@ -63,20 +63,23 @@ async function loadEventsCache(winStart,winEnd,retryWithoutETag){
     EVENT_CACHE_ETAG=(res.headers&&res.headers.get&&res.headers.get("ETag"))||"";
     EVENT_CACHE_INFO={source:"cache",using:true,generatedAt:cache.generatedAt||0,
       windowStart:cache.windowStart||0,windowEnd:cache.windowEnd||0,
-      eventCount:cache.events.length,issues:cache.issues||[],etag:EVENT_CACHE_ETAG};
+      eventCount:cache.events.length,issues:cache.issues||[],diagnostics:Array.isArray(cache.diagnostics)?cache.diagnostics:[],etag:EVENT_CACHE_ETAG};
     return eventCacheWindowEvents(winStart,winEnd);
   }catch(err){
     console.warn("event cache unavailable, falling back to ICS",err);
     return null;
   }
 }
+const LAST_KNOWN_EVENTS_SCHEMA=2;
 let LAST_KNOWN_EVENTS_PERSIST_QUEUED=false;
 let LAST_KNOWN_EVENTS_PENDING=null;
-function queueLastKnownEventsPersist(events){
+function queueLastKnownEventsPersist(events,meta){
   // Calendar commits can arrive in a short burst (last-known first paint,
-  // then fresh ICS). Serialize only the newest snapshot so deferred work
-  // cannot overwrite newer data and repeated refreshes share one idle slot.
-  LAST_KNOWN_EVENTS_PENDING=events;
+  // then fresh ICS). Serialize only the newest current-data snapshot so
+  // deferred work cannot overwrite newer data. A snapshot loaded from local
+  // storage is deliberately never queued again; merely displaying stale data
+  // must not renew its freshness timestamp.
+  LAST_KNOWN_EVENTS_PENDING={events,meta:meta||{}};
   if(LAST_KNOWN_EVENTS_PERSIST_QUEUED)return;
   LAST_KNOWN_EVENTS_PERSIST_QUEUED=true;
   const persist=()=>{
@@ -84,9 +87,18 @@ function queueLastKnownEventsPersist(events){
     const current=LAST_KNOWN_EVENTS_PENDING;
     LAST_KNOWN_EVENTS_PENDING=null;
     if(!current)return;
-    try{ localStorage.setItem("dashboard:lastEvents",JSON.stringify({ts:Date.now(),events:current.map(e=>({
-      id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",managedSchedule:e.managedSchedule||null,writeback:e.writeback||null,cal:e.cal||{}
-    }))})); }catch(_){ }
+    const snapshotMeta=current.meta||{};
+    try{ localStorage.setItem("dashboard:lastEvents",JSON.stringify({
+      schema:LAST_KNOWN_EVENTS_SCHEMA,
+      savedAt:Date.now(),
+      cacheVersion:Number(snapshotMeta.cacheVersion)||11,
+      cacheFingerprint:String(snapshotMeta.cacheFingerprint||""),
+      windowStart:Number(snapshotMeta.windowStart)||0,
+      windowEnd:Number(snapshotMeta.windowEnd)||0,
+      events:current.events.map(e=>({
+        id:e.id,title:e.title,desc:e.desc,location:e.location,start:+e.start,end:e.end?+e.end:null,allDay:!!e.allDay,appOwner:e.appOwner||"",managedSchedule:e.managedSchedule||null,writeback:e.writeback||null,cal:e.cal||{}
+      }))
+    })); }catch(_){ }
   };
   if(typeof requestIdleCallback==="function")requestIdleCallback(persist,{timeout:4000});
   else setTimeout(persist,600);
@@ -118,7 +130,8 @@ function calendarEventsSignature(all,sigExtra){
   }
   return hash.toString(16)+":"+all.length;
 }
-function commitCalendarEvents(all,sigExtra){
+function commitCalendarEvents(all,sigExtra,options){
+  const opts=options||{};
   const sig=calendarEventsSignature(all,sigExtra);
   // A routine cache refresh often returns byte-for-byte equivalent events.
   // Keep the current EVENTS array and per-day index intact in that case; there
@@ -132,7 +145,14 @@ function commitCalendarEvents(all,sigExtra){
   // JSON.stringify of a full multi-week window plus a synchronous
   // localStorage write only benefits the NEXT boot, so it stays off the
   // fresh-data-to-paint path and coalesces with any following refresh.
-  queueLastKnownEventsPersist(all);
+  if(opts.persist!==false){
+    queueLastKnownEventsPersist(all,{
+      cacheVersion:11,
+      cacheFingerprint:opts.cacheFingerprint||sig,
+      windowStart:opts.windowStart==null?EVENT_CACHE_WINDOW_START:+opts.windowStart,
+      windowEnd:opts.windowEnd==null?EVENT_CACHE_WINDOW_END:+opts.windowEnd
+    });
+  }
   const paint=()=>{ renderCalendar(); renderAgenda(); };
   if(typeof deferDashboardWork==="function" && deferDashboardWork("calendar-render",paint)) return true;
   paint();
@@ -142,9 +162,14 @@ function renderLastKnownEvents(){
   try{
     const saved=JSON.parse(localStorage.getItem("dashboard:lastEvents")||"null");
     if(!saved || !Array.isArray(saved.events) || !saved.events.length) return false;
+    const savedAt=Number(saved.savedAt||saved.ts)||0;
     const all=saved.events.map(cacheEventToRuntime).filter(e=>e.start);
-    EVENT_CACHE_INFO={source:"localStorage", using:false, generatedAt:saved.ts||0, eventCount:all.length};
-    commitCalendarEvents(all,"localStorage:"+(saved.ts||0));
+    EVENT_CACHE_WINDOW_START=Number(saved.windowStart)||0;
+    EVENT_CACHE_WINDOW_END=Number(saved.windowEnd)||0;
+    EVENT_CACHE_INFO={source:"localStorage",using:false,generatedAt:savedAt,eventCount:all.length,
+      schema:Number(saved.schema)||1,cacheVersion:Number(saved.cacheVersion)||0,
+      cacheFingerprint:String(saved.cacheFingerprint||""),windowStart:EVENT_CACHE_WINDOW_START,windowEnd:EVENT_CACHE_WINDOW_END};
+    commitCalendarEvents(all,"localStorage:"+savedAt,{persist:false,source:"last-known"});
     return true;
   }catch(_){ return false; }
 }

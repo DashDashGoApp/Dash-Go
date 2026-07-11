@@ -1,0 +1,12 @@
+[
+  {
+    "name": "revision-duration-cancelled",
+    "ics": "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:rev\nSEQUENCE:1\nDTSTART:20260712T090000Z\nSUMMARY:Old\nEND:VEVENT\nBEGIN:VEVENT\nUID:rev\nSEQUENCE:2\nDTSTART:20260712T090000Z\nDURATION:PT90M\nSUMMARY:New\nEND:VEVENT\nBEGIN:VEVENT\nUID:gone\nSTATUS:CANCELLED\nDTSTART:20260712T100000Z\nSUMMARY:Gone\nEND:VEVENT\nEND:VCALENDAR\n",
+    "expected": {"count": 1, "titles": ["New"], "durationsMs": [5400000], "skipCount": 0}
+  },
+  {
+    "name": "weekly-cancelled-override",
+    "ics": "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:series\nDTSTART:20260706T090000Z\nRRULE:FREQ=WEEKLY;COUNT=3\nSUMMARY:Series\nEND:VEVENT\nBEGIN:VEVENT\nUID:series\nRECURRENCE-ID:20260713T090000Z\nSTATUS:CANCELLED\nDTSTART:20260713T090000Z\nSUMMARY:Cancelled\nEND:VEVENT\nEND:VCALENDAR\n",
+    "expected": {"count": 1, "titles": ["Series"], "durationsMs": [0], "skipCount": 1}
+  }
+]

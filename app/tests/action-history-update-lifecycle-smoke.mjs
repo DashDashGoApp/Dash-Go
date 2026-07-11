@@ -8,7 +8,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=rel=>fs.readFileSync(path.join(root,rel),"utf8");
 const ui=read("ui/js/control-cache.js");
 const history=read("cmd/dashboard-control-server/action_history.go");
-const route=read("cmd/dashboard-control-server/http_routes_post.go");
+const route=read("cmd/dashboard-control-server/http_routes_post_operations.go");
 const runner=read("bin/dashboard-update-runner.sh");
 
 assert.match(ui,/state==="rolledback"\) return "Rolled back"/,"Recent Actions must name a verified rollback");

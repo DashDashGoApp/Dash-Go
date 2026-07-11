@@ -17,6 +17,7 @@ const (
 	RefreshLowQuotaMinimumMinutes = weatherRefreshLowQuotaMinimumMinutes
 )
 
+func (s *Service) AQI(ctx context.Context) map[string]any            { return s.aqiPayload(ctx) }
 func (s *Service) Payload() any                                      { return s.weatherPayload() }
 func (s *Service) Fetch(ctx context.Context) (map[string]any, error) { return s.fetchGoWeather(ctx) }
 func (s *Service) RefreshLive(ctx context.Context) (map[string]any, error) {

@@ -15,6 +15,13 @@ func cliUsage(stderr io.Writer) int {
 	return 64
 }
 
+func enabledDisabled(enabled bool) string {
+	if enabled {
+		return "enabled"
+	}
+	return "disabled"
+}
+
 func cliFlag(args []string, name string) string {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == name {
@@ -35,7 +42,7 @@ func (s *Service) RunCLIWithIO(command string, args []string, stdin io.Reader, s
 	switch command {
 	case "--apprise-status":
 		routes := s.Routes()
-		fmt.Fprintf(stdout, "Apprise-Go external delivery: %s\n", map[bool]string{true: "enabled", false: "disabled"}[routes.Enabled])
+		fmt.Fprintf(stdout, "Apprise-Go external delivery: %s\n", enabledDisabled(routes.Enabled))
 		for _, person := range s.ConfiguredPeople() {
 			state := "not configured"
 			if person.Configured {
@@ -125,7 +132,7 @@ func (s *Service) RunCLIWithIO(command string, args []string, stdin io.Reader, s
 			fmt.Fprintln(stderr, "could not update Apprise delivery state")
 			return 1
 		}
-		fmt.Fprintf(stdout, "Apprise external delivery %s.\n", map[bool]string{true: "enabled", false: "disabled"}[store.Enabled])
+		fmt.Fprintf(stdout, "Apprise external delivery %s.\n", enabledDisabled(store.Enabled))
 		return 0
 	case "--apprise-remove-orphaned-routes":
 		removed, err := s.RemoveOrphanRoutes()

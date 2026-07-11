@@ -149,10 +149,17 @@ function appendWeatherSourceNotes(body,i){
   card.appendChild(el("div","wxsourcehead","Source notes"));
   for(const note of notes){
     const r=el("div","row wxnoterow");
-    r.innerHTML=`<span>${escapeHTML(note)}</span><span></span>`;
+    r.append(el("span",null,note),el("span"));
     card.appendChild(r);
   }
   body.appendChild(card);
+}
+function renderWeatherSourceLine(line,label,state,meta,detail){
+  const top=el("div","wxsourcecardtop");
+  top.append(el("b",null,label),el("strong",null,state));
+  const bottom=el("div","wxsourcecardmeta");
+  bottom.append(el("span",null,meta),el("span",null,detail));
+  line.append(top,bottom);
 }
 function appendWeatherSourceDetails(body,i){
   if(typeof weatherSourceRowsForDay!=="function") return;
@@ -184,10 +191,10 @@ function appendWeatherSourceDetails(body,i){
       const state=src.disabled?"Excluded":"Unavailable";
       const detail=src.disabled?"double-tap to include":(src.error||"No response");
       const health=weatherSourceHealthText(src.status);
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${state}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>${escapeHTML(detail)}</span></div>`;
+      renderWeatherSourceLine(line,src.label,state,[src.tier,health].filter(Boolean).join(" · "),detail);
     }else if(src.disabled){
       const health=weatherSourceHealthText(src.status);
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>Excluded</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>double-tap to include</span></div>`;
+      renderWeatherSourceLine(line,src.label,"Excluded",[src.tier,health].filter(Boolean).join(" · "),"double-tap to include");
     }else{
       const hi=idx>=0&&dsrc.temperature_2m_max?wxNum(dsrc.temperature_2m_max[idx],1)+"°":"—";
       const lo=idx>=0&&dsrc.temperature_2m_min?wxNum(dsrc.temperature_2m_min[idx],1)+"°":"—";
@@ -196,7 +203,7 @@ function appendWeatherSourceDetails(body,i){
       const wind=idx>=0&&dsrc.wind_speed_10m_max&&dsrc.wind_speed_10m_max[idx]!=null?wxNum(dsrc.wind_speed_10m_max[idx],1)+" "+CONFIG.windUnit:"—";
       const uv=weatherSourceUvText(dsrc,idx);
       const health=weatherSourceHealthText(src.status);
-      line.innerHTML=`<div class="wxsourcecardtop"><b>${escapeHTML(src.label)}</b><strong>${hi} / ${lo}</strong></div><div class="wxsourcecardmeta"><span>${escapeHTML([src.tier,health].filter(Boolean).join(" · "))}</span><span>rain ${pp} · total ${total} · wind ${wind} · ${uv}</span></div>`;
+      renderWeatherSourceLine(line,src.label,hi+" / "+lo,[src.tier,health].filter(Boolean).join(" · "),"rain "+pp+" · total "+total+" · wind "+wind+" · "+uv);
     }
     const toggle=()=>{
       if(typeof toggleWeatherSourceDisabled!=="function") return;
@@ -261,7 +268,7 @@ function appendWeatherHourlySection(body,dateStr){
   const rows=el("div","wxhourrows");
   h.appendChild(rows);
   const render=(expanded)=>{
-    rows.innerHTML="";
+    rows.replaceChildren();
     const show=expanded?idxs:compactHourlyIndexes(idxs);
     applyWeatherHourlyColumnOrder(rows,show.length);
     for(const j of show){
@@ -272,7 +279,8 @@ function appendWeatherHourlySection(body,dateStr){
       const ppRaw=Array.isArray(WX.hourly.precipitation_probability)?WX.hourly.precipitation_probability[j]:null;
       const pp=ppRaw==null?"":wxPercent(ppRaw);
       const ppClass=Number(ppRaw)>=10?" wxhourprecip-on":"";
-      r.innerHTML=`<span class="wxhourtime">${hr}</span><span class="wxhouricon">${hic}</span><span class="wxhourtemp">${temp}</span><span class="wxhourprecip${ppClass}">${pp}</span>`;
+      const icon=el("span","wxhouricon"); icon.innerHTML=hic;
+      r.append(el("span","wxhourtime",hr),icon,el("span","wxhourtemp",temp),el("span","wxhourprecip"+ppClass,pp));
       rows.appendChild(r);
     }
   };
@@ -305,10 +313,12 @@ function wxPrecipTotalText(v){
 }
 function wxMetricCard(row){
   const r=el("div","row wxsummaryrow"+(row.extraClass?" "+row.extraClass:""));
-  const label=escapeHTML(String(row.label==null?"":row.label));
-  const value=escapeHTML(String(row.value==null?"":row.value));
-  const unit=escapeHTML(String(row.unit==null?"":row.unit));
-  r.innerHTML=`${wxMetricIcon(row.key)}<span class="wxsummarylabel">${label}</span><span class="wxsummaryvalue${row.valueClass?" "+row.valueClass:""}">${value}</span><span class="wxsummaryunit${row.unitClass?" "+row.unitClass:""}">${unit}</span>`;
+  r.innerHTML=wxMetricIcon(row.key);
+  r.append(
+    el("span","wxsummarylabel",String(row.label==null?"":row.label)),
+    el("span","wxsummaryvalue"+(row.valueClass?" "+row.valueClass:""),String(row.value==null?"":row.value)),
+    el("span","wxsummaryunit"+(row.unitClass?" "+row.unitClass:""),String(row.unit==null?"":row.unit))
+  );
   return r;
 }
 
@@ -333,8 +343,11 @@ function showWxDayPopup(i){
   const d=WX.daily, day=new Date(d.time[i]+"T00:00");
   $("#poptitle").textContent=FMT.dayLong.format(day);
   const [desc,ic]=wmo(d.weather_code[i]);
-  $("#popwhen").innerHTML=`<span style="display:inline-flex;align-items:center;gap:8px"><span style="font-size:30px;line-height:1">${ic}</span>${desc}</span>`;
-  const body=$("#popbody"); body.innerHTML="";
+  const when=$("#popwhen"), whenRow=el("span");
+  whenRow.style.cssText="display:inline-flex;align-items:center;gap:8px";
+  const whenIcon=el("span"); whenIcon.style.cssText="font-size:30px;line-height:1"; whenIcon.innerHTML=ic;
+  whenRow.append(whenIcon,document.createTextNode(desc)); when.replaceChildren(whenRow);
+  const body=$("#popbody"); body.replaceChildren();
   const high=Array.isArray(d.temperature_2m_max)?wxDegree(d.temperature_2m_max[i]):"—";
   const low=Array.isArray(d.temperature_2m_min)?wxDegree(d.temperature_2m_min[i]):"—";
   const feels=Array.isArray(d.apparent_temperature_max)?wxDegree(d.apparent_temperature_max[i]):"—";
@@ -346,9 +359,10 @@ function showWxDayPopup(i){
   const sunrise=d.sunrise?wxTimeOnly(d.sunrise[i]):["—",""];
   const sunset=d.sunset?wxTimeOnly(d.sunset[i]):["—",""];
 
-  const hero=el("div","wxhero");
-  hero.innerHTML=`<div class="wxherotemps"><span class="wxherohigh">${high}</span><span class="wxherolow">/ ${low}</span></div><div class="wxherometa"><span>High / low</span><span>Feels up to ${feels}</span></div>`;
-  body.appendChild(hero);
+  const hero=el("div","wxhero"), heroTemps=el("div","wxherotemps"), heroMeta=el("div","wxherometa");
+  heroTemps.append(el("span","wxherohigh",high),el("span","wxherolow","/ "+low));
+  heroMeta.append(el("span",null,"High / low"),el("span",null,"Feels up to "+feels));
+  hero.append(heroTemps,heroMeta); body.appendChild(hero);
 
   const rows=[
     {key:"precipTotal",label:"Precip",value:precipChance,unit:precipTotal},

@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "version": "1.5.10-beta.5",
+  "requiredSourceFeatures": [
+    "scoped-settings-invalidation-v1",
+    "focused-jsonv2-gate-v1",
+    "typed-json-boundaries-v1",
+    "server-aqi-cache-v1",
+    "same-origin-weather-boundary-v1",
+    "nonblocking-aqi-status-v1",
+    "partial-weather-provider-results-v1",
+    "provider-location-cache-v1",
+    "canonical-weather-provider-cache-v1",
+    "calendar-source-diagnostics-v1",
+    "calendar-snapshot-v2",
+    "calendar-parser-parity-v1",
+    "calendar-periodic-rehash-v1",
+    "operation-limiter-post-validation-v1",
+    "security-host-policy-v2",
+    "rooted-static-serving-v1",
+    "narrowed-csp-v1",
+    "data-bearing-innerhtml-hardening-v1",
+    "seasonal-decor-clearance-v1",
+    "display-sleep-state-machine-v2",
+    "route-domain-split-v1",
+    "pin-guidance-v1",
+    "sha256-local-identifiers-v1",
+    "repository-source-handoff-v2"
+  ]
+}

@@ -115,7 +115,7 @@ function renderPinForm(wrap,mode,status){
   const title = mode==="remove" ? "Remove PIN protection" : (mode==="change" ? "Change PIN" : "Set PIN");
   wrap.appendChild(ctrlStateCard(mode==="remove"?"warn":"info",title,
     mode==="remove" ? "Removing the PIN makes Dashboard Control and the saved chalkboard available without unlocking." :
-    "Use 4–8 digits. The PIN is hashed on the dashboard and is not stored as plain text."));
+    "Existing 4-digit PINs remain supported. For a new PIN, use 6–8 digits when practical. The PIN is hashed on the dashboard and is not stored as plain text."));
   const fields = mode==="set"
     ? [{k:"pin",label:"New PIN"},{k:"confirm",label:"Confirm PIN"}]
     : (mode==="remove" ? [{k:"currentPin",label:"Current PIN"}] :

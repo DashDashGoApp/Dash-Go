@@ -27,10 +27,24 @@ func (d icsDuration) addTo(start time.Time) time.Time {
 	return start.AddDate(0, 0, d.days).Add(d.clock)
 }
 
+type parseICSDiagnostics struct {
+	ComponentsFound      int
+	EventsAccepted       int
+	InvalidEventsDropped int
+	CancelledEvents      int
+	SupersededRevisions  int
+}
+
 func parseICS(text string, cal CalendarSource) []ICSEvent {
+	events, _ := parseICSWithDiagnostics(text, cal)
+	return events
+}
+
+func parseICSWithDiagnostics(text string, cal CalendarSource) ([]ICSEvent, parseICSDiagnostics) {
 	lines := unfoldICS(text)
 	zones := parseVTimezones(lines)
 	events := []ICSEvent{}
+	diagnostics := parseICSDiagnostics{}
 	var props []icsProperty
 	inEvent := false
 	for _, line := range lines {
@@ -43,8 +57,11 @@ func parseICS(text string, cal CalendarSource) []ICSEvent {
 			inEvent, props = true, nil
 		case name == "END" && strings.EqualFold(value, "VEVENT"):
 			if inEvent {
+				diagnostics.ComponentsFound++
 				if event, ok := parseICSEvent(props, cal, zones); ok {
 					events = append(events, event)
+				} else {
+					diagnostics.InvalidEventsDropped++
 				}
 			}
 			inEvent, props = false, nil
@@ -52,9 +69,14 @@ func parseICS(text string, cal CalendarSource) []ICSEvent {
 			props = append(props, icsProperty{name: name, params: params, value: value})
 		}
 	}
+	beforeReconcile := len(events)
 	events = reconcileEventRevisions(events)
+	diagnostics.SupersededRevisions = beforeReconcile - len(events)
 	cancelledMasters := map[string]bool{}
 	for _, event := range events {
+		if event.Cancelled {
+			diagnostics.CancelledEvents++
+		}
 		if event.Cancelled && event.UID != "" && event.RecurID == nil {
 			cancelledMasters[event.UID] = true
 		}
@@ -67,7 +89,8 @@ func parseICS(text string, cal CalendarSource) []ICSEvent {
 			out = append(out, event)
 		}
 	}
-	return out
+	diagnostics.EventsAccepted = len(out)
+	return out, diagnostics
 }
 
 func parseICSEvent(props []icsProperty, cal CalendarSource, zones map[string]*calendarZone) (ICSEvent, bool) {

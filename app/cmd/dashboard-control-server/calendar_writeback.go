@@ -133,7 +133,11 @@ func (a *app) configureCalendarWriteback(body map[string]any) (map[string]any, e
 	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
-	a.recordAction("calendars", "Configure calendar edits", "success", fmt.Sprintf("%d registered calendar(s) · %s", len(status.Calendars), map[bool]string{true: "enabled", false: "disabled"}[status.Enabled]), nil)
+	state := "disabled"
+	if status.Enabled {
+		state = "enabled"
+	}
+	a.recordAction("calendars", "Configure calendar edits", "success", fmt.Sprintf("%d registered calendar(s) · %s", len(status.Calendars), state), nil)
 	return a.calendarWritebackStatus(), nil
 }
 

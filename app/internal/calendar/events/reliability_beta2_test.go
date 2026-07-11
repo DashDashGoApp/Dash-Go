@@ -104,3 +104,44 @@ func TestSerializedEventIdentityDoesNotDependOnEmissionOrder(t *testing.T) {
 		t.Fatalf("ids=%#v / %#v", first["id"], second["id"])
 	}
 }
+
+func TestSourceMetaPeriodicallyRehashesSameStatIdentity(t *testing.T) {
+	root := t.TempDir()
+	calDir := filepath.Join(root, "calendars")
+	if err := os.MkdirAll(calDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	s := New(ServiceConfig{
+		DashDir:     root,
+		CalendarDir: calDir,
+		CacheDir:    filepath.Join(root, "cache"),
+		Now:         func() time.Time { return now },
+	})
+	path := filepath.Join(calDir, "digest.ics")
+	if err := os.WriteFile(path, []byte("first"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := s.sourceMeta("calendars/digest.ics", "Digest", "", "", "", path, nil)
+	if first.SHA256 == nil || first.HashedAt == nil {
+		t.Fatalf("first metadata=%#v", first)
+	}
+	if err := os.WriteFile(path, []byte("other"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(25 * time.Hour)
+	second := s.sourceMeta("calendars/digest.ics", "Digest", "", "", "", path, &first)
+	if second.SHA256 == nil || *second.SHA256 == *first.SHA256 {
+		t.Fatalf("periodic rehash did not detect same-size, same-mtime replacement: first=%#v second=%#v", first, second)
+	}
+	if second.HashedAt == nil || *second.HashedAt <= *first.HashedAt {
+		t.Fatalf("periodic rehash timestamp did not advance: first=%#v second=%#v", first.HashedAt, second.HashedAt)
+	}
+}

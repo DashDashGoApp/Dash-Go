@@ -15,7 +15,7 @@ function renderCtrlDashboardDisplay(){
   const group=actionGroup("Clock & footer","Always-visible dashboard choices.","displaygroup grid-3-provider");
   group.grid.append(
     caction(`Time: ${CONFIG.clock24?"24-hour":"12-hour"}`,"Clock format","",()=>{CONFIG.clock24=!CONFIG.clock24;buildFormatters();_clockEls=null;tickClock();if(typeof armClockTimer==="function")armClockTimer();renderWeather();renderCalendar();renderAgenda();postSettings();renderCtrlDashboardDisplay();}),
-    caction(`Temperature: ${CONFIG.tempUnit==="celsius"?"°C":"°F"}`,"Weather units","",()=>{CONFIG.tempUnit=CONFIG.tempUnit==="celsius"?"fahrenheit":"celsius";loadWeather();postSettings();renderCtrlDashboardDisplay();}),
+    caction(`Temperature: ${CONFIG.tempUnit==="celsius"?"°C":"°F"}`,"Weather units","",async()=>{const prior=CONFIG.tempUnit;CONFIG.tempUnit=prior==="celsius"?"fahrenheit":"celsius";if(!await postSettings()){CONFIG.tempUnit=prior;ctrlMsg("Could not save weather units.");}else await loadWeather();renderCtrlDashboardDisplay();}),
     caction(`Clock seconds: ${secondsOn?"On":"Off"}`,"Show seconds in the large clock.",secondsOn?"on":"",async()=>{try{await ctrlSaveProfileOwned("showSeconds",!secondsOn,"Clock seconds","dashboarddisplay");renderCtrlDashboardDisplay();}catch(e){ctrlMsg("Could not change Clock seconds: "+(e.message||String(e)));renderCtrlDashboardDisplay();}})
   );wrap.appendChild(group.group);
 }
@@ -46,7 +46,11 @@ async function renderCtrlWeatherAlerts(){
   banner.grid.append(caction(mute.title,mute.detail,!alertsMuted()?"on":"",()=>{SETTINGS.alertsMutedUntil=alertsMuted()?0:Date.now()+12*3600*1000;renderAlerts();applyNightDim();postSettings();renderCtrlWeatherAlerts();}),caction("Preview alert","Show a local banner without fetching or muting.","",()=>{if(typeof previewAlertBanner==="function")previewAlertBanner();}));frag.appendChild(banner.group);
   const detailMode=CONFIG.weatherDetailMode==="standard"?"standard":"expanded";
   const extras=actionGroup("Current-weather details","Standard keeps the forecast compact. Expanded adds UV and air quality when available.","displaygroup grid-2-feature");
-  const setMode=mode=>{if(mode===detailMode)return;CONFIG.weatherDetailMode=mode;CONFIG.showUV=mode==="expanded";CONFIG.showAQI=mode==="expanded";renderWeather();postSettings();renderCtrlWeatherAlerts();};
+  const setMode=async mode=>{if(mode===detailMode)return;const prior=CONFIG.weatherDetailMode;CONFIG.weatherDetailMode=mode;CONFIG.showUV=mode==="expanded";CONFIG.showAQI=mode==="expanded";if(!await postSettings()){CONFIG.weatherDetailMode=prior;CONFIG.showUV=prior==="expanded";CONFIG.showAQI=prior==="expanded";ctrlMsg("Could not save current-weather details.");}else{renderWeather();if(mode==="expanded")refreshAQINonblocking(0);}await renderCtrlWeatherAlerts();};
   extras.grid.append(caction("Standard","Temperature and conditions only",detailMode==="standard"?"on":"",()=>setMode("standard")),caction("Expanded","Adds UV and air quality",detailMode==="expanded"?"on":"",()=>setMode("expanded")));frag.appendChild(extras.group);
+  const privateEndpoint=actionGroup("Custom endpoint security","Private Open-Meteo-compatible endpoints are blocked unless you deliberately allow RFC1918 or IPv6 ULA destinations. Loopback, link-local, metadata, CGNAT, and special-use ranges remain blocked.","displaygroup grid-1-feature");
+  const privateOn=!!SETTINGS.allowPrivateWxApi;
+  privateEndpoint.grid.append(caction(`Private custom endpoint: ${privateOn?"Allowed":"Blocked"}`,privateOn?"HTTP and private-address custom endpoints are enabled.":"Only public HTTPS custom endpoints are accepted.",privateOn?"on":"",async()=>{try{await ctrlSaveProfileOwned("allowPrivateWxApi",!privateOn,"Private custom Weather endpoint","weatheralerts");await renderCtrlWeatherAlerts();}catch(e){ctrlMsg("Could not change custom endpoint access: "+(e.message||String(e)));await renderCtrlWeatherAlerts();}}));
+  frag.appendChild(privateEndpoint.group);
   wrap.replaceChildren(frag);
 }

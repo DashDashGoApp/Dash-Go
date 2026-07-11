@@ -1,3 +1,88 @@
+## [1.5.10-beta.5] — 2026-07-11
+
+Dash-Go 1.5.10-beta.5 is a stable-readiness correction for the independent beta.4 review. It retains the complete reconstructed beta feature set while closing the remaining display-wake, outbound-network, user-facing wording, and source-handoff contract gaps.
+
+### Bug fixes
+
+- Replaced the display-sleep boolean shortcut with a success-based state machine. Failed screen-off requests no longer suppress visible dashboard work, and disabling the schedule wakes the display and clears deferred sleep state.
+- Routed manual wake, scheduled wake, physical touch/pointer/keyboard wake, and visibility return through one bounded reconciliation path so Calendar, Agenda, Weather, stale state, night dimming, pixel shift, and theme state catch up once after wake.
+- Added request-serial protection and a corrective screen-on request when user input races an in-flight automatic screen-off command.
+- Corrected all Seasonal Décor option summaries to describe both empty days and event days with measured clear space.
+
+### Security
+
+- Expanded custom Weather endpoint denial to cover deprecated relay, protocol-assignment, translation, tunneling, benchmarking, documentation, site-local, multicast, and other special-purpose IPv4/IPv6 ranges.
+- Blocked well-known and local-use NAT64 prefixes, 6to4, IPv4-compatible IPv6, and IPv4-mapped link-local/metadata representations even when private custom endpoints are explicitly enabled.
+- Kept private endpoint opt-in limited to RFC1918 and IPv6 ULA destinations; loopback, link-local, metadata, CGNAT, translation, benchmark, documentation, and infrastructure-only ranges remain denied.
+
+### Build and release integrity
+
+- Advanced the source-feature contract to behavior-backed `display-sleep-state-machine-v2` and `security-host-policy-v2` requirements and added direct lifecycle and exact address-matrix tests.
+- Established the repository-ready source handoff as the single authoritative layout: root maintainer documentation and CI workflow travel with `app/` and `installer/`, while `AI.md`, generated bundles, binaries, mutable data, release artifacts, and builder tools remain excluded.
+- Added an extracted-tree source-handoff layout smoke so the Local Builder and public-source workflow validate the same archive shape.
+
+### Upgrade notes
+
+- No settings or user data migration is required. Existing display schedules and private custom Weather endpoint choices remain valid under the stricter safety policy.
+- A private endpoint that resolves through translation, tunneling, documentation, or other special-purpose space is intentionally rejected; use a direct RFC1918 or ULA address only when the advanced private-endpoint opt-in is enabled.
+
+## [1.5.10-beta.4] — 2026-07-11
+
+Dash-Go 1.5.10-beta.4 reconstructs the complete intended 1.5.10 beta source line and corrects the release-blocking findings from the beta.3 deep review. It preserves the dashboard's visible layout and normal workflows while restoring missing beta.1 and beta.2 reliability work, tightening security boundaries, and adding a source-owned lineage contract so accepted changes cannot silently disappear from a later handoff.
+
+### Improvements
+
+- Restored patch-aware Dashboard settings invalidation so narrow changes update only the Calendar, Agenda, Weather, alerts, clock, app launcher, or geometry surfaces they actually affect.
+- Restored typed closed JSON boundaries for Microsoft To Do due-date and body payloads, deterministic Weather cache-key structures, `omitzero` coverage, and exact semantic/byte compatibility tests.
+- Added per-source Calendar diagnostics for components found, accepted and dropped events, cancellations, superseded revisions, expanded occurrences, parse duration, and source errors without changing the normal Calendar display.
+- Added an explicit advanced setting for private custom Open-Meteo endpoints while keeping public-mode destinations restricted to globally routable addresses.
+- Updated new-PIN guidance to recommend six to eight digits while continuing to accept and verify existing four-digit PINs.
+- Corrected the seasonal décor description to state that accents may use empty days or event days with measured clear space.
+
+### Bug fixes
+
+- Prevented a last-known Calendar snapshot from renewing its own timestamp merely because it was displayed during an offline or failed-source boot; only newly retrieved Calendar data now replaces the durable snapshot.
+- Advanced the browser Calendar snapshot to a versioned schema containing truthful save time, cache version and fingerprint, covered window, and event data while retaining immediate last-known rendering.
+- Moved expensive-operation limiting behind authentication and request validation so malformed, unauthorized, or semantically invalid local requests cannot consume a legitimate update, backup, restore, diagnostics, Weather, or Calendar cooldown.
+- Replaced browser-direct Weather provider fallback with a same-origin Dash-Go boundary, preserving last-known display while ensuring custom hosts, secrets, timeouts, response limits, redirects, and address policy stay server-controlled.
+- Made AQI nonblocking: forecast data paints without waiting for air-quality retrieval, then a bounded same-origin status follow-up adds AQI promptly when the server cache completes.
+- Corrected guarded Weather dialing to try each already-validated IPv4 and IPv6 address within the request deadline instead of failing when only the first DNS answer is unreachable.
+- Expanded outbound destination classification to reject CGNAT, protocol-assignment, benchmark, documentation, metadata-adjacent, multicast, unspecified, loopback, and link-local ranges, including IPv4-mapped IPv6 forms.
+- Replaced the remaining map-cache `http.ServeFile` path with rooted file access and `ServeContent`, keeping the same map image behavior without a second static-file security model.
+- Added defensive clock/date element guards so optional or partial browser shells cannot throw during initialization.
+- Corrected Weather unit and detail-mode controls to save settings before requesting fresh same-origin data, with UI rollback when saving fails.
+- Added periodic Calendar source rehashing so a same-size file replacement with preserved modification time cannot retain a stale digest indefinitely.
+
+### Performance and reliability
+
+- Restored server-cached AQI, parallel multi-call Weather provider work, partial-result preservation, and stable NWS grid and AccuWeather location-key caches.
+- Preserved successful daily or current Weather data when another call for the same provider fails, with explicit `_partial`, `_available`, and bounded error metadata.
+- Normalized provider caches to Celsius, metres per second, and millimetres so display-unit changes are immediate, work offline, and do not trigger unnecessary provider requests.
+- Deferred minute-level visual writes while the display is asleep and performs one reconciliation pass on wake, while retaining date rollover and sleep-state correctness.
+- Reworked system diagnostics to avoid login-shell startup, stage bounded probes, and keep disk sizing low priority without changing the returned diagnostic fields.
+- Replaced local SHA-1 identifiers with versioned SHA-256 identifiers, intentionally advancing Calendar cache and fingerprint versions for one safe automatic rebuild.
+
+### Security
+
+- Tightened mutating API fetch metadata so browser POST requests require `same-origin` while retaining headerless local administration tools and safe navigation semantics for GET requests.
+- Narrowed Content Security Policy network and image destinations to same-origin plus the specifically supported map, radar, and optional configured custom-host routes.
+- Replaced data-bearing Weather and Calendar `innerHTML` writes with text and DOM property updates while retaining reviewed internal SVG constants.
+- Kept custom Weather redirects same-host and bounded, validated every literal dial address before use, and preserved private-network access only through the explicit opt-in.
+
+### Build and release integrity
+
+- Added `release/source-features.json` and a source smoke that pins 23 accepted beta capabilities to concrete behavior or source structure, preventing a later handoff from claiming the beta lineage while omitting restored work.
+- Added the focused `GOEXPERIMENT=jsonv2` source lane, shared Go/browser ICS parity fixtures, typed JSON golden tests, operation-cooldown abuse tests, outbound-network policy tests, rooted-serving checks, CSP checks, and Calendar rehash coverage.
+- Split oversized Weather, Calendar serialization, and POST-route sources by responsibility to remain within the project navigability limits without compatibility shims or cosmetic guard bypasses.
+- Kept generated JavaScript/CSS bundles, compiled binaries, package metadata, checksums, catalogs, and final archives under the authoritative local builder rather than embedding them in this source handoff.
+
+### Upgrade notes
+
+- Existing settings, calendars, provider configuration, private-calendar mappings, local apps, and four-digit PINs remain compatible.
+- Calendar event caches rebuild automatically for cache schema 11 and fingerprint version 9; last-known browser snapshots migrate to schema 2 after the next successful current-data load.
+- Existing Weather provider caches remain readable where compatible and are naturally refreshed into canonical-unit entries; changing display units no longer changes the provider cache identity.
+- A legitimate private custom Open-Meteo endpoint must be explicitly enabled in the advanced Weather controls; loopback, link-local, metadata, benchmark, documentation, and other non-user private destinations remain blocked.
+
 ## [1.5.10-beta.3] — 2026-07-11
 
 Dash-Go 1.5.10-beta.3 is a security-hardening follow-up to the Calendar and Weather reliability work. It preserves the optional-PIN appliance model while strengthening the loopback HTTP boundary, static-file confinement, browser isolation, custom Weather networking, and expensive-operation coordination.

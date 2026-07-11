@@ -35,7 +35,13 @@ func weatherProviderCacheKeyGo(id string, cfg Config) string {
 	// Keep the ordinary configuration digest completely independent from the
 	// provider secret. The opaque HMAC marker is appended afterward, so the
 	// secret never flows through a second plain-SHA256 operation.
-	parts := map[string]any{"provider": weatherNormalizeProviderIDGo(id), "lat": cfg.Lat, "lon": cfg.Lon, "tempUnit": cfg.TempUnit, "windUnit": cfg.WindUnit, "days": cfg.Days, "wxApi": cfg.WxAPI}
+	parts := struct {
+		Provider string  `json:"provider"`
+		Lat      float64 `json:"lat"`
+		Lon      float64 `json:"lon"`
+		Days     int     `json:"days"`
+		WxAPI    string  `json:"wxApi"`
+	}{weatherNormalizeProviderIDGo(id), cfg.Lat, cfg.Lon, cfg.Days, cfg.WxAPI}
 	b, _ := json.Marshal(parts)
 	sum := sha256.Sum256(b)
 	base := hex.EncodeToString(sum[:])

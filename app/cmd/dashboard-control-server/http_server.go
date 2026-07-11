@@ -11,8 +11,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
 const (
@@ -51,14 +54,6 @@ func (a *app) requireLoopback(next http.HandlerFunc) http.HandlerFunc {
 		if !a.sameOriginAPIRequest(r) {
 			a.err(w, "same-origin API requests only", http.StatusForbidden)
 			return
-		}
-		if r.Method == http.MethodPost && a.operationLimiter != nil {
-			done, wait, ok := a.operationLimiter.begin(r.URL.Path)
-			if !ok {
-				writeRateLimited(w, wait)
-				return
-			}
-			defer done()
 		}
 		next(w, r)
 	}
@@ -138,6 +133,9 @@ func (a *app) sameOriginAPIRequest(r *http.Request) bool {
 		}
 	}
 	site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+	if r.Method == http.MethodPost {
+		return site == "" || site == "same-origin"
+	}
 	return site == "" || site == "same-origin" || site == "none"
 }
 
@@ -261,14 +259,32 @@ func staticPrivatePath(rel string) bool {
 		rel == "cache/dashboard-diagnostics.zip"
 }
 
-func dashboardSecurityHeaders(next http.Handler) http.Handler {
+func (a *app) dashboardContentSecurityPolicy() string {
+	imageSources := []string{"'self'", "data:", "blob:", "https://tile.openstreetmap.org", "https://opengeo.ncep.noaa.gov", "https://rainviewer.com", "https://*.rainviewer.com"}
+	settings := a.loadSettings()
+	for _, key := range []string{"radarCustomTiles", "radarCustomWms"} {
+		raw := strings.TrimSpace(jsonutil.StringValue(settings[key]))
+		u, err := url.Parse(raw)
+		if err != nil || !strings.EqualFold(u.Scheme, "https") || u.User != nil || u.Host == "" {
+			continue
+		}
+		source := "https://" + strings.ToLower(u.Host)
+		if !slices.Contains(imageSources, source) {
+			imageSources = append(imageSources, source)
+		}
+	}
+	slices.Sort(imageSources[3:])
+	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src " + strings.Join(imageSources, " ") + "; connect-src 'self' https://api.rainviewer.com; frame-src https://maps.google.com; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+}
+
+func (a *app) dashboardSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		h.Set("Content-Security-Policy", a.dashboardContentSecurityPolicy())
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
@@ -366,7 +382,7 @@ func (a *app) httpServer(addr string) *http.Server {
 		}
 		base.ServeHTTP(w, r)
 	})
-	handler := dashboardSecurityHeaders(hostChecked)
+	handler := a.dashboardSecurityHeaders(hostChecked)
 	return &http.Server{
 		Addr:              addr,
 		Handler:           handler,

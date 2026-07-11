@@ -53,3 +53,26 @@ func TestAPIAllowsSameOriginBrowserRequest(t *testing.T) {
 		t.Fatalf("same-origin response=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+func TestAPIPostRejectsNavigationFetchSite(t *testing.T) {
+	a := testProfileApp(t)
+	request := postJSONRequest("/api/lock/status", []byte(`{}`))
+	request.Header.Set("Sec-Fetch-Site", "none")
+	response := httptest.NewRecorder()
+	a.handle(response, request)
+	if response.Code != http.StatusForbidden || responseError(t, response) != "same-origin API requests only" {
+		t.Fatalf("navigation-style POST response=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestAPIGetAllowsNavigationFetchSite(t *testing.T) {
+	a := testProfileApp(t)
+	request := httptest.NewRequest(http.MethodGet, "http://dashboard.local/api/lock/status", nil)
+	request.RemoteAddr = "127.0.0.1:12345"
+	request.Header.Set("Sec-Fetch-Site", "none")
+	response := httptest.NewRecorder()
+	a.handle(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("navigation-style GET response=%d body=%s", response.Code, response.Body.String())
+	}
+}

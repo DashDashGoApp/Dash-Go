@@ -6,11 +6,15 @@ async function loadCalendars(){
   const today=startOfDay(new Date());
   const winStart=addDays(startOfWeek(today),-CONFIG.weeksAbove*7);          // DST-safe
   const winEnd=addDays(startOfWeek(today),(CONFIG.weeksBelow+1)*7);
+  EVENT_CACHE_WINDOW_START=+winStart;
+  EVENT_CACHE_WINDOW_END=+winEnd;
   const cachedEvents=await loadEventsCache(winStart,winEnd);
   if(cachedEvents){
     CAL_ISSUES=(EVENT_CACHE_INFO.issues||[]).slice();
     lastCalOK=Date.now();
-    commitCalendarEvents(cachedEvents,"events.cache:"+(EVENT_CACHE_INFO.generatedAt||0));
+    commitCalendarEvents(cachedEvents,"events.cache:"+(EVENT_CACHE_INFO.generatedAt||0),{
+      cacheFingerprint:EVENT_CACHE_INFO.etag||"",windowStart:+winStart,windowEnd:+winEnd
+    });
     maybePrewarmEventMaps(winStart,winEnd);
     return;
   }
@@ -79,7 +83,7 @@ async function loadCalendars(){
   }
   for(const ev of birthdayEvents(winStart,winEnd)) all.push(ev);
   all.sort((a,b)=>a.start-b.start);
-  commitCalendarEvents(all,"ics:"+ACTIVE_CALENDARS.map(c=>[c.url,c.name||"",c.color||"",c.tag||"",c.owner||""].join("|")).join("~"));
+  commitCalendarEvents(all,"ics:"+ACTIVE_CALENDARS.map(c=>[c.url,c.name||"",c.color||"",c.tag||"",c.owner||""].join("|")).join("~"),{windowStart:+winStart,windowEnd:+winEnd});
   maybePrewarmEventMaps(winStart,winEnd);
   } finally {
     loadCalendars._busy=false;

@@ -77,10 +77,10 @@ assert.match(routinePost,/response\["day"\] = routinesDayResponse\(result\.Paylo
 assert.match(familyBoard,/const active=core\.activeOrder\(noteList\(\)\),count=active\.length;/,"Family Board must sort active notes once when accepting state");
 
 const eventCache=read("ui/js/event-cache.js");
-assert.match(eventCache,/function queueLastKnownEventsPersist\(events\)\{[\s\S]*?LAST_KNOWN_EVENTS_PENDING=events;[\s\S]*?if\(LAST_KNOWN_EVENTS_PERSIST_QUEUED\)return;/,
-  "last-known event persistence must coalesce refresh bursts to the latest snapshot");
-assert.match(eventCache,/queueLastKnownEventsPersist\(all\);/,
-  "calendar event commits must defer snapshot serialization through the shared idle queue");
+assert.match(eventCache,/function queueLastKnownEventsPersist\(events,meta\)\{[\s\S]*?LAST_KNOWN_EVENTS_PENDING=\{events,meta:meta\|\|\{\}\};[\s\S]*?if\(LAST_KNOWN_EVENTS_PERSIST_QUEUED\)return;/,
+  "last-known event persistence must coalesce refresh bursts to the latest versioned snapshot");
+assert.match(eventCache,/queueLastKnownEventsPersist\(all,\{/,
+  "calendar event commits must defer versioned snapshot serialization through the shared idle queue");
 const indexHtml=read("index.html");
 assert.match(indexHtml,/<link rel="icon" href="data:,">/,
   "dashboard must suppress the unneeded favicon 404 on kiosk launch");

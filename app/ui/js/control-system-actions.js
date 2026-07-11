@@ -114,7 +114,7 @@ function renderCtrlQuickActions(){
     ctrlMsg("Restarting browser…");try{await api("/api/browser/restart","POST",{});}catch(e){ctrlMsg(e.message);}
   }));
   common.grid.appendChild(caction("Screen off","Blank the display now; touch wakes it.","",async()=>{
-    try{await api("/api/display/off","POST",{});closeCtrl();}catch(e){ctrlMsg(e.message);}
+    try{await requestDisplaySleep();closeCtrl();}catch(e){ctrlMsg(e.message);}
   }));
   ctrlApplyBalancedGridCount(common.grid);
   row.appendChild(common.group);

@@ -8,12 +8,16 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const weather=fs.readFileSync(path.join(root,"ui","js","weather.js"),"utf8");
 const css=fs.readFileSync(path.join(root,"ui","css","dashboard","sidebar-weather-messages.css"),"utf8");
 
-assert.match(weather,/class="sub wx-current-metrics"/,
+assert.match(weather,/metrics=el\("span","sub wx-current-metrics"\)/,
   "current weather details must use a dedicated wrapping metric row");
-assert.match(weather,/class="wx-metric-token wx-feels-token">Feels&nbsp;\$\{Math\.round\(c\.apparent_temperature\)\}°<\/span>/,
-  "feels-like value must remain an atomic metric token");
-assert.match(weather,/class="wx-metric-token wx-wind-token"><span class="wx-metric-sep" aria-hidden="true">·<\/span>\$\{Math\.round\(c\.wind_speed_10m\)\}&nbsp;\$\{CONFIG\.windUnit\}<\/span>/,
-  "wind value and configured unit must be emitted as one atomic token");
+assert.match(weather,/el\("span","wx-metric-token wx-feels-token","Feels "\+Math\.round\(c\.apparent_temperature\)\+"°"\)/,
+  "feels-like value must remain an atomic metric token created as text");
+assert.match(weather,/wind=el\("span","wx-metric-token wx-wind-token"\)/,
+  "wind value and configured unit must remain one atomic token");
+assert.match(weather,/document\.createTextNode\(Math\.round\(c\.wind_speed_10m\)\+" "\+CONFIG\.windUnit\)/,
+  "wind value and configured unit must be emitted through a text node");
+assert.match(weather,/sep\.setAttribute\("aria-hidden","true"\)/,
+  "wind separator must retain its accessibility contract");
 assert.match(css,/#wxnow \.meta \.sub\.wx-current-metrics\{display:flex;flex-wrap:wrap;align-items:baseline;/,
   "current weather metrics must be allowed to wrap between complete tokens");
 assert.match(css,/#wxnow \.wx-metric-token\{display:inline-flex;flex:0 0 auto;align-items:baseline;white-space:nowrap;\}/,

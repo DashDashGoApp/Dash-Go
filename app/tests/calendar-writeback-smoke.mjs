@@ -51,7 +51,7 @@ assert.doesNotMatch(writebackCss,/rgba\(255,255,255,\.14\)/,'writeback press fee
 assert.match(form,/endDisplay\.setDate\(endDisplay\.getDate\(\)-1\)/,'all-day edits must display the inclusive last day of the event');
 assert.match(form,/February 31/,'timed date entry must reject JavaScript date normalization');
 assert.match(form,/showOSKFor/,'writeback fields must use the shared OSK');
-assert.match(cache,/cache\.version!==10/,'cache must reject pre-writeback capability records');
+assert.match(cache,/cache\.version!==11/,'cache must reject pre-writeback capability records');
 assert.match(cache,/writeback:/,'last-known event persistence must retain writeback capability');
 assert.match(routesPublic,/\/api\/calendar\/event\/create[\s\S]*?calendarWritebackRequirePIN/,'create/edit/skip are public only when writeback does not require PIN');
 assert.match(routesPrivate,/\/api\/calendar\/event\/delete/,'delete must remain inside the token-gated calendar route');

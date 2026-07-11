@@ -108,8 +108,14 @@ function boot(){
     const visualMinute=()=>{
       const now=new Date();
       const d=typeof weatherLocalDateKey==="function"?weatherLocalDateKey(now):now.toDateString();
-      if(d!==lastDay){
-        lastDay=d; renderCalendar(); renderAgenda();
+      const dayChanged=d!==lastDay;
+      if(dayChanged) lastDay=d;
+      if(typeof DISPLAY_SLEEPING!=="undefined" && DISPLAY_SLEEPING){
+        if(typeof markDisplaySleepReconcile==="function") markDisplaySleepReconcile();
+        return;
+      }
+      if(dayChanged){
+        renderCalendar(); renderAgenda();
         clearTimeout(loadWeather._timer); loadWeather._retry=0;
         if(!(typeof deferDashboardWork==="function" && deferDashboardWork("weather-day-rollover",loadWeather))) loadWeather();
       }

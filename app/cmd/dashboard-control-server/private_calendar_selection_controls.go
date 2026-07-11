@@ -50,7 +50,11 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 	script := filepath.Join(a.binDir, "private-calendar-selection.sh")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, script, "--activate", candidate.Pair, candidate.RemoteID, candidate.Name, candidate.Color, map[bool]string{true: "1", false: "0"}[editable])
+	editableFlag := "0"
+	if editable {
+		editableFlag = "1"
+	}
+	cmd := exec.CommandContext(ctx, script, "--activate", candidate.Pair, candidate.RemoteID, candidate.Name, candidate.Color, editableFlag)
 	cmd.Env = append(os.Environ(), "DASH="+a.dash, "HOME="+a.home)
 	output, runErr := cmd.CombinedOutput()
 	kind, selection, initial, parseErr := parsePrivateCalendarSelection(string(output))
@@ -78,7 +82,11 @@ func (a *app) activatePrivateCalendar(body map[string]any) (map[string]any, erro
 	} else if editable {
 		a.calendarWritebackService().Record(selection.Source, "syncing", "Selected calendar is active; validating its initial remote sync.")
 	}
-	a.recordAction("calendars", "Select private calendar", "success", fmt.Sprintf("%s added with %s", candidate.Name, map[bool]string{true: "two-way sync", false: "view-only access"}[editable]), nil)
+	accessLabel := "view-only access"
+	if editable {
+		accessLabel = "two-way sync"
+	}
+	a.recordAction("calendars", "Select private calendar", "success", fmt.Sprintf("%s added with %s", candidate.Name, accessLabel), nil)
 	out := a.privateCalendarStatus()
 	out["result"] = kind
 	return out, nil
@@ -111,7 +119,11 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 	// early while it is still within its documented bound.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute+15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, script, "--set-editable", source, map[bool]string{true: "1", false: "0"}[editable])
+	editableFlag := "0"
+	if editable {
+		editableFlag = "1"
+	}
+	cmd := exec.CommandContext(ctx, script, "--set-editable", source, editableFlag)
 	cmd.Env = append(os.Environ(), "DASH="+a.dash, "HOME="+a.home)
 	output, err := cmd.CombinedOutput()
 	if err != nil || !strings.HasPrefix(string(output), "updated\t") {
@@ -129,7 +141,11 @@ func (a *app) setPrivateCalendarEditable(body map[string]any) (map[string]any, e
 	if _, err := a.refreshCurrentEventCache(true); err != nil {
 		return nil, fmt.Errorf("refresh Dashboard event capabilities: %w", err)
 	}
-	a.recordAction("calendars", "Change private calendar access", "success", fmt.Sprintf("%s is now %s", source, map[bool]string{true: "two-way sync", false: "view-only"}[editable]), nil)
+	accessLabel := "view-only"
+	if editable {
+		accessLabel = "two-way sync"
+	}
+	a.recordAction("calendars", "Change private calendar access", "success", fmt.Sprintf("%s is now %s", source, accessLabel), nil)
 	return a.privateCalendarStatus(), nil
 }
 

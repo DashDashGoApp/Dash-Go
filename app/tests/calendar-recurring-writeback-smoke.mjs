@@ -5,7 +5,7 @@ const root=resolve(process.argv[2]||".");
 const read=rel=>readFileSync(resolve(root,rel),"utf8");
 const actions=read("ui/js/calendar-writeback.js");
 const form=read("ui/js/calendar-event-form.js");
-const eventCache=read("internal/calendar/events/cache.go");
+const eventCache=read("internal/calendar/events/cache.go")+read("internal/calendar/events/serialize.go");
 const writer=read("internal/calendar/icalwrite/recurrence_write.go");
 const items=read("internal/calendar/writeback/items.go");
 const routesPublic=read("cmd/dashboard-control-server/http_routes_public_post.go");

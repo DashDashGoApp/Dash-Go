@@ -20,10 +20,12 @@ func (s *Service) Config() Config {
 		WindUnit:          "mph",
 		Days:              16,
 		WxAPI:             "https://api.open-meteo.com",
+		AQAPI:             "https://air-quality-api.open-meteo.com",
 		APIKey:            "",
 		Providers:         []string{"openmeteo"},
 		ProviderKeys:      map[string]string{},
 		AllowPrivateWxAPI: false,
+		CacheDir:          s.cacheDir,
 	}
 	if b, err := os.ReadFile(filepath.Join(s.dash, "ui", "js", "config-defaults.js")); err == nil {
 		txt := string(b)
@@ -32,6 +34,7 @@ func (s *Service) Config() Config {
 		cfg.TempUnit = jsString(txt, "tempUnit", cfg.TempUnit)
 		cfg.WindUnit = jsString(txt, "windUnit", cfg.WindUnit)
 		cfg.WxAPI = jsString(txt, "wxApi", cfg.WxAPI)
+		cfg.AQAPI = jsString(txt, "aqApi", cfg.AQAPI)
 		cfg.APIKey = jsString(txt, "apiKey", cfg.APIKey)
 		mergeStringMap(cfg.ProviderKeys, jsStringMap(txt, "weatherProviderKeys"))
 		cfg.Providers = jsStringArray(txt, "weatherProviders", cfg.Providers)
@@ -43,6 +46,7 @@ func (s *Service) Config() Config {
 		cfg.TempUnit = jsString(txt, "tempUnit", cfg.TempUnit)
 		cfg.WindUnit = jsString(txt, "windUnit", cfg.WindUnit)
 		cfg.WxAPI = jsString(txt, "wxApi", cfg.WxAPI)
+		cfg.AQAPI = jsString(txt, "aqApi", cfg.AQAPI)
 		cfg.APIKey = jsString(txt, "apiKey", cfg.APIKey)
 		mergeStringMap(cfg.ProviderKeys, jsStringMap(txt, "weatherProviderKeys"))
 		cfg.Providers = jsStringArray(txt, "weatherProviders", cfg.Providers)
@@ -72,8 +76,11 @@ func (s *Service) Config() Config {
 			}
 		}
 	}
-	if s := strings.TrimSpace(strOr(settings["wxApi"], "")); s != "" {
-		cfg.WxAPI = s
+	if value := strings.TrimSpace(strOr(settings["wxApi"], "")); value != "" {
+		cfg.WxAPI = value
+	}
+	if value := strings.TrimSpace(strOr(settings["aqApi"], "")); value != "" {
+		cfg.AQAPI = value
 	}
 	if arr, ok := settings["weatherProviders"].([]any); ok && len(arr) > 0 {
 		cfg.Providers = []string{}

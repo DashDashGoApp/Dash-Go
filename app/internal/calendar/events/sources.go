@@ -207,14 +207,20 @@ func (s *Service) sourceMeta(url, name, color, tag, owner, path string, prior *S
 	if abs, err := filepath.Abs(path); err == nil && item.RealPath != "" && abs != item.RealPath {
 		item.IsSymlink = true
 	}
-	if prior != nil && prior.Exists && prior.SHA256 != nil && prior.Size != nil && prior.MtimeNs != nil &&
-		*prior.Size == size && *prior.MtimeNs == mtimeNs && filepath.Clean(prior.RealPath) == filepath.Clean(item.RealPath) {
+	nowMs := s.now().UnixMilli()
+	const fullRehashInterval = int64((24 * time.Hour) / time.Millisecond)
+	if prior != nil && prior.Exists && prior.SHA256 != nil && prior.Size != nil && prior.MtimeNs != nil && prior.HashedAt != nil &&
+		*prior.Size == size && *prior.MtimeNs == mtimeNs && filepath.Clean(prior.RealPath) == filepath.Clean(item.RealPath) &&
+		nowMs-*prior.HashedAt >= 0 && nowMs-*prior.HashedAt < fullRehashInterval {
 		hash := *prior.SHA256
+		hashedAt := *prior.HashedAt
 		item.SHA256 = &hash
+		item.HashedAt = &hashedAt
 		return item
 	}
 	if hash, err := fileHashHex(path, sha256.New()); err == nil {
 		item.SHA256 = &hash
+		item.HashedAt = &nowMs
 	} else {
 		item.HashError = err.Error()
 	}
