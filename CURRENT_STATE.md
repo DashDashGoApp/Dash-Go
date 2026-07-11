@@ -2,45 +2,33 @@
 
 **Dash-Go** is pronounced **“Dash Dash Go.”**
 
-## Current beta release candidate
+## Current stable release candidate
 
-- **Version:** `1.5.10-beta.5`
-- **Track:** beta
-- **Purpose:** Correct the independent beta.4 stable-review blockers while preserving the reconstructed 1.5.10 beta union and its user-visible behavior.
-- **Primary changes:** success-based display sleep state with manual, scheduled, physical-input, failed-request, and request-race recovery; complete special-use and translation-range Weather destination denial; corrected Seasonal Décor option wording; behavioral lineage gates for display wake and outbound policy; and one repository-ready source-handoff contract shared by durable guidance, CI, the Local Builder, and the GitHub Publisher.
-- **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, extract and validate this exact repository-ready source handoff, prove the 24-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical beta proof:** on the Pi kiosk, verify scheduled screen-off, failed/offline screen-off recovery, touch wake, manual wake, scheduled wake, disabling the schedule while asleep, and one dashboard reconciliation after wake.
-- **Compatibility:** existing settings, calendar source files, private-calendar mappings, provider configuration, local app data, four-digit PINs, and the repository-style source workflow remain compatible. No user-visible feature or data format is removed.
-- **Current release boundary:** this is a source candidate only. It is not a deployable release until the local Windows/WSL builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, and final-ZIP gates.
+- **Version:** `1.5.10`
+- **Track:** stable
+- **Promotion basis:** the complete validated `1.5.10-beta.5` source is promoted without runtime feature changes. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** Calendar and Weather correctness and caching; same-origin and outbound-network hardening; truthful last-known data; success-based display sleep and wake reconciliation; scoped frontend invalidation; typed JSON/JSON v2 readiness; Pi Zero 2 W background-work reductions; and source-lineage/repository-handoff assurance.
+- **Required release proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, extract and validate this exact repository-ready stable source handoff, prove the 24-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
+- **Physical stable proof:** on the Pi kiosk, verify scheduled screen-off, failed/offline screen-off recovery, touch wake, manual wake, scheduled wake, disabling the schedule while asleep, one post-wake reconciliation, Weather refresh and AQI behavior, Calendar last-known freshness, and normal Dashboard Control interaction.
+- **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
+- **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
-## Current stable release
+## Current published stable release
 
 - **Version:** `1.5.9`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Promotion basis:** 1.5.9 consolidates the validated 1.5.9 beta line into one stable source contract. The local Windows/WSL builder remains responsible for the final generated bundles, five Linux binaries, package validation, binary-derived SPDX SBOM, checksums, release archives, and publishable GitHub assets.
-- **Required release proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified browser bundles, clear the complete source and Chromium layout gates, derive one matching authenticated module inventory from all five released Linux binaries, and pass installer, package, checksum, SBOM, and final-archive validation. Dash-Go GitHub Publisher 1.4.11 or newer must extract, preview, publish, and verify the exact structured 1.5.9 changelog section.
-- **Compatibility:** existing event-cache metadata is accepted and upgraded after one safe fallback parse. `events.cache.json` and normal browser/API content remain compatible. The service memory setting is a soft Go runtime target rather than a systemd hard limit.
-- **Source-handoff contract:** `app/tests/run-all.sh`, `.github/workflows/verify.yml`, and `RELEASING.md` travel together. `AI.md`, `.git/`, generated bundles, binaries, builder tooling, release artifacts, mutable user data, and credentials remain excluded.
+- **Status:** remains the published stable release until the validated 1.5.10 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
 
-## 1.5.9 stable scope
+## 1.5.10 stable scope
 
-- **Native Showcase contract:** `dashgo-showcase/v1` supplies isolated scenario data, manifest-owned calendars, bounded cache preparation, readiness reporting, package probing, Windows portability, and strict static-data routing while remaining dormant during ordinary Dash-Go operation.
-- **Debian security maintenance:** valid Debian mirrors, proxies, and mirrored archives qualify through current Debian-signed base and `trixie-security` metadata rather than hostname matching. Insecure, wrong-suite, missing-metadata, and incompatible source layouts remain fail-closed; repair is explicit and rollback-safe.
-- **Calendar and weather presentation:** fixed local-calendar labels render correctly in edit flows, and refreshed static calendar décor and weather SVG sets preserve the existing low-power inline-asset model.
-- **Pi performance and durability:** generated JavaScript is minified without binding renames, unchanged event caches use validated metadata instead of full reparsing, compact cache writes are atomic, redundant cache URL churn is removed, and the dashboard service receives a 96 MiB soft Go memory target.
-- **Release assurance:** the source runner, CI workflow, and maintainer instructions travel together; ShellCheck and module-tidy policy are explicit; native Showcase declarations are cross-compiled and probed; SPDX reports modules linked into all five shipped binaries; and GitHub notes are generated from the reviewed stable changelog section.
-
-## 1.5.6 stable highlights
-
-- **Private calendars:** Google, iCloud, and compatible CalDAV connections now use a review-only discovery step followed by explicit exact collection selection. Selected collections are independently display-only or editable, sync serially and at low priority, and retain their own safe status and recovery state.
-- **Two-way event management:** eligible exact private calendars support local-first event creation, editing, deletion, one-occurrence recurrence changes, and constrained simple-series updates. Unsupported provider-managed, attendee, invitation, advanced recurrence, broad-mirror, URL-feed, and generated-calendar cases remain clear read-only flows.
-- **Conflict and recovery safety:** conflicts stop safely, appear in Calendar Manager, and require a PIN-gated one-shot deliberate winner choice for the affected pair. Repair connection performs one targeted discovery/sync for an exact selected pair without broad account changes. Normal configuration never stores a permanent winner.
-- **Update and installer safety:** normal SSH and Dashboard Control updates are strict upgrades only, with successful no-op behavior for equal releases and no downgrade path. Private-calendar setup reports the actual provider/package operation that fails rather than using an unrelated weather probe as an internet test.
-- **Calendar control and visual polish:** Calendar Manager has one continuous scroll surface; event capabilities refresh after edit-state changes; recurring event management is scoped and clear; event forms use Dash-Go-owned calendar selection, touch-safe quick time controls, semantic states, focused keyboard treatment, and theme-consistent recovery/error surfaces.
-- **Pi appliance behavior:** calendar work remains bounded, serial, discovery-free during routine sync, and low priority. The dashboard preserves last-known calendar data through provider failures and avoids an always-on vdirsyncer process.
+- **Calendar correctness:** truthful schema-2 last-known snapshots, broader ICS parity, stable occurrence identity, source diagnostics, conditional reads, bounded rebuild serialization, and periodic source rehash protection.
+- **Weather reliability:** same-origin browser access, nonblocking cached AQI, partial and parallel provider work, freshness-aware blending, canonical-unit caches, stable location caches, and corrected precipitation/wind conversions.
+- **Security:** loopback Host/Origin enforcement, narrowed CSP, rooted static and map serving, post-validation operation limiting, stricter POST fetch metadata, provider-data DOM hardening, and comprehensive custom-endpoint address policy including mapped and translation forms.
+- **Pi performance:** scoped settings invalidation, sleep-aware minute work, stable no-store URLs, bounded diagnostics, provider/cache reuse, and serialized heavy refresh paths.
+- **Release assurance:** a 24-feature lineage contract, JSON v2 lane, typed closed boundaries, Go/browser Calendar parity corpus, behavior-backed security and display-sleep tests, and one repository-ready handoff contract.
 
 ## Recommended operating model
 

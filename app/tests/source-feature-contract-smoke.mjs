@@ -35,7 +35,7 @@ const expected=[
 assert.equal(featureContract.schema,1);
 assert.equal(featureContract.version,version);
 assert.equal(releaseContract.version,version);
-assert.deepEqual(featureContract.requiredSourceFeatures,expected,"required beta feature list changed or lost ordering");
+assert.deepEqual(featureContract.requiredSourceFeatures,expected,"required source feature list changed or lost ordering");
 
 const settingsRuntime=read("ui/js/settings-runtime.js");
 assert.match(settingsRuntime,/DASHBOARD_SETTINGS_IMPACT/);

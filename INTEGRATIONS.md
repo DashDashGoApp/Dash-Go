@@ -7,7 +7,7 @@ Dash-Go fresh installs support Debian or Raspberry Pi OS **Bookworm** and recomm
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.9, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.10, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
