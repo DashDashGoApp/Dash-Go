@@ -17,15 +17,16 @@ import (
 )
 
 type Config struct {
-	Lat          float64
-	Lon          float64
-	TempUnit     string
-	WindUnit     string
-	Days         int
-	WxAPI        string
-	APIKey       string
-	Providers    []string
-	ProviderKeys map[string]string
+	Lat               float64
+	Lon               float64
+	TempUnit          string
+	WindUnit          string
+	Days              int
+	WxAPI             string
+	APIKey            string
+	Providers         []string
+	ProviderKeys      map[string]string
+	AllowPrivateWxAPI bool
 }
 
 type weatherFetchJobGo struct {

@@ -4,10 +4,10 @@
 
 ## Current beta release candidate
 
-- **Version:** `1.5.10-beta.2`
+- **Version:** `1.5.10-beta.3`
 - **Track:** beta
-- **Purpose:** Calendar and Weather reliability beta based on 1.5.10-beta.1, preserving the dashboard layout and interaction model while correcting provider units, hardening forecast blending, and reducing redundant Calendar work.
-- **Primary changes:** canonical millimetre precipitation with display-edge conversion, robust freshness-aware Weather blending, per-provider cache and request telemetry, typed rate-limit handling, settings-aware Calendar cache windows, source-digest reuse, serialized cache generation, ETag/304 browser reuse, stable event identities, and corrected ICS cancellation/revision/duration handling.
+- **Purpose:** Security-hardening follow-up to the Calendar and Weather reliability beta, preserving the dashboard layout, interaction model, and optional-PIN behavior while strengthening browser, HTTP, filesystem, outbound-network, and resource-abuse boundaries.
+- **Primary changes:** rooted static serving, strict loopback Host/Origin validation against DNS rebinding, CSP and same-origin resource isolation, SSRF-resistant custom Weather networking, expensive-operation cooldowns, full CodeQL alert corrections, plus the canonical Weather units and Calendar reliability work inherited from beta.2.
 - **Required candidate proof:** Dash-Go Local Builder 1.0.42 or newer must use Go 1.26.5, prove `go mod tidy -diff` and `go mod verify`, regenerate and verify minified JavaScript and CSS bundles, run the complete source and Chromium layout gates, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, and final-archive validation before publication.
 - **Compatibility:** existing settings, calendar source files, and provider configuration remain compatible. Calendar cache schema 10 rebuilds automatically; Weather precipitation remains canonical millimetres internally and is converted only for display.
 

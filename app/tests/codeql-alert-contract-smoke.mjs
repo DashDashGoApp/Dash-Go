@@ -19,6 +19,8 @@ const themePicker=read("ui/js/control-theme.js");
 const index=read("index.html");
 const responsive=read("tests/dashboard-responsive-fit-smoke.mjs");
 const radar=read("tests/lite-radar-snapshot-smoke.mjs");
+const httpServer=read("cmd/dashboard-control-server/http_server.go");
+const privateCalendar=read("tests/private-calendar-controls-smoke.mjs");
 
 assert.match(weather,/crypto\/hmac/,"weather cache fingerprints must use keyed HMAC");
 assert.match(weather,/weatherProviderCacheFingerprintLabel/,"weather cache fingerprint label missing");
@@ -53,5 +55,9 @@ assert.doesNotMatch(index,/dashboardAssetFallback|data-fallback|document\.write/
 assert.ok(index.includes('<script src="/config/config.local.js"></script>'),"optional local config must remain parser-time static script");
 assert.equal(responsive.includes("matchAll("),false,"responsive smoke must not use a tag-filter regex");
 assert.match(radar,/new URL\(String\(url\)\)\.hostname === "tile\.openstreetmap\.org"/,"radar smoke must compare parsed hostnames");
+
+assert.match(httpServer,/os\.OpenRoot\(/,"static route must use rooted file access");
+assert.doesNotMatch(httpServer,/http\.ServeFile/,"static route must not use request-derived ServeFile paths");
+assert.doesNotMatch(privateCalendar,/new RegExp\(endpoint\.replace/,"endpoint literals must not use incomplete regex escaping");
 
 console.log("PASS: CodeQL alert fixes preserve pinned paths, trusted calendar roots, DOM-safe previews, and zero recurring dashboard work.");

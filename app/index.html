@@ -4,27 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Dash-Go</title>
-<script>
-(function(){
-  // Apply the same CSS-pixel tier before the dashboard stylesheet is parsed.
-  // The later fit controller owns measured docking, but this avoids a first
-  // frame rendered with base-sized Calendar/Sidebar geometry on small or XL
-  // panels. innerWidth/innerHeight intentionally already represent effective
-  // CSS pixels, including desktop display scaling.
-  window.dashboardFitTierFromViewport=function(width,height){
-    var w=Math.max(1,Math.round(Number(width)||0));
-    var h=Math.max(1,Math.round(Number(height)||0));
-    if(w>=2400||h>=1500)return "xl";
-    if(w>=1280&&h>=720)return "base";
-    if(w>=1024&&h>=600)return "compact";
-    if(w>=860&&h>=520)return "dense";
-    return "min";
-  };
-  try{document.documentElement.dataset.fit=window.dashboardFitTierFromViewport(window.innerWidth,window.innerHeight);}catch(e){}
-}());
-</script>
-<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.10-beta.2">
-<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.10-beta.2">
+<script src="/ui/js/preflight-fit.js?v=1.5.10-beta.3"></script>
+<link rel="stylesheet" href="/ui/dashboard.css?v=1.5.10-beta.3">
+<link id="dynfonts" rel="stylesheet" href="/api/fonts/face.css?v=1.5.10-beta.3">
 <link rel="icon" href="data:,">
 <!-- Optional per-device settings written by the installer. Sets
      window.DASHBOARD_LOCAL = { lat, lon, tempUnit, windUnit, locationName,
@@ -263,6 +245,6 @@
   </section>
 </div>
 
-<script src="/ui/js/app.bundle.js?v=1.5.10-beta.2" defer></script>
+<script src="/ui/js/app.bundle.js?v=1.5.10-beta.3" defer></script>
 </body>
 </html>

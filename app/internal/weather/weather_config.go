@@ -14,15 +14,16 @@ import (
 func (s *Service) Config() Config {
 	settings := s.loadSettings()
 	cfg := Config{
-		Lat:          41.8781,
-		Lon:          -87.6298,
-		TempUnit:     "fahrenheit",
-		WindUnit:     "mph",
-		Days:         16,
-		WxAPI:        "https://api.open-meteo.com",
-		APIKey:       "",
-		Providers:    []string{"openmeteo"},
-		ProviderKeys: map[string]string{},
+		Lat:               41.8781,
+		Lon:               -87.6298,
+		TempUnit:          "fahrenheit",
+		WindUnit:          "mph",
+		Days:              16,
+		WxAPI:             "https://api.open-meteo.com",
+		APIKey:            "",
+		Providers:         []string{"openmeteo"},
+		ProviderKeys:      map[string]string{},
+		AllowPrivateWxAPI: false,
 	}
 	if b, err := os.ReadFile(filepath.Join(s.dash, "ui", "js", "config-defaults.js")); err == nil {
 		txt := string(b)
@@ -50,6 +51,7 @@ func (s *Service) Config() Config {
 	cfg.Lon = anyFloatDefault(settings["lon"], cfg.Lon)
 	cfg.TempUnit = normalizeTempUnit(strOr(settings["tempUnit"], cfg.TempUnit))
 	cfg.WindUnit = normalizeWindUnit(strOr(settings["windUnit"], cfg.WindUnit))
+	cfg.AllowPrivateWxAPI = jsonutil.Truthy(settings["allowPrivateWxApi"])
 	// Forecast horizon is source-owned: providers return their maximum available
 	// daily range and blending retains the furthest supplied date, up to 16 days.
 	cfg.Days = 16

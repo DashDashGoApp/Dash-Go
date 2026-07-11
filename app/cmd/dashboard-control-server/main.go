@@ -94,11 +94,13 @@ type app struct {
 	// The To Do service owns mutable sync, queue, auth, cache, migration, and
 	// Grocery Memory state. Core retains immutable paths plus the lazy service
 	// reference and HTTP/SSE adapter state only.
-	todoInitMu     sync.Mutex
-	todo           *todopkg.Service
-	todoStreamMu   sync.Mutex
-	todoStreams    map[chan []byte]bool
-	releaseVersion string
+	todoInitMu       sync.Mutex
+	todo             *todopkg.Service
+	todoStreamMu     sync.Mutex
+	todoStreams      map[chan []byte]bool
+	releaseVersion   string
+	requestSecurity  requestSecurityPolicy
+	operationLimiter *operationLimiter
 	// releaseResolver is an in-process test seam; production always uses the
 	// canonical GitHub Release client.
 	releaseResolver func(context.Context, releasepkg.Track) (releasepkg.Resolved, error)
@@ -267,7 +269,7 @@ func newAppFromRuntime() *app {
 		data = showcase.dataRoot
 		home = showcase.homeDir
 	}
-	a := &app{dash: dash, home: home, configDir: filepath.Join(data, "config"), calDir: filepath.Join(data, "calendars"), cacheDir: filepath.Join(data, "cache"), logDir: filepath.Join(data, "logs"), binDir: filepath.Join(dash, "bin"), settingsFile: filepath.Join(data, "config", "settings.json"), configLocal: filepath.Join(data, "config", "config.local.js"), celebrationsFile: filepath.Join(home, ".dashboard-celebrations"), todoDir: filepath.Join(data, "config", "todo"), todoTokenFile: filepath.Join(home, ".dashboard-todo.json"), fontsDir: filepath.Join(dash, "fonts"), showcase: showcase, showcaseInitErr: showcaseErr, todoStreams: map[chan []byte]bool{}, releaseVersion: fileio.ReadString(filepath.Join(dash, "VERSION"), "")}
+	a := &app{dash: dash, home: home, configDir: filepath.Join(data, "config"), calDir: filepath.Join(data, "calendars"), cacheDir: filepath.Join(data, "cache"), logDir: filepath.Join(data, "logs"), binDir: filepath.Join(dash, "bin"), settingsFile: filepath.Join(data, "config", "settings.json"), configLocal: filepath.Join(data, "config", "config.local.js"), celebrationsFile: filepath.Join(home, ".dashboard-celebrations"), todoDir: filepath.Join(data, "config", "todo"), todoTokenFile: filepath.Join(home, ".dashboard-todo.json"), fontsDir: filepath.Join(dash, "fonts"), showcase: showcase, showcaseInitErr: showcaseErr, todoStreams: map[chan []byte]bool{}, operationLimiter: newOperationLimiter(), releaseVersion: fileio.ReadString(filepath.Join(dash, "VERSION"), "")}
 	a.settings = settingspkg.New(a.settingsConfig())
 	return a
 }

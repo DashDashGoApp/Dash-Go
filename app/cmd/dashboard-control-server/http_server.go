@@ -48,9 +48,17 @@ func (a *app) requireLoopback(next http.HandlerFunc) http.HandlerFunc {
 			a.err(w, "loopback only", http.StatusForbidden)
 			return
 		}
-		if !sameOriginAPIRequest(r) {
+		if !a.sameOriginAPIRequest(r) {
 			a.err(w, "same-origin API requests only", http.StatusForbidden)
 			return
+		}
+		if r.Method == http.MethodPost && a.operationLimiter != nil {
+			done, wait, ok := a.operationLimiter.begin(r.URL.Path)
+			if !ok {
+				writeRateLimited(w, wait)
+				return
+			}
+			defer done()
 		}
 		next(w, r)
 	}
@@ -115,19 +123,18 @@ func (a *app) httpRoutes() *http.ServeMux {
 // sameOriginAPIRequest blocks browser cross-origin requests to the local
 // control API. Headerless local tools remain supported; a supplied Origin or
 // Sec-Fetch-Site header must describe the same dashboard origin.
-func sameOriginAPIRequest(r *http.Request) bool {
+func (a *app) sameOriginAPIRequest(r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin != "" {
-		u, err := url.Parse(origin)
-		if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return false
-		}
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		if !strings.EqualFold(u.Scheme, scheme) || !strings.EqualFold(u.Host, r.Host) {
-			return false
+		if len(a.requestSecurity.allowedOrigins) > 0 {
+			if !a.requestSecurity.validOrigin(origin) {
+				return false
+			}
+		} else {
+			u, err := url.Parse(origin)
+			if err != nil || !strings.EqualFold(u.Host, r.Host) {
+				return false
+			}
 		}
 	}
 	site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
@@ -189,8 +196,8 @@ func (a *app) readBody(r *http.Request) (map[string]any, error) {
 // mutableStaticRevision uses file size and nanosecond mtime for the two
 // mutable browser resources that support conditional checks: live theme
 // configuration and the generated event cache.
-func mutableStaticRevision(path string) (string, bool) {
-	st, err := os.Stat(path)
+func mutableStaticRevision(root *os.Root, rel string) (string, bool) {
+	st, err := root.Stat(rel)
 	if err != nil || st.IsDir() {
 		return "", false
 	}
@@ -207,13 +214,13 @@ func requestHasETag(header, want string) bool {
 	return false
 }
 
-func setMutableStaticRevision(w http.ResponseWriter, r *http.Request, rel, full string) bool {
+func setMutableStaticRevision(w http.ResponseWriter, r *http.Request, root *os.Root, rel string) bool {
 	conditionalGet := rel == "cache/events.cache.json"
 	conditionalHead := conditionalGet || rel == "config/config.local.js"
 	if !conditionalGet && !conditionalHead {
 		return false
 	}
-	tag, ok := mutableStaticRevision(full)
+	tag, ok := mutableStaticRevision(root, rel)
 	if !ok {
 		return false
 	}
@@ -260,6 +267,8 @@ func dashboardSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		next.ServeHTTP(w, r)
 	})
@@ -273,6 +282,11 @@ func dashboardSecurityHeaders(next http.Handler) http.Handler {
 // stable URL-path representation.
 func staticURLRelativePath(requestPath string) (string, bool) {
 	requestPath = strings.ReplaceAll(requestPath, `\`, "/")
+	for _, segment := range strings.Split(requestPath, "/") {
+		if segment == ".." || strings.ContainsRune(segment, '\x00') {
+			return "", false
+		}
+	}
 	clean := path.Clean("/" + strings.TrimPrefix(requestPath, "/"))
 	rel := strings.TrimPrefix(clean, "/")
 	// Windows cannot represent a colon in a file name. Refuse a drive-qualified
@@ -300,17 +314,33 @@ func (a *app) static(w http.ResponseWriter, r *http.Request, requestPath string)
 		aliased = false
 	}
 	rel, valid := staticURLRelativePath(requestPath)
-	if !valid {
+	if !valid || rel == "" || staticPrivatePath(rel) {
 		setNoStore(w)
 		http.NotFound(w, r)
 		return
 	}
-	full := filepath.Join(a.dash, filepath.FromSlash(rel))
-	dataPath, fromShowcaseData := a.showcaseStaticDataPath(rel)
-	if fromShowcaseData {
-		full = dataPath
+	rootPath := a.dash
+	rootRel := rel
+	if _, ok := a.showcaseStaticDataPath(rel); ok {
+		rootPath = a.showcase.dataRoot
+		rootRel = rel
 	}
-	if (!fromShowcaseData && !strings.HasPrefix(full, a.dash)) || staticPrivatePath(rel) {
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		setNoStore(w)
+		http.NotFound(w, r)
+		return
+	}
+	defer root.Close()
+	file, err := root.Open(rootRel)
+	if err != nil {
+		setNoStore(w)
+		http.NotFound(w, r)
+		return
+	}
+	defer file.Close()
+	st, err := file.Stat()
+	if err != nil || st.IsDir() {
 		setNoStore(w)
 		http.NotFound(w, r)
 		return
@@ -320,19 +350,26 @@ func (a *app) static(w http.ResponseWriter, r *http.Request, requestPath string)
 	} else {
 		setNoStore(w)
 	}
-	if setMutableStaticRevision(w, r, rel, full) {
+	if setMutableStaticRevision(w, r, root, rootRel) {
 		return
 	}
-	// ServeFile performs the file/dir check itself.  Avoid a second stat on
-	// every static request; repeated Surf relaunches commonly request these
-	// same small versioned assets together.
-	http.ServeFile(w, r, full)
+	http.ServeContent(w, r, filepath.Base(rootRel), st.ModTime(), file)
 }
 
 func (a *app) httpServer(addr string) *http.Server {
+	a.requestSecurity = newRequestSecurityPolicy(addr)
+	base := a.httpRoutes()
+	hostChecked := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.requestSecurity.validHost(r.Host) {
+			http.Error(w, "misdirected request", http.StatusMisdirectedRequest)
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
+	handler := dashboardSecurityHeaders(hostChecked)
 	return &http.Server{
 		Addr:              addr,
-		Handler:           dashboardSecurityHeaders(a.httpRoutes()),
+		Handler:           handler,
 		ReadHeaderTimeout: serverReadHeaderLimit,
 		ReadTimeout:       serverReadLimit,
 		WriteTimeout:      serverWriteLimit,

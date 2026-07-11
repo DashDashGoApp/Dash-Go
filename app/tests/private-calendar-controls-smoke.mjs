@@ -19,8 +19,8 @@ assert.match(ui,/Discover available calendars/,'Calendar Manager must expose a u
 assert.match(ui,/Nothing discovered here syncs or changes until you add it/,'discovery UI must state its non-destructive boundary');
 assert.match(ui,/legacy all-calendars mirror/,'selection UI must warn before a preserved broad mirror can duplicate exact sources');
 for(const endpoint of ["/api/calendars/private/discover","/api/calendars/private/activate","/api/calendars/private/editable","/api/calendars/private/deactivate","/api/calendars/private/sync","/api/calendars/private/repair","/api/calendars/private/resolve"]){
-  assert.match(ui,new RegExp(endpoint.replace(/[/.]/g,"\\$&")),'private calendar UI must use '+endpoint);
-  assert.match(routes,new RegExp(endpoint.replace(/[/.]/g,"\\$&")),'server must route '+endpoint);
+  assert.ok(ui.includes(endpoint),'private calendar UI must use '+endpoint);
+  assert.ok(routes.includes(endpoint),'server must route '+endpoint);
 }
 assert.match(server,/private-calendar-discovery\.sh/,'server discovery must invoke the isolated helper');
 assert.match(server,/--set-editable/,'server must support changing a selected calendar between display-only and editable');

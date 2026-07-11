@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func TestStaticURLRelativePathUsesURLSeparatorsAcrossHosts(t *testing.T) {
 		{name: "forward slashes", path: "/config/config.local.js", want: "config/config.local.js", ok: true},
 		{name: "Windows separators", path: `\config\config.local.js`, want: "config/config.local.js", ok: true},
 		{name: "mixed separators", path: `/calendars\family.green.ics`, want: "calendars/family.green.ics", ok: true},
-		{name: "relative traversal remains rooted", path: "/../config/config.local.js", want: "config/config.local.js", ok: true},
+		{name: "relative traversal refused", path: "/../config/config.local.js", want: "", ok: false},
 		{name: "drive-qualified segment refused", path: "/C:/config/config.local.js", want: "", ok: false},
 	}
 	for _, tc := range cases {
@@ -136,10 +137,11 @@ func TestHTTPServerAppliesBaselineSecurityHeadersToAllResponses(t *testing.T) {
 	a := &app{dash: root, releaseVersion: "1.4.3-beta.93"}
 	s := a.httpServer("127.0.0.1:8090")
 	expected := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"Referrer-Policy":        "no-referrer",
-		"Permissions-Policy":     "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+		"X-Content-Type-Options":       "nosniff",
+		"X-Frame-Options":              "DENY",
+		"Referrer-Policy":              "no-referrer",
+		"Permissions-Policy":           "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+		"Cross-Origin-Resource-Policy": "same-origin",
 	}
 	for _, target := range []string{"/", "/ui/js/app.js", "/api/not-found", "/missing"} {
 		t.Run(target, func(t *testing.T) {
@@ -153,5 +155,39 @@ func TestHTTPServerAppliesBaselineSecurityHeadersToAllResponses(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHTTPServerRejectsUnapprovedHostAndRebindingPair(t *testing.T) {
+	a := &app{operationLimiter: newOperationLimiter()}
+	s := a.httpServer("127.0.0.1:8090")
+	r := httptest.NewRequest(http.MethodGet, "http://attacker.example/api/status", nil)
+	r.Host = "attacker.example"
+	r.RemoteAddr = "127.0.0.1:12345"
+	r.Header.Set("Origin", "http://attacker.example")
+	w := httptest.NewRecorder()
+	s.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("status=%d want 421", w.Code)
+	}
+}
+
+func TestStaticRootRejectsEscapingSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape.txt")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	a := &app{dash: root}
+	w := httptest.NewRecorder()
+	a.handle(w, httptest.NewRequest(http.MethodGet, "/escape.txt", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want 404", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "secret") {
+		t.Fatal("escaping symlink content was served")
 	}
 }

@@ -1,8 +1,6 @@
-# Dash-Go Changelog
+## [1.5.10-beta.3] — 2026-07-11
 
-## [1.5.10-beta.2] — 2026-07-11
-
-Dash-Go 1.5.10-beta.2 is a Calendar and Weather reliability beta. It keeps the existing dashboard layout and interaction model while standardizing provider units, hardening multi-source forecast blending, reducing unchanged Calendar work, and improving recurrence correctness and source diagnostics.
+Dash-Go 1.5.10-beta.3 is a security-hardening follow-up to the Calendar and Weather reliability work. It preserves the optional-PIN appliance model while strengthening the loopback HTTP boundary, static-file confinement, browser isolation, custom Weather networking, and expensive-operation coordination.
 
 ### Improvements
 
@@ -17,6 +15,13 @@ Dash-Go 1.5.10-beta.2 is a Calendar and Weather reliability beta. It keeps the e
 - Reused persisted Calendar source digests when source path, size, and nanosecond modification time are unchanged.
 
 ### Bug fixes
+
+- Replaced request-derived static filesystem paths and `http.ServeFile` with traversal-resistant `os.Root` file access and `http.ServeContent`, including mutable ETag lookup through the same rooted resource boundary.
+- Added an explicit loopback Host and Origin policy that rejects unapproved hostnames before routing, blocking hostile Origin/Host pairs used by DNS-rebinding attacks while retaining headerless local tools.
+- Added Content Security Policy and same-origin resource isolation headers; moved the first-paint fit bootstrap into a versioned external script so executable inline script is no longer required.
+- Added connection-time SSRF protection for custom Open-Meteo endpoints, including scheme validation, private-network opt-in, loopback and link-local denial, guarded DNS resolution, same-host redirect enforcement, and redirect limits.
+- Added bounded single-operation and cooldown controls for forced Weather refresh, Calendar synchronization/rebuild/discovery, diagnostics, backup/restore, and update operations, returning `429` with `Retry-After` during abuse or accidental request bursts.
+- Removed incomplete endpoint-regex escaping from private-calendar source tests and added source gates that pin the four reported CodeQL corrections.
 
 - Corrected imperial precipitation totals that previously displayed canonical millimetres with an inch symbol.
 - Corrected Visual Crossing wind conversion when metric provider responses report kilometres per hour.

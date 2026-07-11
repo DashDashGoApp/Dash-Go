@@ -41,7 +41,14 @@ func fetchOpenMeteoGo(ctx context.Context, id string, cfg Config) (map[string]an
 		return nil, err
 	}
 	req.Header.Set("User-Agent", weatherOutboundUserAgent)
-	res, err := weatherHTTPClient.Do(req)
+	client := weatherHTTPClient
+	if id == "openmeteo-custom" {
+		client, err = customWeatherHTTPClient(u, cfg.AllowPrivateWxAPI)
+		if err != nil {
+			return nil, err
+		}
+	}
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

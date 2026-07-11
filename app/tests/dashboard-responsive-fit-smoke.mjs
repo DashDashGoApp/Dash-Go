@@ -54,9 +54,10 @@ for(const id of ["fitdocktabs","fitdock-agenda-tab","fitdock-weather-tab","fitdo
   assert.ok(index.includes(`id="${id}"`),`responsive dock shell missing ${id}`);
 }
 const firstStylesheet=index.indexOf('<link rel="stylesheet" href="/ui/dashboard.css');
-const earlyTier=index.indexOf('document.documentElement.dataset.fit=window.dashboardFitTierFromViewport');
+const preflight=fs.readFileSync(path.join(root,'ui/js/preflight-fit.js'),'utf8');
+const earlyTier=index.indexOf('/ui/js/preflight-fit.js');
 assert.ok(earlyTier>=0&&earlyTier<firstStylesheet,"initial fit tier must be applied before dashboard CSS parses");
-assert.match(index,/window\.dashboardFitTierFromViewport=function\(width,height\)/,"head bootstrap must expose the shared early tier selector");
+assert.match(preflight,/window\.dashboardFitTierFromViewport=function\(width,height\)/,"preflight script must expose the shared early tier selector");
 assert.ok(index.indexOf('id="fitdocktabs"')>index.indexOf('id="clock"'),"stack dock tabs must live inside the clock strip rather than Calendar");
 assert.ok(index.indexOf('id="fitdocktabs"')<index.indexOf('id="agendalist"'),"stack dock tabs must remain in the clock header before Agenda content");
 assert.ok(responsive.includes("#fitdocktabs{\n  position:static"),"stack dock tabs must no longer float over Calendar cells");
@@ -100,17 +101,11 @@ assert.equal(context.__tier({width:1024,height:599,dpr:1}),"dense","1024×599 mu
 assert.equal(context.__tier({width:1280,height:719,dpr:1}),"compact","1280×719 must remain below the base boundary");
 assert.equal(context.__tier({width:2400,height:720,dpr:1}),"xl","2400px wide must enter the XL tier");
 
-const firstScriptOpen="<script>", firstScriptClose="</script>";
-const firstScriptStart=index.indexOf(firstScriptOpen);
-assert.notEqual(firstScriptStart,-1,"head bootstrap inline script missing");
-const firstScriptEnd=index.indexOf(firstScriptClose,firstScriptStart+firstScriptOpen.length);
-assert.notEqual(firstScriptEnd,-1,"head bootstrap inline script must close");
-const firstScript=index.slice(firstScriptStart+firstScriptOpen.length,firstScriptEnd);
 const earlyContext={window:{innerWidth:800,innerHeight:480},document:{documentElement:{dataset:{}}},Math,Number};
 earlyContext.window.window=earlyContext.window;
 vm.createContext(earlyContext);
-vm.runInContext(firstScript,earlyContext);
-assert.equal(earlyContext.document.documentElement.dataset.fit,"min","head bootstrap must set the tier before first stylesheet paint");
+vm.runInContext(preflight,earlyContext);
+assert.equal(earlyContext.document.documentElement.dataset.fit,"min","preflight script must set the tier before first stylesheet paint");
 for(const [[width,height],tier] of expected){
   assert.equal(earlyContext.window.dashboardFitTierFromViewport(width,height),tier,`early tier selector must match controller at ${width}×${height}`);
 }
