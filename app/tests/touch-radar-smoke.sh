@@ -243,7 +243,6 @@ need "$ROOT/internal/platform/diagnostics.go" 'RADAR_XWEATHER_ID' 'explicit rada
 need "$ROOT/internal/platform/diagnostics.go" 'KEY|SECRET|TOKEN|PASS|PASSWORD' 'provider credential suffix redaction'
 need "$MESSAGES_DOMAIN/messages_providers.go" 'decodeMessageJSON' 'bounded message JSON decoder'
 need "$MESSAGES_DOMAIN/messages_providers.go" '2<<20' 'general message provider body cap'
-need "$MESSAGES_DOMAIN/messages_providers.go" '1<<20' 'random-word provider body cap'
 need "$SERVER/config_backup_restore.go" 'maxConfigBackupEntryBytes' 'config restore per-entry ceiling'
 need "$SERVER/config_backup_restore.go" 'maxConfigBackupTotalBytes' 'config restore total ceiling'
 need "$SERVER/config_backup_restore.go" 'stageConfigBackup' 'config restore staging before mutation'

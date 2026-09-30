@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
@@ -23,8 +22,8 @@ func decodeMessageJSON(body io.Reader, limit int64, dst any) error {
 
 func (s *Service) fetchMessageProvider(ctx context.Context, provider string, want int) ([]string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	getJSON := func(u string, headers map[string]string, dst any) error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	getJSONCtx := func(c context.Context, u string, headers map[string]string, dst any) error {
+		req, err := http.NewRequestWithContext(c, http.MethodGet, u, nil)
 		if err != nil {
 			return err
 		}
@@ -43,6 +42,9 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 			return fmt.Errorf("%s: %s", res.Status, strings.TrimSpace(string(b)))
 		}
 		return decodeMessageJSON(res.Body, 2<<20, dst)
+	}
+	getJSON := func(u string, headers map[string]string, dst any) error {
+		return getJSONCtx(ctx, u, headers, dst)
 	}
 	apiNinjas := func(path string, params url.Values) ([]map[string]any, error) {
 		key := s.messageEnv("DASH_API_NINJAS_KEY")
@@ -102,9 +104,11 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 		return quoteRowsTexts(rows), err
 	case "uselessfacts":
 		out := []string{}
+		bounded, cancel := context.WithTimeout(ctx, 12*time.Second)
+		defer cancel()
 		for range clamp(want, 1, 4) {
 			var data map[string]any
-			if err := getJSON("https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", nil, &data); err != nil {
+			if err := getJSONCtx(bounded, "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", nil, &data); err != nil {
 				return out, err
 			}
 			if t := cleanMessageText(data["text"]); t != "" {
@@ -122,10 +126,12 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 		return stringList(jsonutil.List(data["data"])), err
 	case "numbersapi_https":
 		out := []string{}
+		bounded, cancel := context.WithTimeout(ctx, 12*time.Second)
+		defer cancel()
 		for range clamp(want, 1, 4) {
 			var data map[string]any
 			n := 1 + rand.Intn(366)
-			if err := getJSON(fmt.Sprintf("https://numbersapi.com/%d/trivia?json", n), nil, &data); err != nil {
+			if err := getJSONCtx(bounded, fmt.Sprintf("https://numbersapi.com/%d/trivia?json", n), nil, &data); err != nil {
 				return out, err
 			}
 			if t := cleanMessageText(data["text"]); t != "" {
@@ -178,8 +184,6 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 			}
 		}
 		return out, err
-	case "dictionary_random_word", "freedictionary_random_word":
-		return s.fetchRandomWordDefinition(ctx, client, provider)
 	}
 	return nil, fmt.Errorf("unknown provider %s", provider)
 }
@@ -260,30 +264,4 @@ func quoteRowsTexts(rows []map[string]any) []string {
 		}
 	}
 	return out
-}
-
-func (s *Service) fetchRandomWordDefinition(ctx context.Context, client *http.Client, provider string) ([]string, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://random-word-api.herokuapp.com/word?number=1", nil)
-	req.Header.Set("User-Agent", messageOutboundUserAgent)
-	res, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	var words []string
-	if err := decodeMessageJSON(res.Body, 1<<20, &words); err != nil {
-		return nil, err
-	}
-	if len(words) == 0 {
-		return nil, fmt.Errorf("random word unavailable")
-	}
-	word := strings.TrimSpace(words[0])
-	if word == "" {
-		return nil, fmt.Errorf("random word unavailable")
-	}
-	// strings.Title is deprecated; the provider returns one lowercase English
-	// word, so capitalizing the first rune directly is sufficient.
-	runes := []rune(word)
-	runes[0] = unicode.ToUpper(runes[0])
-	return []string{string(runes) + " — a useful word to look up together."}, nil
 }

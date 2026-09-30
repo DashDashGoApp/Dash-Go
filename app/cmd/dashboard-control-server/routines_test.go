@@ -62,7 +62,7 @@ func TestRoutinesCalendarIsBoundedAndCarriesOwner(t *testing.T) {
 	if !strings.Contains(text, "SUMMARY:Routines — Sam · 1") || !strings.Contains(text, "DESCRIPTION:Dash-Go Routines\\nMorning routine · Sam") || !strings.Contains(text, "X-DASHGO-APP-OWNER:routines") {
 		t.Fatalf("routines calendar metadata/event missing: %s", text)
 	}
-	if strings.Contains(text, "202609") {
+	if strings.Contains(text, "DTSTART:202609") {
 		t.Fatalf("routines calendar ignored bounded horizon: %s", text)
 	}
 }

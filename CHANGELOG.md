@@ -1,3 +1,16 @@
+## [1.5.11] — 2026-09-30
+
+Dash-Go 1.5.11 removes the non-functional Word of the day message category and tightens the rotating-message section: local fallback pools are larger so offline days vary more, and multi-call fact providers now run under a bounded total deadline so a slow endpoint cannot stall the message refresh.
+
+### Improvements
+
+- Expanded the local fallback message pools for quotes, jokes, facts, riddles, wellbeing, and family prompts so offline and provider-failure days rotate through more variety instead of repeating the same handful of lines.
+- Bounded the multi-call fact providers (Useless Facts and Numbers API) with a total request deadline so up to four sequential lookups can no longer exceed the refresh budget and block the rotating message section.
+
+### Removals
+
+- Removed the Word of the day message category and its random-word providers, which fetched a bare word and appended a hardcoded "a useful word to look up together" line without any real dictionary lookup.
+
 ## [1.5.10] — 2026-07-11
 
 Dash-Go 1.5.10 strengthens Calendar and Weather reliability, hardens loopback and outbound-network security, reduces unnecessary Pi Zero 2 W work, and adds durable release-lineage checks while preserving existing user-visible workflows and data.

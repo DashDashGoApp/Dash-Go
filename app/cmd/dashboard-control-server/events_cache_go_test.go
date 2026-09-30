@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/fileio"
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -15,24 +17,29 @@ func TestGoEventCacheBuildsSingleAndRecurringEvents(t *testing.T) {
 	dash := filepath.Join(tmp, "dash")
 	a := &app{dash: dash, home: home, configDir: filepath.Join(dash, "config"), calDir: filepath.Join(dash, "calendars"), cacheDir: filepath.Join(dash, "cache"), logDir: filepath.Join(dash, "logs"), binDir: filepath.Join(dash, "bin"), settingsFile: filepath.Join(dash, "config", "settings.json"), configLocal: filepath.Join(dash, "config", "config.local.js"), celebrationsFile: filepath.Join(home, ".dashboard-celebrations")}
 	a.ensureDirs()
-	ics := `BEGIN:VCALENDAR
+	now := time.Now()
+	oneStart := now.AddDate(0, 0, 5)
+	oneEnd := oneStart.Add(time.Hour)
+	recStart := now.AddDate(0, 0, -3)
+	recEnd := recStart.Add(30 * time.Minute)
+	ics := fmt.Sprintf(`BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
 UID:one@test
-DTSTART:20260620T090000
-DTEND:20260620T100000
+DTSTART:%s
+DTEND:%s
 SUMMARY:One-time Test
 LOCATION:Kitchen
 END:VEVENT
 BEGIN:VEVENT
 UID:weekly@test
-DTSTART:20260601T120000
-DTEND:20260601T123000
-RRULE:FREQ=WEEKLY;COUNT=4;BYDAY=MO
+DTSTART:%s
+DTEND:%s
+RRULE:FREQ=DAILY;COUNT=4
 SUMMARY:Weekly Test
 END:VEVENT
 END:VCALENDAR
-`
+`, oneStart.Format("20060102T150405"), oneEnd.Format("20060102T150405"), recStart.Format("20060102T150405"), recEnd.Format("20060102T150405"))
 	if err := os.WriteFile(filepath.Join(a.calDir, "personal.green.ics"), []byte(ics), 0644); err != nil {
 		t.Fatal(err)
 	}

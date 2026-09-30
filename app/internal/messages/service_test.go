@@ -144,7 +144,7 @@ func TestMessageOutboundUserAgentIsVersionNeutral(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(body)
-	if strings.Contains(text, "Dash-Go/1.") || strings.Count(text, "messageOutboundUserAgent") < 3 {
+	if strings.Contains(text, "Dash-Go/1.") || strings.Count(text, "messageOutboundUserAgent") < 2 {
 		t.Fatal("message providers retained a versioned or unshared outbound User-Agent")
 	}
 }
