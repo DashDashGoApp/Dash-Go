@@ -65,3 +65,49 @@ func TestServeHTTPUntilSignalRejectsNilInputs(t *testing.T) {
 		t.Fatal("nil server/listener unexpectedly succeeded")
 	}
 }
+
+// A long-lived stream (SSE) never becomes idle on its own. The release hook must
+// end it so a planned stop drains promptly, and the drain must still be a clean
+// stop rather than a fatal error.
+func TestServeHTTPUntilSignalReleasesLongLivedStreams(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		close(started)
+		<-release
+	})}
+	srv.RegisterOnShutdown(func() { close(release) })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- serveHTTPUntilSignal(ctx, srv, listener, 30*time.Second) }()
+	go func() {
+		response, err := http.Get("http://" + listener.Addr().String())
+		if err == nil {
+			_ = response.Body.Close()
+		}
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("long-lived handler never started")
+	}
+
+	began := time.Now()
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("released stream produced %v; a planned stop must exit cleanly", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown waited out its grace period despite the release hook")
+	}
+	if elapsed := time.Since(began); elapsed > 2*time.Second {
+		t.Fatalf("drain took %v; expected a prompt stop once the stream was released", elapsed)
+	}
+}

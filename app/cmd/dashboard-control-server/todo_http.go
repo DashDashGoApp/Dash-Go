@@ -357,6 +357,10 @@ func (a *app) handleTodoStream(w http.ResponseWriter, r *http.Request) {
 	defer heartbeat.Stop()
 	for {
 		select {
+		case <-a.shutdownCh:
+			// A planned update/restart releases the stream explicitly so the
+			// server's graceful drain does not have to wait on this connection.
+			return
 		case <-r.Context().Done():
 			return
 		case <-heartbeat.C:

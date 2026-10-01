@@ -1,3 +1,15 @@
+## [1.5.12] — 2026-09-30
+
+Dash-Go 1.5.12 fixes a shutdown defect that made every application update record a failed dashboard-server unit, and turns off two pieces of background work a kiosk never needs.
+
+### Bug fixes
+
+- The dashboard server now exits cleanly when an update or restart stops it. A long-lived dashboard stream stays open by design, so the graceful shutdown always expired its grace period, logged `context deadline exceeded`, and exited 1 — which systemd recorded as a failed unit and a restart on every update. The server now releases long-lived streams as shutdown begins and treats an expired grace period as a normal stop. Measured on a Raspberry Pi Zero 2 W, stopping the server with a live stream went from an 8.0 s drain ending in a failed unit to an 11 ms clean exit.
+
+### Improvements
+
+- The installer now turns off two pieces of background work a kiosk never needs: the daily `man-db` man-page re-index, and `cloud-init`, which only provisions cloud and headless images on first boot. Dash-Go's managed security-maintenance policy is deliberately unchanged — `apt-daily` and `apt-daily-upgrade` stay enabled and scheduled on the nightly window the security helpers render.
+
 ## [1.5.11] — 2026-09-30
 
 Dash-Go 1.5.11 removes the non-functional Word of the day message category and tightens the rotating-message section: local fallback pools are larger so offline days vary more, and multi-call fact providers now run under a bounded total deadline so a slow endpoint cannot stall the message refresh.

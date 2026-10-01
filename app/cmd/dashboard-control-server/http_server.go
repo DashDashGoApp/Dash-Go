@@ -383,7 +383,7 @@ func (a *app) httpServer(addr string) *http.Server {
 		base.ServeHTTP(w, r)
 	})
 	handler := a.dashboardSecurityHeaders(hostChecked)
-	return &http.Server{
+	srv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: serverReadHeaderLimit,
@@ -392,4 +392,7 @@ func (a *app) httpServer(addr string) *http.Server {
 		IdleTimeout:       serverIdleLimit,
 		MaxHeaderBytes:    1 << 20,
 	}
+	// Release long-lived streams so a planned stop does not wait out the grace period.
+	srv.RegisterOnShutdown(a.beginShutdown)
+	return srv
 }

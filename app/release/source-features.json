@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.5.11",
+  "version": "1.5.12",
   "requiredSourceFeatures": [
     "scoped-settings-invalidation-v1",
     "focused-jsonv2-gate-v1",

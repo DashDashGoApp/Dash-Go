@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -35,7 +36,12 @@ func serveHTTPUntilSignal(ctx context.Context, srv *http.Server, listener net.Li
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
+			// A grace period that expires is a normal restart condition, not a
+			// fault: long-lived streams and slow clients can outlast the window.
+			// Release the remaining connections and report a clean stop, so a
+			// planned update/restart is never recorded as a failed unit.
+			log.Printf("dashboard shutdown grace expired (%v); closing remaining connections", err)
+			_ = srv.Close()
 		}
 		err := <-errCh
 		if err == nil || errors.Is(err, http.ErrServerClosed) {
@@ -43,4 +49,14 @@ func serveHTTPUntilSignal(ctx context.Context, srv *http.Server, listener net.Li
 		}
 		return err
 	}
+}
+
+// beginShutdown releases long-lived streams so a planned stop drains promptly
+// instead of waiting out the full shutdown grace period. Safe to call twice.
+func (a *app) beginShutdown() {
+	a.shutdownOnce.Do(func() {
+		if a.shutdownCh != nil {
+			close(a.shutdownCh)
+		}
+	})
 }

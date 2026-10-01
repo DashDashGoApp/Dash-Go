@@ -3017,10 +3017,36 @@ service_unit_section_has_setting(){
   ' "$path" 2>/dev/null
 }
 
+# Reduce background work a kiosk never needs. Every step is idempotent,
+# best-effort, and reversible. This deliberately does NOT touch Dash-Go's managed
+# security policy: apt-daily.timer and apt-daily-upgrade.timer stay enabled on the
+# nightly window dashboard-security-maintenance.sh renders.
+ensure_kiosk_service_hygiene(){
+  command -v systemctl >/dev/null 2>&1 || return 0
+  [ -n "${SUDO:-}" ] || SUDO=""
+  # man-db re-indexes man pages daily; a kiosk never reads them.
+  if systemctl is-enabled --quiet man-db.timer 2>/dev/null; then
+    $SUDO systemctl disable --now man-db.timer >/dev/null 2>&1 || true
+  fi
+  # cloud-init provisions cloud/headless images on first boot. This device is
+  # already provisioned, so it is only boot work and enabled-unit surface.
+  if [ -d /etc/cloud ] && [ ! -e /etc/cloud/cloud-init.disabled ]; then
+    $SUDO touch /etc/cloud/cloud-init.disabled >/dev/null 2>&1 || true
+  fi
+  local hygiene_unit
+  for hygiene_unit in cloud-init-local cloud-init-main cloud-init-network cloud-config cloud-final; do
+    if systemctl is-enabled --quiet "${hygiene_unit}.service" 2>/dev/null; then
+      $SUDO systemctl disable "${hygiene_unit}.service" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 ensure_go_dashboard_service_unit(){
   [ -x "$DASH/bin/dashboard-control-server" ] || return 0
   command -v systemctl >/dev/null 2>&1 || return 0
   [ -n "${SUDO:-}" ] || SUDO=""
+  # Install, repair, and update all converge here, so kiosk hygiene rides along.
+  ensure_kiosk_service_hygiene || true
   local svc=/etc/systemd/system/dashboard-server.service
   [ -f "$svc" ] || return 0
   if service_unit_section_has_setting "$svc" Unit 'StartLimitIntervalSec=120' \
