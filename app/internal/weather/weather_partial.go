@@ -24,7 +24,7 @@ func weatherParallelCalls(calls ...func() (any, error)) []weatherCallResult {
 	return results
 }
 
-func weatherPartialSourceGo(id string, current map[string]any, daily map[string][]any, hourly any, currentErr, dailyErr error) (map[string]any, error) {
+func weatherPartialSourceGo(id string, current map[string]any, daily map[string][]any, hourly any, currentErr, dailyErr, hourlyErr error) (map[string]any, error) {
 	if current == nil {
 		current = map[string]any{}
 	}
@@ -38,8 +38,11 @@ func weatherPartialSourceGo(id string, current map[string]any, daily map[string]
 	if len(daily["time"]) > 0 {
 		available = append(available, "daily")
 	}
+	if hourly != nil {
+		available = append(available, "hourly")
+	}
 	if len(available) == 0 {
-		return nil, errors.Join(currentErr, dailyErr)
+		return nil, errors.Join(currentErr, dailyErr, hourlyErr)
 	}
 	if len(current) == 0 && len(daily["time"]) > 0 {
 		first := func(key string) any {
@@ -60,7 +63,7 @@ func weatherPartialSourceGo(id string, current map[string]any, daily map[string]
 	}
 	out := weatherOKGo(id, map[string]any{"current": current, "daily": daily, "hourly": hourly})
 	out["_available"] = available
-	if currentErr != nil || dailyErr != nil {
+	if currentErr != nil || dailyErr != nil || hourlyErr != nil {
 		out["_partial"] = true
 		errorsByPart := map[string]any{}
 		if currentErr != nil {
@@ -68,6 +71,9 @@ func weatherPartialSourceGo(id string, current map[string]any, daily map[string]
 		}
 		if dailyErr != nil {
 			errorsByPart["daily"] = dailyErr.Error()
+		}
+		if hourlyErr != nil {
+			errorsByPart["hourly"] = hourlyErr.Error()
 		}
 		out["_partialErrors"] = errorsByPart
 	}

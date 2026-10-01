@@ -17,7 +17,7 @@ func TestWeatherPartialSourcePreservesDailyWhenCurrentFails(t *testing.T) {
 		"temperature_2m_min":       {float64(20)},
 		"apparent_temperature_max": {float64(31)},
 		"wind_speed_10m_max":       {float64(5)},
-	}, nil, errors.New("current unavailable"), nil)
+	}, nil, errors.New("current unavailable"), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestWeatherPartialSourcePreservesDailyWhenCurrentFails(t *testing.T) {
 }
 
 func TestWeatherPartialSourceFailsWhenNoPartIsUsable(t *testing.T) {
-	_, err := weatherPartialSourceGo("googleweather", nil, nil, nil, errors.New("current unavailable"), errors.New("daily unavailable"))
+	_, err := weatherPartialSourceGo("googleweather", nil, nil, nil, errors.New("current unavailable"), errors.New("daily unavailable"), errors.New("hourly unavailable"))
 	if err == nil {
 		t.Fatal("empty multi-call provider result was accepted")
 	}

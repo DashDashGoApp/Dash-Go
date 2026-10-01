@@ -22,12 +22,21 @@ func fetchXWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	dailyVals["filter"] = "day"
 	obsVals := mapCopy(auth)
 	obsVals["limit"] = "1"
+	hourlyVals := mapCopy(auth)
+	hourlyVals["limit"] = strconv.Itoa(weatherHourlyMaxRows)
+	// Xweather publishes every interval through one forecasts endpoint: the
+	// hourly product is filter=1hr, not a sub-path. The daily call above uses
+	// filter=day, so this is a second request only for that provider.
+	hourlyVals["filter"] = "1hr"
 	results := weatherParallelCalls(
 		func() (any, error) {
 			return fetchJSONGo(ctx, "https://data.api.xweather.com/forecasts/"+url.PathEscape(place)+"?"+weatherURLValues(dailyVals))
 		},
 		func() (any, error) {
 			return fetchJSONGo(ctx, "https://data.api.xweather.com/observations/"+url.PathEscape(place)+"?"+weatherURLValues(obsVals))
+		},
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://data.api.xweather.com/forecasts/"+url.PathEscape(place)+"?"+weatherURLValues(hourlyVals))
 		},
 	)
 	d := emptyDailyGo()
@@ -64,7 +73,7 @@ func fetchXWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 			current = map[string]any{"temperature_2m": toTempGo(ob["tempF"], "f", cfg.TempUnit), "apparent_temperature": toTempGo(ob["feelslikeF"], "f", cfg.TempUnit), "weather_code": textCodeGo(xOr(ob["weather"], ob["weatherShort"])), "wind_speed_10m": toWindGo(ob["windSpeedMPH"], "mph", cfg.WindUnit), "relative_humidity_2m": ob["humidity"]}
 		}
 	}
-	return weatherPartialSourceGo("xweather", current, d, nil, results[1].Err, results[0].Err)
+	return weatherPartialSourceGo("xweather", current, d, hourlyBlockFromCallGo("xweather", results[2], cfg), results[1].Err, results[0].Err, results[2].Err)
 }
 func xweatherCredsGo(raw string) (string, string) {
 	raw = strings.TrimSpace(raw)
@@ -82,23 +91,42 @@ func fetchNWSGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		return nil, fmt.Errorf("NWS / NOAA is US-only and is unavailable for this location; source will be skipped")
 	}
 	forecastURL, cached := weatherLocationCacheRead(cfg, "nws")
+	hourlyURL, _ := weatherLocationCacheRead(cfg, "nws-hourly")
 	if !cached {
 		pointsURL := fmt.Sprintf("https://api.weather.gov/points/%s,%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon))
 		points, err := fetchJSONGo(ctx, pointsURL)
 		if err != nil {
 			return nil, err
 		}
-		forecastURL = jsonutil.StringValue(anyMap(points["properties"])["forecast"])
+		properties := anyMap(points["properties"])
+		forecastURL = jsonutil.StringValue(properties["forecast"])
 		if forecastURL == "" {
 			return nil, fmt.Errorf("NWS did not return a forecast grid for this location")
 		}
 		weatherLocationCacheWrite(cfg, "nws", forecastURL)
+		hourlyURL = jsonutil.StringValue(properties["forecastHourly"])
+		if hourlyURL != "" {
+			weatherLocationCacheWrite(cfg, "nws-hourly", hourlyURL)
+		}
 	}
-	fc, err := fetchJSONGo(ctx, forecastURL)
-	if err != nil {
-		return nil, err
+	if hourlyURL == "" && forecastURL != "" {
+		// A location cache written before hourly support only stored the daily
+		// grid URL; NWS publishes the hourly product one segment below it.
+		hourlyURL = forecastURL + "/hourly"
 	}
-	periods := jsonutil.List(anyMap(fc["properties"])["periods"])
+	results := weatherParallelCalls(
+		func() (any, error) { return fetchJSONGo(ctx, forecastURL) },
+		func() (any, error) {
+			if hourlyURL == "" {
+				return nil, nil
+			}
+			return fetchJSONGo(ctx, hourlyURL)
+		},
+	)
+	if results[0].Err != nil {
+		return nil, results[0].Err
+	}
+	periods := jsonutil.List(anyMap(anyMap(results[0].Value)["properties"])["periods"])
 	if len(periods) == 0 {
 		return nil, fmt.Errorf("NWS forecast returned no periods for this location")
 	}
@@ -149,7 +177,12 @@ func fetchNWSGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		d["sunset"] = append(d["sunset"], nil)
 	}
 	first := anyMap(periods[0])
-	return weatherOKGo("nws", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(first["temperature"], strings.ToLower(firstN(fmt.Sprint(first["temperatureUnit"]), 1)), cfg.TempUnit), "apparent_temperature": nil, "weather_code": textCodeGo(xOr(first["shortForecast"], first["detailedForecast"])), "wind_speed_10m": nwsWindGo(first, cfg), "relative_humidity_2m": nil}, "daily": d, "hourly": nil}), nil
+	hourly := any(nil)
+	if doc, ok := results[1].Value.(map[string]any); ok {
+		hourly = nwsHourlyGo(jsonutil.List(anyMap(doc["properties"])["periods"]))
+	}
+	current := map[string]any{"temperature_2m": toTempGo(first["temperature"], strings.ToLower(firstN(fmt.Sprint(first["temperatureUnit"]), 1)), cfg.TempUnit), "apparent_temperature": nil, "weather_code": textCodeGo(xOr(first["shortForecast"], first["detailedForecast"])), "wind_speed_10m": nwsWindGo(first, cfg), "relative_humidity_2m": nil}
+	return weatherPartialSourceGo("nws", current, d, hourly, nil, nil, results[1].Err)
 }
 
 func insideNWSCoverageGo(lat, lon float64) bool {

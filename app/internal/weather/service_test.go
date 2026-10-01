@@ -117,7 +117,7 @@ func TestWeatherSourcesPayloadPreservesNumericCodesWithoutNilCoercion(t *testing
 		map[string]any{"current": map[string]any{"weather_code": nil}},
 		map[string]any{"current": map[string]any{"weather_code": 2}},
 	}
-	payload := weatherSourcesPayloadGo(sources, nil, nil)
+	payload := weatherSourcesPayloadGo(sources, nil, nil, Config{})
 	raw := payload["sources"].([]any)
 	if got := anyMap(anyMap(raw[1])["current"])["weather_code"]; got != 2 {
 		t.Fatalf("numeric source code = %#v, want numeric code 2", got)

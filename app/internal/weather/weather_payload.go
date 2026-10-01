@@ -81,7 +81,6 @@ func (s *Service) weatherPayload() any {
 		"current":            nil,
 		"daily":              []any{},
 		"hourly":             []any{},
-		"alerts":             []any{},
 		"selected":           cfg.Providers,
 		"sources":            []any{},
 		"status":             status,

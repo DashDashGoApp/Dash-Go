@@ -29,9 +29,13 @@ func fetchAccuWeatherGo(ctx context.Context, cfg Config) (map[string]any, error)
 	}
 	currentURL := fmt.Sprintf("https://dataservice.accuweather.com/currentconditions/v1/%s?%s", url.PathEscape(locationKey), weatherURLValues(map[string]string{"apikey": key, "details": "true"}))
 	dailyURL := fmt.Sprintf("https://dataservice.accuweather.com/forecasts/v1/daily/5day/%s?%s", url.PathEscape(locationKey), weatherURLValues(map[string]string{"apikey": key, "details": "true", "metric": metric}))
+	// The documented 12-hour hourly endpoint is the one available on the trial
+	// entitlement; 24/72/120-hour endpoints need higher tiers.
+	hourlyURL := fmt.Sprintf("https://dataservice.accuweather.com/forecasts/v1/hourly/12hour/%s?%s", url.PathEscape(locationKey), weatherURLValues(map[string]string{"apikey": key, "details": "true", "metric": "true"}))
 	results := weatherParallelCalls(
 		func() (any, error) { return fetchJSONAnyGo(ctx, currentURL) },
 		func() (any, error) { return fetchJSONGo(ctx, dailyURL) },
+		func() (any, error) { return fetchJSONAnyGo(ctx, hourlyURL) },
 	)
 	current := map[string]any{}
 	if currentList := jsonutil.List(results[0].Value); len(currentList) > 0 {
@@ -77,5 +81,5 @@ func fetchAccuWeatherGo(ctx context.Context, cfg Config) (map[string]any, error)
 			d["sunset"] = append(d["sunset"], nil)
 		}
 	}
-	return weatherPartialSourceGo("accuweather", current, d, nil, results[0].Err, results[1].Err)
+	return weatherPartialSourceGo("accuweather", current, d, hourlyBlockFromCallGo("accuweather", results[2], cfg), results[0].Err, results[1].Err, results[2].Err)
 }

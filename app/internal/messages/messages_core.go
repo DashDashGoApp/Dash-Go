@@ -26,9 +26,11 @@ type messageFetchResult struct {
 }
 
 var messageCategories = []messageCategory{
-	{"jokes", "Jokes", "Clean jokes, dad jokes, and puns.", []string{"icanhazdadjoke", "jokeapi_safe", "api_ninjas_dadjokes", "api_ninjas_jokes", "official_joke"}, "jokes", false},
-	{"quotes", "Quotes", "Short uplifting and reflective lines.", []string{"quotable", "favqs", "zenquotes", "api_ninjas_quotes", "typefit_quotes", "dummyjson_quotes"}, "quotes", false},
-	{"facts", "Fun facts", "General trivia, science, space, history, and animal facts.", []string{"uselessfacts", "api_ninjas_facts", "catfact", "meowfacts", "numbersapi_https"}, "facts", false},
+	{"jokes", "Jokes", "Clean jokes, dad jokes, and puns.", []string{"icanhazdadjoke", "jokeapi_safe", "official_joke", "api_ninjas_dadjokes", "api_ninjas_jokes"}, "jokes", false},
+	{"quotes", "Quotes", "Short uplifting and reflective lines.", []string{"dummyjson_quotes", "quotable_mirror", "stoic_quotes", "thequoteshub", "favqs", "zenquotes", "typefit_quotes", "quotable", "api_ninjas_quotes"}, "quotes", false},
+	{"facts", "Fun facts", "General trivia, science, space, history, and animal facts.", []string{"uselessfacts", "api_ninjas_facts", "catfact", "meowfacts"}, "facts", false},
+	{"history", "This day in history", "What happened on today's date, and who was born today.", []string{"wikimedia_onthisday", "wikimedia_births"}, "history", false},
+	{"trivia", "Trivia", "Household-safe quiz questions with the answer.", []string{"opentdb"}, "trivia", false},
 	{"riddles", "Riddles", "Quick riddle prompts.", []string{"api_ninjas_riddles", "riddles_api"}, "riddles", false},
 	{"wellbeing", "Wellbeing prompts", "Gratitude, kindness, and mindfulness nudges.", []string{"affirmations", "advice_slip", "api_ninjas_quotes_positive"}, "wellbeing", false},
 	{"family", "Family & home prompts", "Conversation starters, household nudges, seasonal notes, and coffee thoughts.", []string{"advice_slip"}, "family", false},
@@ -37,8 +39,9 @@ var messageCategories = []messageCategory{
 
 var providerLabels = map[string]string{
 	"icanhazdadjoke": "icanhazdadjoke", "jokeapi_safe": "JokeAPI / Sv443 safe mode", "api_ninjas_dadjokes": "API Ninjas Dad Jokes", "api_ninjas_jokes": "API Ninjas Jokes", "official_joke": "Official Joke API",
-	"quotable": "Quotable", "favqs": "FavQs QOTD", "zenquotes": "ZenQuotes", "api_ninjas_quotes": "API Ninjas Quotes", "typefit_quotes": "Type.fit Quotes", "dummyjson_quotes": "DummyJSON Quotes",
-	"uselessfacts": "Useless Facts", "api_ninjas_facts": "API Ninjas Facts", "catfact": "catfact.ninja", "meowfacts": "MeowFacts", "numbersapi_https": "Numbers API HTTPS",
+	"quotable": "Quotable", "quotable_mirror": "Quotable community mirror", "favqs": "FavQs QOTD", "zenquotes": "ZenQuotes", "api_ninjas_quotes": "API Ninjas Quotes", "typefit_quotes": "Type.fit Quotes", "dummyjson_quotes": "DummyJSON Quotes", "stoic_quotes": "Stoic Quotes", "thequoteshub": "The Quotes Hub",
+	"uselessfacts": "Useless Facts", "api_ninjas_facts": "API Ninjas Facts", "catfact": "catfact.ninja", "meowfacts": "MeowFacts",
+	"wikimedia_onthisday": "Wikipedia: On this day", "wikimedia_births": "Wikipedia: born this day", "opentdb": "Open Trivia DB",
 	"api_ninjas_riddles": "API Ninjas Riddles", "riddles_api": "Riddles API",
 	"affirmations": "Affirmations.dev", "advice_slip": "Advice Slip", "api_ninjas_quotes_positive": "API Ninjas positive quotes", "jokeapi_nsfw": "JokeAPI adult", "local": "local fallback",
 }
@@ -54,7 +57,11 @@ var localMessages = map[string][]string{
 	"riddles":   {"What has hands but cannot clap? A clock.", "What gets wetter as it dries? A towel.", "What has many keys but opens no locks? A piano.", "What has a head, a tail, and no body? A coin.", "What can travel around the world while staying in a corner? A stamp.", "What has words but never speaks? A book.", "What has a bed but never sleeps? A river.", "What has a neck but no head? A bottle.", "What goes up but never comes down? Your age.", "What can fill a room but takes up no space? Light.", "What has a face and two hands but no arms or legs? A clock.", "What has cities but no houses, forests but no trees, and water but no fish? A map."},
 	"wellbeing": {"Name one small thing that helped today.", "Thank someone for an ordinary kindness.", "Notice something that made the room better.", "What went right today?", "Send one encouraging message.", "Take three slow breaths.", "Name one thing you are looking forward to this week.", "Step outside for two minutes and just look up.", "Write down one thing you are grateful for right now.", "Drink a full glass of water before your next coffee.", "Text someone you have not spoken to in a while.", "Stretch for sixty seconds; your shoulders will thank you.", "What is one thing you can let go of today?", "Name one small win from the last few days."},
 	"family":    {"What was the best part of your day?", "What are you looking forward to?", "What should we cook soon?", "What made you laugh lately?", "Water bottles to the sink.", "Check tomorrow's calendar before bedtime.", "What is one thing you want to try this weekend?", "Who should we call or visit this week?", "What snack should we pick up on the way home?", "What is one chore we can knock out together in ten minutes?", "What song should be on the playlist tonight?", "What is one thing you are proud of from this week?", "What should we plan for next month?", "What is one small thing that made today better?"},
-	"nsfw":      {},
+	// The history pool intentionally holds prompts rather than facts: a local
+	// fallback must never invent an anniversary that did not happen.
+	"history": {"Look up what happened on this day in history together.", "Ask what your family was doing on this date ten years ago.", "Pick a year and find out what happened that day.", "Every date has a story; which one do you remember?", "What is one thing from this date you want to remember?", "Small anniversaries are worth noticing.", "Ask someone older what they remember about this month.", "What was in the news the year you were born?", "Name a day you would happily live again.", "Who in the family has a story from this exact date?", "Write down one thing that happened today.", "What happened this week in the town you grew up in?", "Look up one famous person born on this day.", "What is the oldest thing in this house?", "Pick a favorite year and ask everyone about it.", "What would you like this date to be remembered for?"},
+	"trivia":  {"What is the largest planet in our solar system? Answer: Jupiter.", "What is the largest ocean on Earth? Answer: The Pacific Ocean.", "How many continents are there? Answer: Seven.", "How many inches are in a foot? Answer: Twelve.", "At what temperature does water freeze in Fahrenheit? Answer: 32 degrees.", "How many legs does a spider have? Answer: Eight.", "Which gas do plants take in to make food? Answer: Carbon dioxide.", "What is the tallest mountain above sea level? Answer: Mount Everest.", "How many minutes are in an hour? Answer: Sixty.", "How many days are in a leap year? Answer: 366.", "What is the chemical formula for water? Answer: H2O.", "Are bats mammals? Answer: Yes.", "Can penguins fly? Answer: No.", "How many players does a soccer team field? Answer: Eleven.", "What is the largest mammal on Earth? Answer: The blue whale.", "How many sides does a hexagon have? Answer: Six."},
+	"nsfw":    {},
 }
 
 func (s *Service) messagePrefs() map[string]any {

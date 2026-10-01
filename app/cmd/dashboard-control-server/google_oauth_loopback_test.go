@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+// The server's own wait must outlast the client's poll deadline. When both were
+// time.Second, a loaded race-instrumented runner could lose the race to the
+// deferred listener close and report a spurious "connection refused" even
+// though the loopback path was correct.
+const (
+	loopbackTestServerWait   = time.Minute
+	loopbackTestPollDeadline = 2 * time.Second
+)
+
 func TestGoogleOAuthLoopbackWaitReceivesMatchingCallback(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -20,14 +29,14 @@ func TestGoogleOAuthLoopbackWaitReceivesMatchingCallback(t *testing.T) {
 		err  error
 	}, 1)
 	go func() {
-		code, waitErr := googleOAuthLoopbackWaitWith(listener, "expected", "", "family", "https://accounts.example/authorize", false, time.Second, make(chan os.Signal))
+		code, waitErr := googleOAuthLoopbackWaitWith(listener, "expected", "", "family", "https://accounts.example/authorize", false, loopbackTestServerWait, make(chan os.Signal))
 		result <- struct {
 			code string
 			err  error
 		}{code, waitErr}
 	}()
 	callback := "http://" + listener.Addr().String() + "/?code=authorization-code&state=expected"
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(loopbackTestPollDeadline)
 	for {
 		response, requestErr := http.Get(callback)
 		if requestErr == nil {
@@ -53,11 +62,11 @@ func TestGoogleOAuthLoopbackRejectsWrongState(t *testing.T) {
 	interrupted := make(chan os.Signal, 1)
 	result := make(chan error, 1)
 	go func() {
-		_, waitErr := googleOAuthLoopbackWaitWith(listener, "expected", "", "family", "https://accounts.example/authorize", false, time.Second, interrupted)
+		_, waitErr := googleOAuthLoopbackWaitWith(listener, "expected", "", "family", "https://accounts.example/authorize", false, loopbackTestServerWait, interrupted)
 		result <- waitErr
 	}()
 	callback := "http://" + listener.Addr().String() + "/?" + url.Values{"code": {"authorization-code"}, "state": {"other"}}.Encode()
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(loopbackTestPollDeadline)
 	for {
 		response, requestErr := http.Get(callback)
 		if requestErr == nil {

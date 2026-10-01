@@ -11,7 +11,7 @@ func TestWeatherSourcesPayloadGoLeavesBlendingToBrowser(t *testing.T) {
 		map[string]any{"_source": "first", "_sourceLabel": "First source", "current": map[string]any{"temperature_2m": 70.0}, "daily": map[string]any{"time": []any{"2026-01-01"}}, "hourly": map[string]any{"time": []any{"2026-01-01T00:00"}}},
 		map[string]any{"_source": "second", "_sourceLabel": "Second source", "current": map[string]any{"temperature_2m": 72.0}},
 	}
-	got := weatherSourcesPayloadGo(sources, nil, []string{"first", "second"})
+	got := weatherSourcesPayloadGo(sources, nil, []string{"first", "second"}, Config{})
 	if got["current"].(map[string]any)["temperature_2m"] != 70.0 {
 		t.Fatalf("top-level compatibility current must mirror first source, got %#v", got["current"])
 	}

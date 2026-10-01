@@ -7,7 +7,7 @@ Dash-Go fresh installs support Debian or Raspberry Pi OS **Bookworm** and recomm
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.10, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.13, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -29,7 +29,7 @@ When an optional service is unavailable, Dash-Go does not invent missing data or
 | Weather and air quality | Forecasts, conditions, air quality, and severe-weather alerts | Configured location coordinates and, where needed, a provider API key | Cached information may remain visible; fresh data cannot be retrieved |
 | Radar | On-demand weather radar | Location-derived map tile requests and any configured provider credentials | Radar remains unavailable until a source can be reached |
 | Maps and geocoding | Event-map previews, location lookup, and optional interactive maps | Event location text or map coordinates | Local event details remain available without a map image |
-| Message feeds | Optional jokes, quotes, facts, riddles, advice, affirmations, and word content | A request to the selected content source; some sources use a configured API key | Local messages and previously cached pulled content remain available |
+| Message feeds | Optional jokes, quotes, facts, riddles, trivia, on-this-day history, advice, affirmations, and word content | A request to the selected content source; some sources use a configured API key | Local messages and previously cached pulled content remain available |
 | Font downloads | Default and optional typography choices | A font-file download request | Dash-Go uses its installed or system fallback fonts |
 | GitHub Releases | Dash-Go installer, source, release downloads, and update information | Standard HTTPS request metadata and the requested release asset | The installed dashboard continues running; no update is downloaded |
 
@@ -147,7 +147,15 @@ Weather features use the dashboard’s configured location coordinates. Open-Met
 
 Some providers require an API key. A configured key is stored locally and is sent only to that provider when making its request.
 
-Dash-Go can also request air-quality data and National Weather Service severe-weather alerts. National Weather Service alert coverage is limited to areas supported by that service.
+Dash-Go blends every enabled source and states which sources supplied hourly and daily values. Hourly data is used from every provider that publishes it, and refreshed provider caches keep that work inside each provider's normal cadence:
+
+- Open-Meteo, the National Weather Service, WeatherAPI, OpenWeather, Tomorrow.io, Visual Crossing, Pirate Weather, Xweather, and AccuWeather all provide hourly values with Dash-Go's existing provider request or a single additional free, keyless National Weather Service request.
+- Weatherbit's hourly endpoint requires a paid plan. Weatherbit remains available for current conditions and daily forecasts on its free plan, and its hourly values are used when the plan provides them.
+- Google Weather requires Google Maps Platform billing; its hourly values are used when that integration is configured.
+
+Dash-Go can also request air-quality data and National Weather Service severe-weather alerts. National Weather Service alert coverage is limited to areas supported by that service. Severe-weather banners come from the browser's own National Weather Service request, not from a forecast provider.
+
+Sunrise and sunset are computed locally from the configured coordinates when a provider does not supply them, so no provider combination leaves them empty.
 
 Provider availability, terms, quotas, pricing, and rate limits are controlled by the provider. Dash-Go applies bounded refresh behavior and provider backoff, but it cannot guarantee a provider’s availability or retention policy.
 
@@ -178,13 +186,18 @@ When enabled, an interactive location action can open Google Maps in the local k
 
 ## Optional message feeds
 
-Dashboard Control can enable optional online message categories such as jokes, quotes, facts, riddles, advice, affirmations, and word content.
+Dashboard Control can enable optional online message categories such as jokes, quotes, facts, riddles, trivia, this-day-in-history, advice, affirmations, and household prompts.
 
-Dash-Go only contacts sources selected by the administrator. Current source options may include public services such as API Ninjas, icanhazdadjoke, JokeAPI, Official Joke API, Quotable, FavQs, ZenQuotes, type.fit, DummyJSON, Useless Facts, Cat Facts, Meow Facts, Numbers API, Riddles API, Affirmations.dev, Advice Slip, and Random Word API.
+Dash-Go only contacts sources selected by the administrator. Current source options may include public services such as API Ninjas, icanhazdadjoke, JokeAPI, Official Joke API, Quotable and its community mirror, FavQs, ZenQuotes, Stoic Quotes, The Quotes Hub, type.fit, DummyJSON, Useless Facts, Cat Facts, Meow Facts, Riddles API, Affirmations.dev, Advice Slip, Wikipedia's "on this day" feed, and Open Trivia DB.
 
-Some providers may require an API key. Pulled text can be cached locally and can be edited or removed in Dashboard Control.
+Two sources carry attribution and reuse conditions:
 
-External content is supplied by its respective source. Dash-Go does not guarantee its accuracy, suitability, availability, or retention.
+- **Wikipedia "on this day"** content is published by Wikimedia contributors under the Creative Commons Attribution-ShareAlike 4.0 license. Dash-Go requests only the feed's curated entries and notable births, and Dash-Go is not affiliated with or endorsed by the Wikimedia Foundation.
+- **Open Trivia DB** content is available under the Creative Commons Attribution-ShareAlike 4.0 license. Dash-Go requests only its household-safe subjects and states the source alongside enabled categories.
+
+Some providers may require an API key. Several joke and quote providers also publish adult content categories; Dash-Go never requests those categories for its household categories. Pulled text can be cached locally and can be edited or removed in Dashboard Control.
+
+Dash-Go does not verify or endorse the accuracy of third-party content. External content is supplied by its respective source, and Dash-Go does not guarantee its accuracy, suitability, availability, or retention.
 
 ## Font downloads
 

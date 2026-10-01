@@ -23,7 +23,15 @@ func (s *Service) messageSourcesStatus() map[string]any {
 	return map[string]any{"defs": s.messageDefs(), "prefs": s.messagePrefs(), "cache": s.messageCachePayload(), "overrides": s.messageOverrides(), "generator": "go"}
 }
 
+// messageRefreshBudget bounds one whole refresh. Every provider chain is
+// individually bounded, but many enabled categories in sequence could still
+// stretch the rotating-message refresh on a bad network day; the deadline keeps
+// the section on its normal cadence and preserves whatever was already gathered.
+const messageRefreshBudget = 25 * time.Second
+
 func (s *Service) refreshMessages(ctx context.Context, includeNetwork, manual bool) map[string]any {
+	bounded, cancel := context.WithTimeout(ctx, messageRefreshBudget)
+	defer cancel()
 	prior := s.messageCachePayload()
 	requestedNetwork := includeNetwork
 	if includeNetwork && !s.networkLikelyAvailable() {
@@ -44,7 +52,7 @@ func (s *Service) refreshMessages(ctx context.Context, includeNetwork, manual bo
 		if !ok {
 			continue
 		}
-		got := s.fetchMessageCategory(ctx, c, includeNetwork, 8, manual)
+		got := s.fetchMessageCategory(bounded, c, includeNetwork, 8, manual)
 		statuses = append(statuses, got.Status)
 		if len(got.Items) > 0 {
 			used = append(used, id)

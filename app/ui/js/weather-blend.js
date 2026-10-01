@@ -95,7 +95,7 @@ function robustNumeric(vals,key){
   if(!nums.length) return {value:null,count:0,used:0,dropped:0,method:"none",min:null,max:null,spread:0,disagree:false};
   const min=Math.min(...nums), max=Math.max(...nums), spread=max-min, med=medianNums(nums), threshold=weatherThreshold(key,med);
   if(nums.length===1) return {value:nums[0],count:1,used:1,dropped:0,method:"single",min,max,spread,median:med,disagree:false};
-  if(nums.length===2) return {value:meanNums(nums),count:2,used:2,dropped:0,method:"two-source mean",min,max,spread,median:med,disagree:spread>=threshold*1.5};
+  if(nums.length===2) return {value:meanNums(nums),count:2,used:2,dropped:0,method:"two-source mean",min,max,spread,median:med,disagree:spread>=threshold};
   if(nums.length===3){
     const disagree=spread>=threshold;
     return {value:disagree?med:meanNums(nums),count:3,used:3,dropped:0,method:disagree?"three-source median":"three-source mean",min,max,spread,median:med,disagree};
@@ -160,6 +160,9 @@ function blendWeatherCode(vals,precipProbability,precipTotal){
     else if(!wetSignal&&families.includes("clear")) families=["clear"];
   }
   families.sort((a,b)=>WEATHER_FAMILY_SEVERITY[b]-WEATHER_FAMILY_SEVERITY[a]||a.localeCompare(b));
+  // Ties resolve on condition severity and then family name. This is deliberate:
+  // it stays deterministic and independent of provider ordering, so a household
+  // cannot change the blend's meaning by rearranging its sources.
   return representativeWeatherCode(codes,families[0]);
 }
 function medianNearestTimestamp(vals){
@@ -169,6 +172,10 @@ function medianNearestTimestamp(vals){
   rows.sort((a,b)=>Math.abs(a.ms-med)-Math.abs(b.ms-med)||a.ms-b.ms);
   return rows[0].value;
 }
+// The dashboard shows one day of hours at a time, so the blended hourly block is
+// bounded to the same three-day horizon the Go adapters use. This keeps the
+// payload small on a Pi Zero instead of carrying sixteen days of unused rows.
+const WEATHER_HOURLY_MAX_ROWS=72;
 function blendHourlySources(sources){
   const byTime={};
   for(const src of sources){
@@ -176,17 +183,25 @@ function blendHourlySources(sources){
     (h.time||[]).forEach((time,i)=>{ if(time){ (byTime[time]=byTime[time]||[]).push({src,h,i}); } });
   }
   const times=Object.keys(byTime).sort();
-  if(!times.length) return (sources[0]&&sources[0].hourly)||null;
+  if(!times.length){
+    // No overlapping timestamps: one provider's rows are used unchanged. The
+    // stats say so, instead of presenting a single source as a blend.
+    const only=(sources[0]&&sources[0].hourly)||null;
+    const rows=only&&Array.isArray(only.time)?only.time.length:0;
+    return {hourly:only,stats:{rows,sources:rows?1:0,singleSource:!!rows,usedFallback:!!rows,totalHours:rows}};
+  }
   const out={time:[],temperature_2m:[],weather_code:[],precipitation_probability:[]};
-  for(const time of times){
+  const contributors=new Set();
+  for(const time of times.slice(0,WEATHER_HOURLY_MAX_ROWS)){
     const selected=preferredWeatherEntries(byTime[time]),arr=selected.entries;
+    for(const entry of arr) contributors.add(String((entry.src&&entry.src._source)||"").trim().toLowerCase());
     out.time.push(time);
     out.temperature_2m.push(robustNumeric(arr.map(x=>x.h.temperature_2m&&x.h.temperature_2m[x.i]),"temperature_2m").value);
     const pop=blendPrecipProbability(arr.map(x=>x.h.precipitation_probability&&x.h.precipitation_probability[x.i]));
     out.precipitation_probability.push(pop.value);
     out.weather_code.push(blendWeatherCode(arr.map(x=>x.h.weather_code&&x.h.weather_code[x.i]),pop.value,null));
   }
-  return out;
+  return {hourly:out,stats:{rows:out.time.length,sources:contributors.size,singleSource:contributors.size<=1,usedFallback:false,totalHours:times.length}};
 }
 
 function blendWeatherSources(sources){
@@ -203,7 +218,23 @@ function blendWeatherSources(sources){
     only._sources=allSources;
     only._activeSources=sources;
     only._sourceLabel=only._sourceLabel;
-    only._blend={current:{},daily:{},allExcludedFallback};
+    // A single active source still publishes per-field provenance, so the
+    // review surface can explain the value instead of showing nothing.
+    const hourlyRows=Number(only.hourly&&Array.isArray(only.hourly.time)?only.hourly.time.length:0);
+    only._blend={current:{},daily:{},hourly:{rows:hourlyRows,sources:hourlyRows?1:0,singleSource:true,usedFallback:false,totalHours:hourlyRows},allExcludedFallback};
+    for(const key of ["temperature_2m","apparent_temperature","wind_speed_10m","relative_humidity_2m"]){
+      const value=(only.current||{})[key]??null;
+      only._blend.current[key]={value,count:value===null?0:1,used:value===null?0:1,dropped:0,method:value===null?"none":"single",disagree:false};
+    }
+    const daily=only.daily||{};
+    (daily.time||[]).forEach((date,i)=>{
+      const stats={contributors:1,totalSources:1,staleExcluded:0,usedStaleFallback:false};
+      for(const key of ["temperature_2m_max","temperature_2m_min","apparent_temperature_max","wind_speed_10m_max","uv_index_max","precipitation_sum","precipitation_probability_max"]){
+        const value=Array.isArray(daily[key])?daily[key][i]:null;
+        stats[key]={value:value===undefined?null:value,count:value===undefined||value===null?0:1,used:1,dropped:0,method:"single",disagree:false};
+      }
+      only._blend.daily[date]=stats;
+    });
     if(allExcludedFallback) only._sourceFallbackNote="All available weather sources were excluded; the first available source was restored for this forecast.";
     return only;
   }
@@ -214,7 +245,8 @@ function blendWeatherSources(sources){
   }
   const currentSelection=preferredWeatherEntries(sources.map(src=>({src})));
   const currentSources=currentSelection.entries.map(entry=>entry.src);
-  const out={current:{},daily:emptyDaily(),hourly:blendHourlySources(sources),_sources:allSources,_activeSources:sources,_sourceLabel:"Combined forecast from "+sources.length+" sources",_blend:{current:{},daily:{},allExcludedFallback}};
+  const hourly=blendHourlySources(sources);
+  const out={current:{},daily:emptyDaily(),hourly:hourly.hourly,_sources:allSources,_activeSources:sources,_sourceLabel:"Combined forecast from "+sources.length+" sources",_blend:{current:{},daily:{},hourly:hourly.stats,allExcludedFallback}};
   if(allExcludedFallback) out._sourceFallbackNote="All available weather sources were excluded; available data was restored so the forecast remains usable.";
   function setCurrent(key){
     const st=weatherFreshnessStats(robustNumeric(currentSources.map(s=>s.current&&s.current[key]),key),currentSelection);

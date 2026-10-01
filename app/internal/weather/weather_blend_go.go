@@ -1,10 +1,6 @@
 package weather
 
-import (
-	"time"
-
-	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
-)
+import "time"
 
 // weatherSourcesPayloadGo publishes normalized provider records to the browser.
 // The browser owns the one authoritative blend because it already has the
@@ -15,7 +11,12 @@ import (
 // The top-level current/daily/hourly fields remain a compatibility mirror of
 // the first successful source for cache validation and older consumers. They
 // are intentionally not labelled or computed as a blend.
-func weatherSourcesPayloadGo(sources []any, status []any, selected []string) map[string]any {
+//
+// There is deliberately no alerts field here. Dash-Go's severe-weather banners
+// come from the browser's own NWS request; no Go provider ever populated this
+// object, so publishing it only advertised data that could never arrive.
+func weatherSourcesPayloadGo(sources []any, status []any, selected []string, cfg Config) map[string]any {
+	fillDerivedSunTimesGo(sources, cfg)
 	out := map[string]any{
 		"sources":            sources,
 		"status":             status,
@@ -31,7 +32,6 @@ func weatherSourcesPayloadGo(sources []any, status []any, selected []string) map
 		out["current"] = nil
 		out["daily"] = map[string][]any{}
 		out["hourly"] = map[string][]any{}
-		out["alerts"] = []any{}
 		return out
 	}
 
@@ -41,22 +41,5 @@ func weatherSourcesPayloadGo(sources []any, status []any, selected []string) map
 	out["hourly"] = primary["hourly"]
 	out["_source"] = primary["_source"]
 	out["_sourceLabel"] = primary["_sourceLabel"]
-	out["alerts"] = mergeAlertsGo(sources)
-	return out
-}
-
-func mergeAlertsGo(sources []any) []any {
-	out := []any{}
-	seen := map[string]bool{}
-	for _, src := range sources {
-		for _, raw := range jsonutil.List(anyMap(src)["alerts"]) {
-			key := jsonutil.TextValue(raw)
-			if key == "" || seen[key] {
-				continue
-			}
-			seen[key] = true
-			out = append(out, raw)
-		}
-	}
 	return out
 }

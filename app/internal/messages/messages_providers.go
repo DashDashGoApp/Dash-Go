@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,181 +13,101 @@ import (
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
 
+// messageOutboundUserAgent identifies every message-feed request. Dash-Go keeps
+// one deliberately generic agent for all outbound message traffic: no version
+// and no contact string, so shared public assets cannot leak household or
+// release identity. Sources that ask for a descriptive agent get one, and an
+// anonymous household refresh stays far inside their published rate limits.
 const messageOutboundUserAgent = "Dash-Go (+local-kiosk)"
 
 func decodeMessageJSON(body io.Reader, limit int64, dst any) error {
 	return json.NewDecoder(io.LimitReader(body, limit)).Decode(dst)
 }
 
+// messageFetcher carries the per-refresh HTTP plumbing shared by every provider
+// adapter. Keeping it separate lets each adapter file stay a plain
+// "request -> text lines" function inside the source-navigability limit.
+type messageFetcher struct {
+	ctx    context.Context
+	client *http.Client
+	env    func(string) string
+}
+
+func (s *Service) newMessageFetcher(ctx context.Context) *messageFetcher {
+	return &messageFetcher{ctx: ctx, client: &http.Client{Timeout: 5 * time.Second}, env: s.messageEnv}
+}
+
+// bounded returns a child context so a provider that makes several sequential
+// calls can never exceed the message refresh budget.
+func (f *messageFetcher) bounded(d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(f.ctx, d)
+}
+
+func (f *messageFetcher) getJSONCtx(ctx context.Context, u string, headers map[string]string, dst any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", messageOutboundUserAgent)
+	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	res, err := f.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(res.Body, 256))
+		return fmt.Errorf("%s: %s", res.Status, strings.TrimSpace(string(b)))
+	}
+	return decodeMessageJSON(res.Body, 2<<20, dst)
+}
+
+func (f *messageFetcher) getJSON(u string, headers map[string]string, dst any) error {
+	return f.getJSONCtx(f.ctx, u, headers, dst)
+}
+
+func (f *messageFetcher) apiNinjas(path string, params url.Values) ([]map[string]any, error) {
+	key := f.env("DASH_API_NINJAS_KEY")
+	if key == "" {
+		return nil, fmt.Errorf("missing API Ninjas key")
+	}
+	u := "https://api.api-ninjas.com" + path
+	if len(params) > 0 {
+		u += "?" + params.Encode()
+	}
+	var out []map[string]any
+	err := f.getJSON(u, map[string]string{"X-Api-Key": key}, &out)
+	return out, err
+}
+
+// fetchMessageProvider dispatches one provider id to its category-owned adapter.
+// Every adapter returns plain text lines; trimming, clamping, and the ticker
+// length limit are applied once in cleanMessageText, so a new provider cannot
+// bypass the rotating-message limits.
 func (s *Service) fetchMessageProvider(ctx context.Context, provider string, want int) ([]string, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
-	getJSONCtx := func(c context.Context, u string, headers map[string]string, dst any) error {
-		req, err := http.NewRequestWithContext(c, http.MethodGet, u, nil)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("User-Agent", messageOutboundUserAgent)
-		req.Header.Set("Accept", "application/json")
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-		res, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer res.Body.Close()
-		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			b, _ := io.ReadAll(io.LimitReader(res.Body, 256))
-			return fmt.Errorf("%s: %s", res.Status, strings.TrimSpace(string(b)))
-		}
-		return decodeMessageJSON(res.Body, 2<<20, dst)
-	}
-	getJSON := func(u string, headers map[string]string, dst any) error {
-		return getJSONCtx(ctx, u, headers, dst)
-	}
-	apiNinjas := func(path string, params url.Values) ([]map[string]any, error) {
-		key := s.messageEnv("DASH_API_NINJAS_KEY")
-		if key == "" {
-			return nil, fmt.Errorf("missing API Ninjas key")
-		}
-		u := "https://api.api-ninjas.com" + path
-		if len(params) > 0 {
-			u += "?" + params.Encode()
-		}
-		var out []map[string]any
-		err := getJSON(u, map[string]string{"X-Api-Key": key}, &out)
-		return out, err
-	}
+	f := s.newMessageFetcher(ctx)
 	switch provider {
-	case "icanhazdadjoke":
-		var data map[string]any
-		err := getJSON("https://icanhazdadjoke.com/search?limit="+strconvI(clamp(want, 1, 20)), map[string]string{"Accept": "application/json"}, &data)
-		return textsFromList(jsonutil.List(data["results"]), "joke"), err
-	case "jokeapi_safe", "jokeapi_nsfw":
-		vals := url.Values{"amount": {strconvI(clamp(want, 1, 10))}}
-		if provider == "jokeapi_safe" {
-			vals.Set("safe-mode", "")
-			vals.Set("blacklistFlags", "nsfw,religious,political,racist,sexist,explicit")
-		} else {
-			vals.Set("blacklistFlags", "religious,political,racist,sexist")
-		}
-		var data map[string]any
-		err := getJSON("https://v2.jokeapi.dev/joke/Any?"+vals.Encode(), nil, &data)
-		return jokeAPITexts(data), err
-	case "official_joke":
-		var rows []map[string]any
-		err := getJSON("https://official-joke-api.appspot.com/jokes/random/"+strconvI(clamp(want, 1, 10)), nil, &rows)
-		return jokeRowsTexts(rows), err
-	case "quotable":
-		var rows []map[string]any
-		err := getJSON("https://api.quotable.io/quotes/random?limit="+strconvI(clamp(want, 1, 10))+"&maxLength=220", nil, &rows)
-		return quoteRowsTexts(rows), err
-	case "favqs":
-		var data map[string]any
-		err := getJSON("https://favqs.com/api/qotd", nil, &data)
-		return quoteRowsTexts([]map[string]any{jsonutil.Map(data["quote"])}), err
-	case "zenquotes":
-		var rows []map[string]any
-		err := getJSON("https://zenquotes.io/api/random", nil, &rows)
-		return quoteRowsTexts(rows), err
-	case "typefit_quotes":
-		var rows []map[string]any
-		err := getJSON("https://type.fit/api/quotes", nil, &rows)
-		if len(rows) > want {
-			rows = rows[:want]
-		}
-		return quoteRowsTexts(rows), err
-	case "dummyjson_quotes":
-		var rows []map[string]any
-		err := getJSON("https://dummyjson.com/quotes/random/"+strconvI(clamp(want, 1, 10)), nil, &rows)
-		return quoteRowsTexts(rows), err
-	case "uselessfacts":
-		out := []string{}
-		bounded, cancel := context.WithTimeout(ctx, 12*time.Second)
-		defer cancel()
-		for range clamp(want, 1, 4) {
-			var data map[string]any
-			if err := getJSONCtx(bounded, "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en", nil, &data); err != nil {
-				return out, err
-			}
-			if t := cleanMessageText(data["text"]); t != "" {
-				out = append(out, t)
-			}
-		}
-		return out, nil
-	case "catfact":
-		var data map[string]any
-		err := getJSON("https://catfact.ninja/fact", nil, &data)
-		return []string{cleanMessageText(data["fact"])}, err
-	case "meowfacts":
-		var data map[string]any
-		err := getJSON("https://meowfacts.herokuapp.com/", nil, &data)
-		return stringList(jsonutil.List(data["data"])), err
-	case "numbersapi_https":
-		out := []string{}
-		bounded, cancel := context.WithTimeout(ctx, 12*time.Second)
-		defer cancel()
-		for range clamp(want, 1, 4) {
-			var data map[string]any
-			n := 1 + rand.Intn(366)
-			if err := getJSONCtx(bounded, fmt.Sprintf("https://numbersapi.com/%d/trivia?json", n), nil, &data); err != nil {
-				return out, err
-			}
-			if t := cleanMessageText(data["text"]); t != "" {
-				out = append(out, t)
-			}
-		}
-		return out, nil
-	case "riddles_api":
-		var data map[string]any
-		err := getJSON("https://riddles-api.vercel.app/random", nil, &data)
-		q := cleanMessageText(firstMsgNonEmpty(data, "riddle", "question", "title"))
-		a := cleanMessageText(data["answer"])
-		if q != "" && a != "" {
-			q += " Answer: " + a
-		}
-		return []string{q}, err
-	case "affirmations":
-		var data map[string]any
-		err := getJSON("https://www.affirmations.dev/", nil, &data)
-		return []string{cleanMessageText(data["affirmation"])}, err
-	case "advice_slip":
-		var data map[string]any
-		err := getJSON("https://api.adviceslip.com/advice", nil, &data)
-		return []string{cleanMessageText(jsonutil.Map(data["slip"])["advice"])}, err
-	case "api_ninjas_jokes", "api_ninjas_dadjokes":
-		path := "/v1/jokes"
-		if provider == "api_ninjas_dadjokes" {
-			path = "/v1/dadjokes"
-		}
-		rows, err := apiNinjas(path, nil)
-		return textsFromList(mapsToAny(rows), "joke"), err
-	case "api_ninjas_quotes", "api_ninjas_quotes_positive":
-		params := url.Values{}
-		if provider == "api_ninjas_quotes_positive" {
-			params.Set("category", "happiness")
-		}
-		rows, err := apiNinjas("/v2/randomquotes", params)
-		return quoteRowsTexts(rows), err
-	case "api_ninjas_facts":
-		rows, err := apiNinjas("/v1/facts", nil)
-		return textsFromList(mapsToAny(rows), "fact"), err
-	case "api_ninjas_riddles":
-		rows, err := apiNinjas("/v1/riddles", nil)
-		out := []string{}
-		for _, r := range rows {
-			q := cleanMessageText(r["question"])
-			ans := cleanMessageText(r["answer"])
-			if q != "" && ans != "" {
-				out = append(out, q+" Answer: "+ans)
-			}
-		}
-		return out, err
+	case "icanhazdadjoke", "jokeapi_safe", "jokeapi_nsfw", "official_joke",
+		"api_ninjas_jokes", "api_ninjas_dadjokes":
+		return f.jokeProvider(provider, want)
+	case "quotable", "quotable_mirror", "stoic_quotes", "thequoteshub", "favqs",
+		"zenquotes", "typefit_quotes", "dummyjson_quotes",
+		"api_ninjas_quotes", "api_ninjas_quotes_positive", "affirmations", "advice_slip":
+		return f.quoteProvider(provider, want)
+	case "uselessfacts", "api_ninjas_facts", "catfact", "meowfacts",
+		"riddles_api", "api_ninjas_riddles":
+		return f.factProvider(provider, want)
+	case "wikimedia_onthisday", "wikimedia_births", "opentdb":
+		return f.historyProvider(provider, want)
 	}
 	return nil, fmt.Errorf("unknown provider %s", provider)
 }
 
 func strconvI(n int) string { return fmt.Sprintf("%d", n) }
+
 func mapsToAny(rows []map[string]any) []any {
 	out := make([]any, len(rows))
 	for i := range rows {
@@ -196,6 +115,7 @@ func mapsToAny(rows []map[string]any) []any {
 	}
 	return out
 }
+
 func stringList(vals []any) []string {
 	out := []string{}
 	for _, v := range vals {
@@ -205,6 +125,7 @@ func stringList(vals []any) []string {
 	}
 	return out
 }
+
 func textsFromList(vals []any, key string) []string {
 	out := []string{}
 	for _, raw := range vals {
@@ -214,6 +135,7 @@ func textsFromList(vals []any, key string) []string {
 	}
 	return out
 }
+
 func firstMsgNonEmpty(m map[string]any, keys ...string) any {
 	for _, k := range keys {
 		if t := cleanMessageText(m[k]); t != "" {
@@ -222,6 +144,7 @@ func firstMsgNonEmpty(m map[string]any, keys ...string) any {
 	}
 	return ""
 }
+
 func jokeRowsTexts(rows []map[string]any) []string {
 	out := []string{}
 	for _, r := range rows {
@@ -241,6 +164,7 @@ func jokeRowsTexts(rows []map[string]any) []string {
 	}
 	return out
 }
+
 func jokeAPITexts(data map[string]any) []string {
 	if rows := jsonutil.List(data["jokes"]); len(rows) > 0 {
 		maps := []map[string]any{}
@@ -251,6 +175,7 @@ func jokeAPITexts(data map[string]any) []string {
 	}
 	return jokeRowsTexts([]map[string]any{data})
 }
+
 func quoteRowsTexts(rows []map[string]any) []string {
 	out := []string{}
 	for _, r := range rows {

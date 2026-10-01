@@ -1,3 +1,44 @@
+## [1.5.13] — 2026-09-30
+
+Dash-Go 1.5.13 brings hourly weather to every provider that offers it, adds two rotating-message categories from keyless public sources, and closes the message-feed and blending defects found while reviewing both sections.
+
+### Features
+
+- Added a **This day in history** message category using Wikipedia's keyless "on this day" feed, in two forms: curated anniversary entries and notable births, each shown with its year. Entries rotate through the section instead of repeating the same first lines, and the feed's uncurated event list is deliberately unused because it carries death and disaster lines a household kiosk should not rotate.
+- Added a **Trivia** message category using Open Trivia DB, request-encoded so punctuation survives intact, restricted to household-safe subjects (science, computers, mathematics, mythology, sports, geography, history, animals, vehicles), with the rate limit reported as an ordinary provider error rather than a failure.
+- Both new categories ship with local fallback pools, stay off until enabled in Dashboard Control, and rotate offline: the history pool holds prompts rather than invented anniversaries, and every trivia entry states its answer.
+
+### Improvements
+
+- **Hourly weather now comes from every provider that can supply it.** OpenWeather, Tomorrow.io, Pirate Weather, WeatherAPI, Visual Crossing, Weatherbit, AccuWeather, Xweather, Google Weather, and the National Weather Service all feed the hourly view, and six of them cost no additional provider request: five already returned hourly in the response Dash-Go was fetching and discarding, and Visual Crossing needs one added parameter that its plan counts as a single forecast record. Only NWS adds a request, and it is free and keyless.
+- Hourly values are normalized to one local wall-clock shape before blending. Providers describe the same hour as a naive local time, an offset-bearing timestamp, or a bare UTC epoch; the browser unions hours by exact time identity, so mismatched strings previously collapsed the whole hourly view to a single provider. Every adapter now resolves its own zone, with the device zone as the fallback for providers that publish bare UTC.
+- The blended hourly block is bounded to the three-day horizon the dashboard actually shows, so a sixteen-day hourly payload no longer reaches a Pi Zero browser, and it publishes its own provenance (contributing sources, row count, fallback state) like the daily block already did.
+- Sunrise and sunset are now derived from the configured coordinates when a provider omits them. WeatherAPI, Weatherbit, and NWS return neither, so a household running those sources alone saw an empty sun row; provider-supplied values are still preferred when present.
+- A two-source disagreement is now flagged at the field's disagreement threshold instead of one and a half times it, so the review surface stops presenting an averaged split as agreement.
+- A single active weather source now publishes per-field provenance for current and daily values instead of an empty review surface.
+- Weather source descriptions now state hourly availability and paid-plan requirements accurately, including Weatherbit's paid-only hourly endpoint.
+- The rotating-message refresh now runs under one bounded deadline, so many enabled categories on a slow network cannot stretch the section past its normal cadence.
+- The rotating-message provider chain was repaired after a live health audit: the quotes chain now leads with a verified live source, and a verified live community Quotable mirror, Stoic Quotes, and The Quotes Hub were added as additional quote sources. A quote feed that mixes aphorisms with long novel excerpts is bounded to a ticker line rather than clamped mid-sentence.
+
+### Removals
+
+- Removed the Numbers API provider. Both its `http` and `https` endpoints stopped answering with a usable payload, and no verified keyless replacement exists, so facts now rely on the remaining providers and the local pool.
+- Removed the always-empty weather `alerts` field from the Go payload. No Go provider ever populated it; Dash-Go's severe-weather banners come from the browser's own NWS request, so publishing the field only advertised data that could never arrive.
+
+### Build and release integrity
+
+- Fixed the intermittent OAuth loopback test failures that made a 1.5.12 prepublication proof fail and pass on identical source. The two tests gave the local callback server the same one-second window they then polled for, so a loaded race-instrumented runner could lose to the server's deferred listener close and report a false `connection refused`. The server wait now outlasts the poll deadline by construction.
+- Added a rotating-message catalog smoke that fails when a category loses its local pool, a provider loses its label or dispatch branch, an adult category is reached by a non-adult provider, a removed provider returns, or a fallback pool starts inventing dated content.
+- Extended the weather blending smoke with cross-provider hourly union, the hourly horizon cap, hourly provenance, the two-source disagreement threshold, and single-source provenance.
+- Added eight required source capabilities for this line, from message provider health and the refresh budget to hourly provider coverage, the hourly horizon, derived sun times, and the loopback test stability fix.
+
+### Upgrade notes
+
+- No manual migration is required. Existing settings, calendars, weather sources and keys, message selections, and local data remain compatible.
+- The two new message categories are available but disabled until selected in Dashboard Control.
+- Hourly weather appears automatically for every enabled source that provides it. Sources whose hourly data requires a paid plan (Weatherbit) continue to work daily-only until that plan is active; AccuWeather hourly uses the 12-hour endpoint available on its trial entitlement.
+- Weather provider caches refresh naturally; no cache schema changed.
+
 ## [1.5.12] — 2026-09-30
 
 Dash-Go 1.5.12 fixes a shutdown defect that made every application update record a failed dashboard-server unit, and turns off two pieces of background work a kiosk never needs.

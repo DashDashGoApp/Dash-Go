@@ -38,4 +38,28 @@ const excluded=run(`blendWeatherSources([
 ])`);
 assert.equal(excluded.current.temperature_2m,70,"all-excluded recovery must use one deterministic source, not silently blend all excluded providers");
 assert.equal(excluded._blend.allExcludedFallback,true);
-console.log("PASS: weather blending rejects missing votes, resists small-source outliers, prefers fresh data, and handles exclusions explicitly");
+// --- hourly blending across providers with different timestamp shapes --------
+const hourlyBlend=run(`blendWeatherSources([
+  {_source:'om',current:{temperature_2m:70},daily:{time:['2026-07-11'],weather_code:[0],temperature_2m_max:[80],temperature_2m_min:[60],apparent_temperature_max:[80],precipitation_sum:[1],precipitation_probability_max:[10],wind_speed_10m_max:[5],uv_index_max:[4],sunrise:[null],sunset:[null]},hourly:{time:['2026-07-11T00:00','2026-07-11T01:00'],temperature_2m:[60,61],weather_code:[0,1],precipitation_probability:[10,20]}},
+  {_source:'nws',current:{temperature_2m:72},daily:{time:['2026-07-11'],weather_code:[0],temperature_2m_max:[81],temperature_2m_min:[61],apparent_temperature_max:[81],precipitation_sum:[1],precipitation_probability_max:[10],wind_speed_10m_max:[5],uv_index_max:[4],sunrise:[null],sunset:[null]},hourly:{time:['2026-07-11T00:00','2026-07-11T01:00','2026-07-11T02:00'],temperature_2m:[62,63,64],weather_code:[1,0,0],precipitation_probability:[30,10,0]}}
+])`);
+assert.equal(hourlyBlend.hourly.time.length,3,"hourly union must join both providers across their shared local hours");
+assert.equal(hourlyBlend._blend.hourly.sources,2,"hourly provenance must report both contributing providers");
+assert.equal(hourlyBlend._blend.hourly.singleSource,false,"two hourly providers must not be reported as a single source");
+assert.equal(hourlyBlend.hourly.temperature_2m[0],61,"the first shared hour must blend both providers rather than fall back to one");
+const longHourly=run(`blendWeatherSources([
+  {_source:'om',current:{temperature_2m:70},daily:{time:[]},hourly:{time:Array.from({length:200},(_,i)=>'2026-07-'+String(Math.floor(i/24)+11).padStart(2,'0')+'T'+String(i%24).padStart(2,'0')),temperature_2m:Array.from({length:200},()=>60),weather_code:Array.from({length:200},()=>0),precipitation_probability:Array.from({length:200},()=>0)}},
+  {_source:'nws',current:{temperature_2m:71},daily:{time:[]}}
+])`);
+assert.equal(longHourly.hourly.time.length,72,"the blended hourly block must stay inside the three-day horizon");
+assert.ok(longHourly._blend.hourly.totalHours>72,"hourly provenance must still report how many hours were available");
+assert.equal(run("robustNumeric([60,75],'temperature_2m').disagree"),true,"a two-source disagreement at the field threshold must be flagged");
+assert.equal(run("robustNumeric([68,70],'temperature_2m').disagree"),false,"a two-source agreement must not be flagged");
+run("WEATHER_DISABLED_SOURCE_IDS=new Set()");
+const single=run(`blendWeatherSources([
+  {_source:'om',current:{temperature_2m:70},daily:{time:['2026-07-11'],weather_code:[0],temperature_2m_max:[80],temperature_2m_min:[60],apparent_temperature_max:[80],precipitation_sum:[1],precipitation_probability_max:[10],wind_speed_10m_max:[5],uv_index_max:[4],sunrise:[null],sunset:[null]},hourly:{time:['2026-07-11T00:00'],temperature_2m:[60],weather_code:[0],precipitation_probability:[10]}}
+])`);
+assert.equal(single._blend.current.temperature_2m.method,"single","single-source current must publish provenance");
+assert.equal(single._blend.daily['2026-07-11'].contributors,1,"single-source daily must publish contributor counts");
+assert.equal(single._blend.hourly.rows,1,"single-source hourly must publish its row count");
+console.log("PASS: weather blending rejects missing votes, resists small-source outliers, prefers fresh data, unions hourly across providers, and handles exclusions explicitly");

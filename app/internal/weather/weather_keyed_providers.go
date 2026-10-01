@@ -48,7 +48,7 @@ func fetchWeatherAPIGo(ctx context.Context, cfg Config) (map[string]any, error) 
 	if cfg.TempUnit == "celsius" {
 		unit = "c"
 	}
-	return weatherOKGo("weatherapi", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(choice(unit == "c", c["temp_c"], c["temp_f"]), unit, cfg.TempUnit), "apparent_temperature": toTempGo(choice(unit == "c", c["feelslike_c"], c["feelslike_f"]), unit, cfg.TempUnit), "weather_code": textCodeGo(cond["text"]), "wind_speed_10m": toWindGo(c["wind_mph"], "mph", cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("weatherapi", map[string]any{"current": map[string]any{"temperature_2m": toTempGo(choice(unit == "c", c["temp_c"], c["temp_f"]), unit, cfg.TempUnit), "apparent_temperature": toTempGo(choice(unit == "c", c["feelslike_c"], c["feelslike_f"]), unit, cfg.TempUnit), "weather_code": textCodeGo(cond["text"]), "wind_speed_10m": toWindGo(c["wind_mph"], "mph", cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": weatherHourlyForProviderGo("weatherapi", j, cfg)}), nil
 }
 
 func fetchOpenWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
@@ -82,7 +82,7 @@ func fetchOpenWeatherGo(ctx context.Context, cfg Config) (map[string]any, error)
 	}
 	c := anyMap(j["current"])
 	w := firstMap(jsonutil.List(c["weather"]))
-	return weatherOKGo("openweather", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feels_like"], "weather_code": owCodeGo(w["id"]), "wind_speed_10m": toWindGo(c["wind_speed"], choice(units == "metric", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("openweather", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feels_like"], "weather_code": owCodeGo(w["id"]), "wind_speed_10m": toWindGo(c["wind_speed"], choice(units == "metric", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": weatherHourlyForProviderGo("openweather", j, cfg)}), nil
 }
 
 func fetchGoogleWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
@@ -96,12 +96,20 @@ func fetchGoogleWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 	vals := mapCopy(baseVals)
 	vals["days"] = strconv.Itoa(days)
 	vals["pageSize"] = strconv.Itoa(days)
+	hourVals := mapCopy(baseVals)
+	// Google returns at most one page of 24 hourly records per call, so Dash-Go
+	// takes that single page rather than following nextPageToken for three.
+	hourVals["hours"] = strconv.Itoa(googleWeatherHourlyPageSize)
+	hourVals["pageSize"] = strconv.Itoa(googleWeatherHourlyPageSize)
 	results := weatherParallelCalls(
 		func() (any, error) {
 			return fetchJSONGo(ctx, "https://weather.googleapis.com/v1/currentConditions:lookup?"+weatherURLValues(baseVals))
 		},
 		func() (any, error) {
 			return fetchJSONGo(ctx, "https://weather.googleapis.com/v1/forecast/days:lookup?"+weatherURLValues(vals))
+		},
+		func() (any, error) {
+			return fetchJSONGo(ctx, "https://weather.googleapis.com/v1/forecast/hours:lookup?"+weatherURLValues(hourVals))
 		},
 	)
 	current := map[string]any{}
@@ -127,7 +135,7 @@ func fetchGoogleWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 			d["sunset"] = append(d["sunset"], sun["sunsetTime"])
 		}
 	}
-	return weatherPartialSourceGo("googleweather", current, d, nil, results[0].Err, results[1].Err)
+	return weatherPartialSourceGo("googleweather", current, d, hourlyBlockFromCallGo("googleweather", results[2], cfg), results[0].Err, results[1].Err, results[2].Err)
 }
 func fetchTomorrowGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("tomorrow", cfg)
@@ -163,7 +171,7 @@ func fetchTomorrowGo(ctx context.Context, cfg Config) (map[string]any, error) {
 		v := anyMap(anyMap(hourly[0])["values"])
 		current = map[string]any{"temperature_2m": v["temperature"], "apparent_temperature": v["temperatureApparent"], "weather_code": textCodeGo(xOr(v["weatherCode"], v["weatherCodeFull"])), "wind_speed_10m": toWindGo(v["windSpeed"], choice(units == "metric", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": v["humidity"]}
 	}
-	return weatherOKGo("tomorrow", map[string]any{"current": current, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("tomorrow", map[string]any{"current": current, "daily": d, "hourly": weatherHourlyForProviderGo("tomorrow", j, cfg)}), nil
 }
 
 func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, error) {
@@ -172,7 +180,7 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 	if cfg.TempUnit == "celsius" {
 		unit = "metric"
 	}
-	u := fmt.Sprintf("https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/%s,%s?%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon), weatherURLValues(map[string]string{"unitGroup": unit, "key": k, "include": "current,days"}))
+	u := fmt.Sprintf("https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/%s,%s?%s", trimFloat(cfg.Lat), trimFloat(cfg.Lon), weatherURLValues(map[string]string{"unitGroup": unit, "key": k, "include": "current,days,hours"}))
 	j, err := fetchJSONGo(ctx, u)
 	if err != nil {
 		return nil, err
@@ -194,7 +202,7 @@ func fetchVisualCrossingGo(ctx context.Context, cfg Config) (map[string]any, err
 		d["sunset"] = append(d["sunset"], x["sunset"])
 	}
 	c := anyMap(j["currentConditions"])
-	return weatherOKGo("visualcrossing", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feelslike"], "weather_code": textCodeGo(xOr(c["conditions"], c["icon"])), "wind_speed_10m": toWindGo(c["windspeed"], visualWindUnit, cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("visualcrossing", map[string]any{"current": map[string]any{"temperature_2m": c["temp"], "apparent_temperature": c["feelslike"], "weather_code": textCodeGo(xOr(c["conditions"], c["icon"])), "wind_speed_10m": toWindGo(c["windspeed"], visualWindUnit, cfg.WindUnit), "relative_humidity_2m": c["humidity"]}, "daily": d, "hourly": weatherHourlyForProviderGo("visualcrossing", j, cfg)}), nil
 }
 
 func visualCrossingWindUnitGo(unitGroup string) string {
@@ -214,6 +222,11 @@ func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) 
 		},
 		func() (any, error) {
 			return fetchJSONGo(ctx, base+"/forecast/daily?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units, "days": strconv.Itoa(clamp(cfg.Days, 1, 7))}))
+		},
+		// Weatherbit hourly is a paid-plan endpoint. It rides the same cached
+		// refresh, and a failure only removes the hourly block.
+		func() (any, error) {
+			return fetchJSONGo(ctx, base+"/forecast/hourly?"+weatherURLValues(map[string]string{"lat": trimFloat(cfg.Lat), "lon": trimFloat(cfg.Lon), "key": k, "units": units, "hours": strconv.Itoa(weatherHourlyMaxRows)}))
 		},
 	)
 	current := map[string]any{}
@@ -242,7 +255,7 @@ func fetchWeatherbitGo(ctx context.Context, cfg Config) (map[string]any, error) 
 			d["sunset"] = append(d["sunset"], nil)
 		}
 	}
-	return weatherPartialSourceGo("weatherbit", current, d, nil, results[0].Err, results[1].Err)
+	return weatherPartialSourceGo("weatherbit", current, d, hourlyBlockFromCallGo("weatherbit", results[2], cfg), results[0].Err, results[1].Err, results[2].Err)
 }
 func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, error) {
 	k := weatherProviderKeyGo("pirateweather", cfg)
@@ -277,7 +290,7 @@ func fetchPirateWeatherGo(ctx context.Context, cfg Config) (map[string]any, erro
 		d["sunset"] = append(d["sunset"], tsISOGo(x["sunsetTime"]))
 	}
 	c := anyMap(j["currently"])
-	return weatherOKGo("pirateweather", map[string]any{"current": map[string]any{"temperature_2m": c["temperature"], "apparent_temperature": c["apparentTemperature"], "weather_code": textCodeGo(xOr(c["summary"], c["icon"])), "wind_speed_10m": toWindGo(c["windSpeed"], choice(units == "si", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": mult100(c["humidity"])}, "daily": d, "hourly": nil}), nil
+	return weatherOKGo("pirateweather", map[string]any{"current": map[string]any{"temperature_2m": c["temperature"], "apparent_temperature": c["apparentTemperature"], "weather_code": textCodeGo(xOr(c["summary"], c["icon"])), "wind_speed_10m": toWindGo(c["windSpeed"], choice(units == "si", "ms", "mph").(string), cfg.WindUnit), "relative_humidity_2m": mult100(c["humidity"])}, "daily": d, "hourly": weatherHourlyForProviderGo("pirateweather", j, cfg)}), nil
 }
 
 func maxProbabilityGo(values ...any) any {

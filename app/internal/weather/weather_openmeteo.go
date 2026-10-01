@@ -70,5 +70,6 @@ func fetchOpenMeteoGo(ctx context.Context, id string, cfg Config) (map[string]an
 	payload["_source"] = id
 	payload["_sourceLabel"] = weatherProviderLabel(id)
 	payload["_fetchedAt"] = time.Now().Unix()
+	trimOpenMeteoHourlyGo(payload)
 	return payload, nil
 }

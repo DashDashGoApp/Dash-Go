@@ -2,17 +2,17 @@
 let WEATHER_LAST_SOURCE_STATUS=[];
 const WEATHER_KEY_REQUIRED=new Set(["weatherapi","openweather","googleweather","tomorrow","visualcrossing","weatherbit","pirateweather","accuweather","xweather"]);
 const WEATHER_SOURCE_META={
-  openmeteo:{label:"Open-Meteo",tier:"free · no key · non-commercial",maxDays:16,refreshMin:15},
-  nws:{label:"NWS / NOAA",tier:"free · no key · US-only · NOAA/NWS",maxDays:7,refreshMin:15},
-  weatherapi:{label:"WeatherAPI.com",tier:"free key · 100K/month · 3-day free forecast",maxDays:3,refreshMin:30},
-  openweather:{label:"OpenWeather",tier:"free allowance · 1,000/day then billable · 8-day",maxDays:8,refreshMin:30},
-  googleweather:{label:"Google Weather",tier:"PAID · Google Maps Platform billing · no normal free tier · 10-day",maxDays:10,refreshMin:30},
-  tomorrow:{label:"Tomorrow.io",tier:"free key · 500/day, 25/hour · core forecast ~5 days",maxDays:5,refreshMin:30},
-  visualcrossing:{label:"Visual Crossing",tier:"free key · 1,000 records/day · attribution · 15-day",maxDays:15,refreshMin:30},
-  weatherbit:{label:"Weatherbit",tier:"free key · 50/day · NON-COMMERCIAL · 7-day",maxDays:7,refreshMin:90},
-  pirateweather:{label:"Pirate Weather",tier:"free key · 10,000/month · 8-day",maxDays:8,refreshMin:30},
-  accuweather:{label:"AccuWeather",tier:"14-DAY TRIAL then paid · 500/day during trial · 5-day",maxDays:5,refreshMin:30},
-  xweather:{label:"Xweather",tier:"free/trial/metered · conservative 9K/month cap · US/CA · 15-day",maxDays:15,refreshMin:30},
+  openmeteo:{label:"Open-Meteo",tier:"free · no key · non-commercial · hourly + 16-day",maxDays:16,refreshMin:15},
+  nws:{label:"NWS / NOAA",tier:"free · no key · US-only · NOAA/NWS · hourly + 7-day",maxDays:7,refreshMin:15},
+  weatherapi:{label:"WeatherAPI.com",tier:"free key · 100K/month · 3-day free forecast · hourly on free",maxDays:3,refreshMin:30},
+  openweather:{label:"OpenWeather",tier:"free allowance · 1,000/day then billable · 8-day + 48h hourly",maxDays:8,refreshMin:30},
+  googleweather:{label:"Google Weather",tier:"PAID · Google Maps Platform billing · no normal free tier · 10-day + 24h hourly per call",maxDays:10,refreshMin:30},
+  tomorrow:{label:"Tomorrow.io",tier:"free key · 500/day, 25/hour · core forecast ~5 days · hourly",maxDays:5,refreshMin:30},
+  visualcrossing:{label:"Visual Crossing",tier:"free key · 1,000 records/day · attribution · 15-day · hourly costs one forecast record",maxDays:15,refreshMin:30},
+  weatherbit:{label:"Weatherbit",tier:"free key · 50/day · NON-COMMERCIAL · 7-day · hourly needs a paid plan",maxDays:7,refreshMin:90},
+  pirateweather:{label:"Pirate Weather",tier:"free key · 10,000/month · 8-day · hourly",maxDays:8,refreshMin:30},
+  accuweather:{label:"AccuWeather",tier:"14-DAY TRIAL then paid · 500/day during trial · 5-day + 12h hourly",maxDays:5,refreshMin:30},
+  xweather:{label:"Xweather",tier:"free/trial/metered · conservative 9K/month cap · US/CA · 15-day · hourly costs one extra request",maxDays:15,refreshMin:30},
   "openmeteo-custom":{label:"Custom Open-Meteo",tier:"custom Open-Meteo compatible endpoint/key",maxDays:16,refreshMin:30},
 };
 function weatherProviderRefreshMinimum(id){

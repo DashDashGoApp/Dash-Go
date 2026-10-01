@@ -30,6 +30,14 @@ const expected=[
   "pin-guidance-v1",
   "sha256-local-identifiers-v1",
   "repository-source-handoff-v2",
+  "message-provider-health-v1",
+  "message-history-and-trivia-v1",
+  "message-refresh-budget-v1",
+  "weather-hourly-providers-v1",
+  "weather-hourly-horizon-v1",
+  "weather-sun-derivation-v1",
+  "weather-dead-alerts-removal-v1",
+  "oauth-loopback-test-stability-v1",
 ];
 
 assert.equal(featureContract.schema,1);
@@ -111,5 +119,35 @@ assert.match(read("ui/js/control-location-lock.js"),/For a new PIN, use 6–8 di
 assert.doesNotMatch(read("internal/calendar/events/serialize.go"),/sha1/i);
 assert.match(read("internal/calendar/events/serialize.go"),/sha256\.Sum256/);
 assert.ok(fs.existsSync("tests/source-handoff-layout-smoke.sh"));
+
+// 1.5.13: rotating-message provider health, history and trivia, and the refresh
+// budget.
+assert.ok(fs.existsSync("internal/messages/messages_providers_history.go"),"the history and trivia adapter was removed");
+assert.match(read("internal/messages/messages_core.go"),/"history", "This day in history"/);
+assert.match(read("internal/messages/messages_core.go"),/"trivia", "Trivia"/);
+assert.match(read("internal/messages/messages_providers_quotes.go"),/api\.quotable\.kurokeita\.dev/);
+assert.doesNotMatch(read("internal/messages/messages_core.go"),/numbersapi_https/);
+assert.match(read("internal/messages/messages_refresh.go"),/messageRefreshBudget = 25 \* time\.Second/);
+assert.ok(fs.existsSync("tests/message-source-catalog-smoke.mjs"));
+
+// 1.5.13: hourly from every capable provider, one bounded horizon, derived
+// sunrise/sunset, and no dead alerts field.
+assert.ok(fs.existsSync("internal/weather/weather_hourly.go"));
+const hourly=read("internal/weather/weather_hourly.go");
+assert.match(hourly,/weatherHourlyMaxRows = 72/);
+assert.match(hourly,/func weatherHourlyForProviderGo/);
+for(const id of ["openweather","tomorrow","pirateweather","weatherapi","visualcrossing","weatherbit","accuweather","xweather","googleweather"]){
+  assert.match(hourly,new RegExp(`"${id}":`),`hourly mapper for ${id} is missing`);
+}
+assert.match(read("internal/weather/weather_keyed_nws.go"),/forecastHourly/);
+assert.match(read("internal/weather/weather_openmeteo.go"),/trimOpenMeteoHourlyGo/);
+assert.match(read("ui/js/weather-blend.js"),/WEATHER_HOURLY_MAX_ROWS=72/);
+assert.match(read("ui/js/weather-blend.js"),/hourly:hourly\.stats/);
+assert.match(read("internal/weather/weather_sun.go"),/weatherSunTimesForDay/);
+assert.match(read("internal/weather/weather_blend_go.go"),/fillDerivedSunTimesGo/);
+assert.doesNotMatch(read("internal/weather/weather_blend_go.go"),/mergeAlertsGo/);
+assert.doesNotMatch(read("internal/weather/weather_payload.go"),/"alerts":/);
+assert.match(read("cmd/dashboard-control-server/google_oauth_loopback_test.go"),/loopbackTestServerWait/);
+assert.match(read("cmd/dashboard-control-server/google_oauth_loopback_test.go"),/loopbackTestPollDeadline/);
 
 console.log(`PASS: ${version} required source-feature contract (${expected.length} features)`);

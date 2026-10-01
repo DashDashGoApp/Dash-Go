@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.5.12",
+  "version": "1.5.13",
   "requiredSourceFeatures": [
     "scoped-settings-invalidation-v1",
     "focused-jsonv2-gate-v1",
@@ -25,6 +25,14 @@
     "route-domain-split-v1",
     "pin-guidance-v1",
     "sha256-local-identifiers-v1",
-    "repository-source-handoff-v2"
+    "repository-source-handoff-v2",
+    "message-provider-health-v1",
+    "message-history-and-trivia-v1",
+    "message-refresh-budget-v1",
+    "weather-hourly-providers-v1",
+    "weather-hourly-horizon-v1",
+    "weather-sun-derivation-v1",
+    "weather-dead-alerts-removal-v1",
+    "oauth-loopback-test-stability-v1"
   ]
 }
