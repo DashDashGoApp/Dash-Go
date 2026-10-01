@@ -142,7 +142,7 @@ need "$LITE_RADAR" "radarLiteRadarConcurrency())" "bounded parallel RainViewer t
 need "$LITE_RADAR" "radarLiteAvailableFrameCount()===2" "Play unlock after second completed frame"
 need "$LITE_RADAR" "createImageBitmap" "Lite ImageBitmap compositor"
 need "$LITE_RADAR" "frame.close" "Lite ImageBitmap close"
-need "$LITE_RADAR" "radarLoadDetachedImage(radarBaseTileURL(slot),token)" "Lite OSM base tiles"
+need "$LITE_RADAR" "radarLiteBaseImage(radarBaseTileURL(slot),token)" "Lite OSM base tiles"
 need "$LITE_RADAR" "await radarYield();" "Lite time-budgeted draw yield"
 need "$RADAR" "if(radarIsLite())return;" "Lite prefetch hard stop"
 need "$LITE_RADAR" "function radarSetLiteControls" "Lite controls"
@@ -262,7 +262,7 @@ absent "$EVENT_UTILS" 'func max(' 'custom max shadow removed for Go builtin'
 need "$WEATHER_HTTP" 'weatherJSONResponseLimit' 'bounded weather JSON response limit'
 need "$WEATHER_HTTP" 'io.LimitReader' 'bounded keyed weather decoder'
 need "$WEATHER_HTTP" 'weatherHTTPClient' 'dedicated bounded weather client'
-need "$OPENMETEO" 'io.LimitReader' 'bounded Open-Meteo decoder'
+need "$OPENMETEO" 'readWeatherResponse' 'Open-Meteo uses the shared bounded decoder'
 need "$ISS" 'context.WithTimeout' 'bounded ISS request timeout'
 need "$CALENDAR_SERVICE" 'HTTPClient' 'injected bounded ISS client'
 need "$SETTINGS_GO" 'func (a *app) updateSettings' 'serialized settings read-modify-write helper'

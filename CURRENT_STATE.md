@@ -4,23 +4,30 @@
 
 ## Current stable release candidate
 
-- **Version:** `1.5.16`
+- **Version:** `1.5.17`
 - **Track:** stable
-- **Promotion basis:** a validated `1.5.16` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
-- **Primary scope:** hybrid map speed — the ArcGIS imagery and label exports are fetched concurrently instead of sequentially, so a hybrid preview pays the slower of the two requests rather than their sum, with the rendered output, the optional-labels rule, and the failure semantics unchanged.
+- **Promotion basis:** a validated `1.5.17` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** radar popup open speed in both profiles — the standard overlay starts its base map and RainViewer frame index alongside the local status request instead of after it, Lite prewarms its base tile plan during the status and frame-index round trips through the same bounded loads (zero extra requests, same concurrency caps), and the keyed radar tile proxy gains a shared connection pool. The moved-code smoke marker for the bounded Open-Meteo decoder was repointed at the shared decoder it has called since 1.5.13.
 - **Required release proof:** Dash-Go Local Builder must use Go 1.26.8, extract and validate this exact repository-ready stable source handoff, prove the 43-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that a cold hybrid map render is faster than the 1.5.15 same-day measurement, and that the update path installs cleanly with a clean server stop.
+- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that the radar popup opens visibly sooner in both profiles, and that the update path installs cleanly with a clean server stop.
 - **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration and keys, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
 - **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
 ## Current published stable release
 
-- **Version:** `1.5.15`
+- **Version:** `1.5.16`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Status:** remains the published stable release until the validated 1.5.16 Builder output is published and verified.
+- **Status:** remains the published stable release until the validated 1.5.17 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
+
+## 1.5.17 stable scope
+
+- **Standard radar opens faster:** the base map and the RainViewer frame index no longer wait for the local status response — all three start together, and the overlay renders as soon as its inputs land. An optimistic frame-index fetch is consumed only when the resolved provider is RainViewer; otherwise it is one bounded, unused list request.
+- **Lite radar opens faster:** the base tile plan is prewarmed the moment the overlay opens, during the status and frame-index round trips. The builder awaits the very same bounded loads — no extra requests, the same two-request base pool — and the prewarm is cleared on rebuild and close. The frame index is also fetched optimistically and consumed by the Lite open path.
+- **Keyed radar proxy:** one shared connection pool with warm TLS sessions replaces a fresh client per tile; the 12 s per-request deadline moved to the request context.
+- **Smoke integrity:** the release-blocking `touch-radar-smoke` marker for the bounded Open-Meteo decoder had rotted in 1.5.13 (the bound moved to the shared `readWeatherResponse`); it now asserts the wiring and the shared bound where they actually live. Two radar markers follow the moved Lite base loader.
 
 ## 1.5.16 stable scope
 

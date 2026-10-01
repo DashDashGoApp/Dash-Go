@@ -1,3 +1,17 @@
+## [1.5.17] — 2026-10-01
+
+Dash-Go 1.5.17 makes the radar popup open faster in both profiles. The standard overlay and the Lite snapshot no longer pay their provider-independent round trips one after another: the base map and the RainViewer frame index start downloading at the same moment as the local status request, so the first painted frame arrives sooner. Nothing about what is shown changes — the same tiles, the same frames, the same bounded pools, and no new processes, timers, or persistent code.
+
+### Performance and reliability
+
+- **Standard radar starts three round trips instead of finishing them in series.** The OSM base tiles, the RainViewer frame index, and the local status request are issued together at overlay open; the radar layer renders as soon as its inputs land. On the reference Wi-Fi this removes roughly the frame-index round trip (~0.5 s) from every open. An optimistic frame index is consumed only when the resolved provider is RainViewer; a failed optimistic fetch falls back to exactly the previous single-attempt behavior.
+- **Lite radar prewarms its base while the status and frame-index round trips are in flight.** The bounded base tile plan depends on neither response, so its detached loads are kicked at open and the compositor awaits the very same promises — no extra requests, the same two-request base pool, the same complete-coverage and partial-failure semantics. The prewarm is cancelled and cleared on rebuild and close.
+- **The keyed radar tile proxy reuses one connection pool.** Tomorrow.io, Weatherbit, and Xweather households no longer pay a fresh TCP/TLS handshake per tile; the per-request 12 s deadline moved from a throwaway client to the request context.
+
+### Build and release integrity
+
+- **A release-blocking smoke marker had rotted.** The `touch-radar-smoke` assertion for the bounded Open-Meteo decoder still pointed at an `io.LimitReader` that moved into the shared `readWeatherResponse` decoder in 1.5.13; it now asserts the wiring and the shared bound where they actually live. Two radar markers follow the moved Lite base loader.
+
 ## [1.5.16] — 2026-10-01
 
 Dash-Go 1.5.16 makes the hybrid map preview faster. The ArcGIS export provider fetches its imagery and label layers concurrently instead of one after the other, so a hybrid preview now pays the slower of the two requests rather than their sum. Nothing else changes: the rendered image is identical, a missing label layer is still tolerated, an imagery failure still fails the render, and no new process, timer, or code path runs on the device.

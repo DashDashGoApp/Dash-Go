@@ -1,8 +1,10 @@
 package weather
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,6 +13,26 @@ import (
 )
 
 const radarProxyRequestLimit = 90
+
+// radarProxyRequestDeadline bounds one keyed-proxy tile request end to end.
+const radarProxyRequestDeadline = 12 * time.Second
+
+// One shared transport keeps TLS sessions and idle connections warm across
+// keyed-proxy tile requests so a radar sweep does not pay a fresh handshake
+// per tile. The per-request deadline is supplied through the request context,
+// never the client.
+var radarHTTPClient = &http.Client{
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 3 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		MaxIdleConns:          8,
+		MaxIdleConnsPerHost:   4,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ForceAttemptHTTP2:     true,
+	},
+}
 
 func (s *Service) radarAllowRequest(provider string) bool {
 	s.radarMu.Lock()
@@ -114,7 +136,10 @@ func (s *Service) handleRadarTile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header.Set("User-Agent", weatherOutboundUserAgent)
-	resp, err := (&http.Client{Timeout: 12 * time.Second}).Do(req)
+	ctx, cancel := context.WithTimeout(r.Context(), radarProxyRequestDeadline)
+	defer cancel()
+	req = req.Clone(ctx)
+	resp, err := radarHTTPClient.Do(req)
 	if err != nil {
 		s.noteProviderBackoff("radar-"+provider, err)
 		s.err(w, "radar provider request failed", http.StatusBadGateway)

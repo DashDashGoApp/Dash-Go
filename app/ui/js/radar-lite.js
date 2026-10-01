@@ -108,6 +108,34 @@ function radarSetLiteControls(on){
 }
 function radarYield(){return new Promise(resolve=>setTimeout(resolve,0));}
 function radarLiteNowMs(){return typeof performance!=="undefined"&&typeof performance.now==="function"?performance.now():Date.now();}
+// Base-map prewarm: Lite opens pay the status and frame-index round trips
+// before any tile work starts. The base plan depends on neither, so its
+// detached loads are kicked at open and the builder awaits the very same
+// promises — no extra requests, same bounded pool. The builder waits for the
+// prewarm pass to finish so a slot is never loaded twice. Cleared on
+// rebuild/close.
+let RADAR_LITE_BASE_WARM=new Map();
+let RADAR_LITE_BASE_WARM_DONE=null;
+function radarClearLiteBaseWarm(){RADAR_LITE_BASE_WARM=new Map();RADAR_LITE_BASE_WARM_DONE=null;}
+function radarLitePrewarmBase(token){
+  if(!radarIsLite()||token!==RADAR_STATE.token)return;
+  const px=radarLitePx(),z=RADAR_STATE.liteZoom||RADAR_LITE_ZOOM;
+  if(!px)return;
+  const plan=radarLiteTilePlan(px,radarLatitude(),radarLongitude(),z);
+  RADAR_LITE_BASE_WARM_DONE=radarPool(plan.slots,async slot=>{
+    if(token!==RADAR_STATE.token)return;
+    const url=radarBaseTileURL(slot);
+    if(RADAR_LITE_BASE_WARM.has(url))return;
+    const load=radarLoadDetachedImage(url,token);
+    RADAR_LITE_BASE_WARM.set(url,load);
+    await load;
+  },radarLiteBaseConcurrency()).catch(()=>{});
+}
+async function radarLiteBaseImage(url,token){
+  const warm=RADAR_LITE_BASE_WARM.get(url);
+  if(warm){RADAR_LITE_BASE_WARM.delete(url);return await warm;}
+  return radarLoadDetachedImage(url,token);
+}
 function radarCancelLiteRequests(){
   const pending=RADAR_STATE.liteRequests||new Set();
   for(const request of pending){try{request.cancel();}catch(_){}}
@@ -138,9 +166,12 @@ async function radarBuildLiteBase(token,px,z,base){
   const ctx=base.getContext("2d",{alpha:false});if(!ctx)throw new Error("radar canvas is unavailable");
   ctx.clearRect(0,0,px,px);ctx.fillStyle="#0d161f";ctx.fillRect(0,0,px,px);
   const plan=radarLiteTilePlan(px,radarLatitude(),radarLongitude(),z),coverage={planned:plan.planned,settled:0,drawn:0,failed:0};let budget=radarLiteNowMs();
+  // A prewarm pass from this open may still be queuing slots; let it finish so
+  // every slot is consumed from the warm map instead of loaded twice.
+  if(RADAR_LITE_BASE_WARM_DONE){await RADAR_LITE_BASE_WARM_DONE.catch(()=>{});}
   await radarPool(plan.slots,async slot=>{
     if(token!==RADAR_STATE.token)return;
-    const img=await radarLoadDetachedImage(radarBaseTileURL(slot),token);coverage.settled++;
+    const img=await radarLiteBaseImage(radarBaseTileURL(slot),token);coverage.settled++;
     if(!img||token!==RADAR_STATE.token){coverage.failed++;return;}
     ctx.drawImage(img,plan.ox+slot.col*RADAR_TILE,plan.oy+slot.row*RADAR_TILE,RADAR_TILE,RADAR_TILE);img.src="";coverage.drawn++;
     if(radarLiteNowMs()-budget>12){await radarYield();budget=radarLiteNowMs();}
@@ -236,14 +267,15 @@ async function radarRenderLiteSnapshot(token){
     if(token===RADAR_STATE.token){radarSetLiteControls(radarIsLite());if(radarIsOpen()&&radarLitePx()!==RADAR_STATE.litePx)radarQueueResize();}
   }
 }
-async function radarOpenLite(token,meta,reuseFrames){
+async function radarOpenLite(token,meta,reuseFrames,optimisticFrames){
   radarSetLiteControls(true);radarClearFrameLayers();radarClearGrid(document.getElementById("radarbase"));
   let frames;
   const recent=!!reuseFrames&&Array.isArray(RADAR_STATE.frames)&&RADAR_STATE.frames.length>0&&Date.now()-Number(RADAR_STATE.liteFramesFetchedAt||0)<RADAR_LITE_REFRESH_MS;
   if(meta.kind==="rainviewer"){
-    frames=recent?RADAR_STATE.frames:await radarRainViewerFrames();
-    if(!recent)RADAR_STATE.liteFramesFetchedAt=Date.now();
+    if(recent){frames=RADAR_STATE.frames;}
+    else{const of=optimisticFrames?await optimisticFrames:null;frames=of||await radarRainViewerFrames();RADAR_STATE.liteFramesFetchedAt=Date.now();}
   }else{frames=[{time:0,host:"",path:""}];RADAR_STATE.liteFramesFetchedAt=0;}
+  if(!Array.isArray(frames)||!frames.length){throw new Error("no usable radar frames");}
   if(token!==RADAR_STATE.token)return false;
   RADAR_STATE.frames=frames;RADAR_STATE.frame=Math.max(0,frames.length-1);
   const rendered=await radarRenderLiteSnapshot(token);if(rendered)radarStopLiteAnim();return rendered;
@@ -252,7 +284,7 @@ async function radarOpenLite(token,meta,reuseFrames){
 // base/radar composite is ready. The generation token prevents stale callbacks
 // from committing into the new view.
 function radarBeginLiteRebuild(){
-  radarStopLiteAnim();radarCancelLiteRequests();
+  radarStopLiteAnim();radarCancelLiteRequests();radarClearLiteBaseWarm();
   const token=++RADAR_STATE.token;RADAR_STATE.liteRendering=false;return token;
 }
 function radarRunLiteRebuild(token,reason,reuseFrames){
