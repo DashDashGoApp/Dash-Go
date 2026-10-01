@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,34 +69,6 @@ func pixelToLatLon(px, py float64, zoom int) (float64, float64) {
 	y := py / n
 	lat := math.Atan(math.Sinh(math.Pi*(1.0-2.0*y))) * 180.0 / math.Pi
 	return lat, lon
-}
-
-func (s *Service) renderArcGISExportSVG(lat, lon float64, zoom int, width, height int) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), mapRenderDeadline)
-	defer cancel()
-	zoom, left, top, _, _, _, _, _ := tileBounds(lat, lon, zoom, width, height)
-	north, west := pixelToLatLon(left, top, zoom)
-	south, east := pixelToLatLon(left+float64(width), top+float64(height), zoom)
-	if west > east {
-		west, east = east, west
-	}
-	if south > north {
-		south, north = north, south
-	}
-	bbox := fmt.Sprintf("%.6f,%.6f,%.6f,%.6f", west, south, east, north)
-	base := "bbox=" + url.QueryEscape(bbox) + "&bboxSR=4326&imageSR=4326&size=" + url.QueryEscape(fmt.Sprintf("%d,%d", width, height)) + "&format=png32&transparent=false&f=image"
-	imgURL := "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?" + base
-	img, mime, err := fetchMapURLContext(ctx, imgURL, 5*time.Second, 2*1024*1024)
-	if err != nil {
-		return nil, "", err
-	}
-	pieces := []string{fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, width, height, width, height), `<rect width="100%" height="100%" fill="#1c2428"/>`, fmt.Sprintf(`<image x="0" y="0" width="%d" height="%d" href="data:%s;base64,%s"/>`, width, height, mime, base64.StdEncoding.EncodeToString(img))}
-	labelURL := "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/export?" + strings.Replace(base, "transparent=false", "transparent=true", 1)
-	if labels, labelMime, e := fetchMapURLContext(ctx, labelURL, 3*time.Second, 1024*1024); e == nil {
-		pieces = append(pieces, fmt.Sprintf(`<image x="0" y="0" width="%d" height="%d" href="data:%s;base64,%s"/>`, width, height, labelMime, base64.StdEncoding.EncodeToString(labels)))
-	}
-	pieces = append(pieces, markerSVG(width, height), `</svg>`)
-	return []byte(strings.Join(pieces, "\n")), "image/svg+xml", nil
 }
 
 func (s *Service) renderTileSVG(p mapProviderGo, lat, lon float64, zoom int, width, height int) ([]byte, string, error) {

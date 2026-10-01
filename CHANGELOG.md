@@ -1,3 +1,11 @@
+## [1.5.16] — 2026-10-01
+
+Dash-Go 1.5.16 makes the hybrid map preview faster. The ArcGIS export provider fetches its imagery and label layers concurrently instead of one after the other, so a hybrid preview now pays the slower of the two requests rather than their sum. Nothing else changes: the rendered image is identical, a missing label layer is still tolerated, an imagery failure still fails the render, and no new process, timer, or code path runs on the device.
+
+### Performance and reliability
+
+- **Hybrid map previews render in roughly the time of one export instead of two.** The imagery and boundary-label export requests are issued together over the shared connection pool, cutting the export provider's wall time by about the label round trip on every cold hybrid render and every prewarm pass. A test proves the two requests are genuinely in flight together and that both failure semantics — imagery failure fails the render, label failure is skipped — are unchanged from 1.5.15.
+
 ## [1.5.15] — 2026-10-01
 
 Dash-Go 1.5.15 removes work and reclaims disk. Map previews fetch their tiles in parallel over one shared connection pool instead of one fresh connection per tile, every render is bounded by a single deadline instead of stacked timeouts, and the map caches stop paying full directory scans and cache re-reads on every popup. Housekeeping now prunes the multi-hundred-megabyte update-rollback leftovers that had been sitting on the device since June.

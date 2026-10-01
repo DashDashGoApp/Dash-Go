@@ -4,23 +4,27 @@
 
 ## Current stable release candidate
 
-- **Version:** `1.5.15`
+- **Version:** `1.5.16`
 - **Track:** stable
-- **Promotion basis:** a validated `1.5.15` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
-- **Primary scope:** remove work, reclaim disk, and speed up maps — parallel tile fetches with one shared transport and a bounded render deadline, throttled map-cache cleanup, an in-memory geocode memo, ETag revalidation for cached map images, prewarm that renders the configured style first, a no-behaviour-change split of the HTTP static file, a regression test proving a shutdown grace expiry exits cleanly, quieter interrupted-update recovery logging, and housekeeping that prunes stale update-rollback snapshots (keeping the newest and its metadata) plus old doctor-set-aside weather caches.
+- **Promotion basis:** a validated `1.5.16` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** hybrid map speed — the ArcGIS imagery and label exports are fetched concurrently instead of sequentially, so a hybrid preview pays the slower of the two requests rather than their sum, with the rendered output, the optional-labels rule, and the failure semantics unchanged.
 - **Required release proof:** Dash-Go Local Builder must use Go 1.26.8, extract and validate this exact repository-ready stable source handoff, prove the 43-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that a cold hybrid map render is at least 40 % faster than the 1.5.14 baseline, that `cache/` drops below 60 MB after the update with rollback still working, and that the update path installs cleanly with a clean server stop.
+- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that a cold hybrid map render is faster than the 1.5.15 same-day measurement, and that the update path installs cleanly with a clean server stop.
 - **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration and keys, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
 - **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
 ## Current published stable release
 
-- **Version:** `1.5.14`
+- **Version:** `1.5.15`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Status:** remains the published stable release until the validated 1.5.15 Builder output is published and verified.
+- **Status:** remains the published stable release until the validated 1.5.16 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
+
+## 1.5.16 stable scope
+
+- **Hybrid map speed:** the ArcGIS imagery and label export requests are issued concurrently over the shared transport, so the export provider's wall time is the slower request rather than the sum of both. The imagery failure remains the render failure, a label failure remains tolerated, and the SVG output is byte-for-byte the same shape. A test proves the two requests are in flight together and that neither failure semantic changed.
 
 ## 1.5.15 stable scope
 
