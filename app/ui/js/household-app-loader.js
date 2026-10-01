@@ -37,7 +37,7 @@ let _routinesLoading=null;
 function loadChoreWheelAssets(){
   if(window.openChoreWheelImpl) return Promise.resolve();
   if(_choreWheelLoading) return _choreWheelLoading;
-  _choreWheelLoading=Promise.all([loadDashboardLazyAsset("style","ui/chore-wheel.css?v="+(CONFIG.version||"1.5.17"),"chorewheel","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/chore-wheel-core.js?v="+(CONFIG.version||"1.5.17"),"chorewheel-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/chore-wheel.js?v="+(CONFIG.version||"1.5.17"),"chorewheel-script","app assets failed to load"));
+  _choreWheelLoading=Promise.all([loadDashboardLazyAsset("style","ui/chore-wheel.css?v="+(CONFIG.version||"1.5.18"),"chorewheel","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/chore-wheel-core.js?v="+(CONFIG.version||"1.5.18"),"chorewheel-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/chore-wheel.js?v="+(CONFIG.version||"1.5.18"),"chorewheel-script","app assets failed to load"));
   _choreWheelLoading.catch(()=>{_choreWheelLoading=null;});return _choreWheelLoading;
 }
 function openChoreWheel(){
@@ -49,7 +49,7 @@ function openChoreWheel(){
 function loadFamilyBoardAssets(){
   if(window.openFamilyBoardImpl) return Promise.resolve();
   if(_familyBoardLoading) return _familyBoardLoading;
-  _familyBoardLoading=Promise.all([loadDashboardLazyAsset("style","ui/family-board.css?v="+(CONFIG.version||"1.5.17"),"familyboard","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/family-board-core.js?v="+(CONFIG.version||"1.5.17"),"familyboard-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/family-board.js?v="+(CONFIG.version||"1.5.17"),"familyboard-script","app assets failed to load"));
+  _familyBoardLoading=Promise.all([loadDashboardLazyAsset("style","ui/family-board.css?v="+(CONFIG.version||"1.5.18"),"familyboard","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/family-board-core.js?v="+(CONFIG.version||"1.5.18"),"familyboard-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/family-board.js?v="+(CONFIG.version||"1.5.18"),"familyboard-script","app assets failed to load"));
   _familyBoardLoading.catch(()=>{_familyBoardLoading=null;});return _familyBoardLoading;
 }
 function openFamilyBoard(){
@@ -61,7 +61,7 @@ function openFamilyBoard(){
 function loadMaintenanceAssets(){
   if(window.openMaintenanceImpl) return Promise.resolve();
   if(_maintenanceLoading) return _maintenanceLoading;
-  _maintenanceLoading=Promise.all([loadDashboardLazyAsset("style","ui/maintenance.css?v="+(CONFIG.version||"1.5.17"),"maintenance","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/maintenance-core.js?v="+(CONFIG.version||"1.5.17"),"maintenance-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/maintenance.js?v="+(CONFIG.version||"1.5.17"),"maintenance-script","app assets failed to load"));
+  _maintenanceLoading=Promise.all([loadDashboardLazyAsset("style","ui/maintenance.css?v="+(CONFIG.version||"1.5.18"),"maintenance","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/maintenance-core.js?v="+(CONFIG.version||"1.5.18"),"maintenance-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/maintenance.js?v="+(CONFIG.version||"1.5.18"),"maintenance-script","app assets failed to load"));
   _maintenanceLoading.catch(()=>{_maintenanceLoading=null;});return _maintenanceLoading;
 }
 function openMaintenance(){
@@ -77,7 +77,7 @@ window.openMaintenance=openMaintenance;
 function loadRoutinesAssets(){
   if(window.openRoutinesImpl)return Promise.resolve();
   if(_routinesLoading)return _routinesLoading;
-  _routinesLoading=Promise.all([loadDashboardLazyAsset("style","ui/routines.css?v="+(CONFIG.version||"1.5.17"),"routines","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/routines-core.js?v="+(CONFIG.version||"1.5.17"),"routines-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/routines.js?v="+(CONFIG.version||"1.5.17"),"routines-script","app assets failed to load"));
+  _routinesLoading=Promise.all([loadDashboardLazyAsset("style","ui/routines.css?v="+(CONFIG.version||"1.5.18"),"routines","app stylesheet failed to load"),loadDashboardLazyAsset("script","ui/routines-core.js?v="+(CONFIG.version||"1.5.18"),"routines-core","app assets failed to load")]).then(()=>loadDashboardLazyAsset("script","ui/routines.js?v="+(CONFIG.version||"1.5.18"),"routines-script","app assets failed to load"));
   _routinesLoading.catch(()=>{_routinesLoading=null;});return _routinesLoading;
 }
 function openRoutines(options){return loadRoutinesAssets().then(()=>{if(typeof window.openRoutinesImpl!=="function")throw new Error("Routines did not initialize");return window.openRoutinesImpl(options||{});});}

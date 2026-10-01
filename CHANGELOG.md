@@ -1,3 +1,20 @@
+## [1.5.18] — 2026-10-01
+
+Dash-Go 1.5.18 widens the rotating-message section's offline content. The local fallback pools — the lines that keep the sidebar rotating when the dashboard has no network — were the thinnest content in the section, so the quote, joke, and fact pools grew substantially. This is a pure data change to the server's local pools: the same nine categories and twenty-nine providers, the same measured fit and fade, the same local-first rotation — and no new process, timer, code path, or JavaScript on the device.
+
+### Features
+
+- **More offline quotes and inspiration.** The local quote pool grew from 20 to 30 lines, adding steady, household-calibre affirmations (on pace, rest, small kindness, and gratitude) so the sidebar keeps offering something warm even fully offline.
+
+### Improvements
+
+- **More offline jokes.** The local joke pool grew from 16 to 28 clean, dad-joke-style lines, so the joke rotation has more variety before it repeats in a low-signal household.
+- **More offline fun facts.** The local fact pool grew from 16 to 25 verified, household-safe facts (animals, space, the human body, and everyday science). Entries were kept to statements that are true and free of internal punctuation the measured fit would have to re-wrap.
+
+### Build and release integrity
+
+- **No device-visible behavior change.** The change touches only `internal/messages` local pool data; provider chains, the 25 s refresh budget, the local-fallback selection, and the message fit/fade contract are all unchanged and re-verified by the message source, fade, and holiday catalog smoke tests.
+
 ## [1.5.17] — 2026-10-01
 
 Dash-Go 1.5.17 makes the radar popup open faster in both profiles. The standard overlay and the Lite snapshot no longer pay their provider-independent round trips one after another: the base map and the RainViewer frame index start downloading at the same moment as the local status request, so the first painted frame arrives sooner. Nothing about what is shown changes — the same tiles, the same frames, the same bounded pools, and no new processes, timers, or persistent code.
