@@ -80,11 +80,13 @@ function dashboardListOverscanOnScroll(root){
   if(Math.abs(delta)>=DASHBOARD_LIST_OVERSCAN_SCROLL_EPSILON)state.direction=delta>0?1:-1;
   state.lastScrollTop=next;
   dashboardListOverscanCancel(state,"warmTimer");state.warm.clear();
+  // The settle re-arm happens inside the coalesced frame, not once per scroll
+  // event: the deadline still follows the last event (semantics unchanged) but
+  // the timer churn no longer scales with event rate.
   if(!state.raf)state.raf=requestAnimationFrame(()=>{
     const current=DASHBOARD_LIST_OVERSCAN_STATE.get(root);if(!current)return;
-    current.raf=0;dashboardListOverscanApply(current,false);
+    current.raf=0;dashboardListOverscanApply(current,false);dashboardListOverscanScheduleSettle(root);
   });
-  dashboardListOverscanScheduleSettle(root);
 }
 // Capture one post-render geometry snapshot. No geometry reads occur from the
 // passive scroll listener above, and the snapshot is refreshed after every

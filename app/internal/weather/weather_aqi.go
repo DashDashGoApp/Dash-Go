@@ -19,6 +19,53 @@ import (
 
 const weatherAQICacheTTL = 30 * time.Minute
 
+// weatherAQIFailureCooldown bounds how often a failing air-quality endpoint is
+// re-attempted. The success cache alone left a dead endpoint being called on every
+// weather refresh, and once per browser retry on top of that, so a short failure
+// marker is persisted and honoured before any live attempt. It stays short on
+// purpose: the first refresh after it expires probes again.
+const weatherAQIFailureCooldown = 10 * time.Minute
+
+type weatherAQIFailureState struct {
+	CacheKey string `json:"cacheKey"`
+	FailedAt int64  `json:"failedAt"`
+}
+
+func weatherAQIFailurePath(cacheDir string) string {
+	return filepath.Join(cacheDir, "weather-aqi-failure.json")
+}
+
+// weatherAQIFailureUntil reports when the cooldown for this cache key ends, or the
+// zero time when it is not cooling down (never failed, different key, or expired).
+func (s *Service) weatherAQIFailureUntil(key string) time.Time {
+	raw := anyMap(s.readJSONDefault(weatherAQIFailurePath(s.cacheDir), nil))
+	if len(raw) == 0 || jsonutil.StringValue(raw["cacheKey"]) != key {
+		return time.Time{}
+	}
+	failedAt := int64(jsonutil.Int(raw["failedAt"], 0))
+	if failedAt == 0 {
+		return time.Time{}
+	}
+	until := time.Unix(failedAt, 0).Add(weatherAQIFailureCooldown)
+	if !time.Now().Before(until) {
+		return time.Time{}
+	}
+	return until
+}
+
+func (s *Service) weatherAQINoteFailure(key string) {
+	_ = fileio.WriteJSON(weatherAQIFailurePath(s.cacheDir), weatherAQIFailureState{CacheKey: key, FailedAt: time.Now().Unix()})
+}
+
+// weatherAQINoteSuccess clears the marker, so a recovered endpoint is cached
+// normally instead of being held back by an old failure.
+func (s *Service) weatherAQINoteSuccess(key string) {
+	path := weatherAQIFailurePath(s.cacheDir)
+	if fileio.Exists(path) {
+		_ = fileio.RemoveDurable(path)
+	}
+}
+
 func weatherAQICacheKey(cfg Config) string {
 	// Display units are intentionally absent: AQI is canonical and survives a
 	// Fahrenheit/Celsius toggle without another provider request.
@@ -40,12 +87,29 @@ func (s *Service) aqiPayload(ctx context.Context) map[string]any {
 	if cached, ok := s.readAQICache(path, key, false); ok {
 		return cached
 	}
+	// A recent failure is not re-attempted on every refresh. A stale cache is still
+	// served when it exists, so the household keeps a number while the endpoint is
+	// down rather than watching the pill flap.
+	if until := s.weatherAQIFailureUntil(key); !until.IsZero() {
+		if cached, ok := s.readAQICache(path, key, true); ok {
+			cache := anyMap(cached["cache"])
+			cache["hit"] = true
+			cache["stale"] = true
+			cache["cooldownUntil"] = until.Unix()
+			cache["reason"] = "Air quality is cooling down after a recent failure"
+			cached["cache"] = cache
+			return cached
+		}
+		return map[string]any{"current": nil, "error": "Air quality is cooling down after a recent failure", "cache": map[string]any{"hit": false, "stale": false, "cooldownUntil": until.Unix(), "cacheKey": key}}
+	}
 	payload, err := fetchOpenMeteoAQI(ctx, cfg)
 	if err == nil {
+		s.weatherAQINoteSuccess(key)
 		payload["cache"] = map[string]any{"hit": false, "stale": false, "cacheKey": key, "savedAt": time.Now().UnixMilli()}
 		_ = fileio.WriteJSON(path, payload)
 		return payload
 	}
+	s.weatherAQINoteFailure(key)
 	if cached, ok := s.readAQICache(path, key, true); ok {
 		cache := anyMap(cached["cache"])
 		cache["hit"] = true

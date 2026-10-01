@@ -4,30 +4,30 @@
 
 ## Current stable release candidate
 
-- **Version:** `1.5.13`
+- **Version:** `1.5.14`
 - **Track:** stable
-- **Promotion basis:** a validated `1.5.13` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
-- **Primary scope:** hourly weather from every provider that publishes it with a normalized, bounded, provenance-carrying hourly blend; locally derived sunrise and sunset; corrected two-source disagreement reporting; rotating-message provider health, two new keyless categories (this-day-in-history and trivia), and a bounded message refresh; and the intermittent OAuth loopback test failure that made a 1.5.12 prepublication proof fail and pass on identical source.
-- **Required release proof:** Dash-Go Local Builder must use Go 1.26.8, extract and validate this exact repository-ready stable source handoff, prove the 32-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression after the hourly payload reduction, that hourly rows render for an enabled hourly source, that sunrise and sunset appear for a provider mix without Open-Meteo, that the new message categories rotate and fall back locally, and that the update path installs cleanly with a clean server stop.
+- **Promotion basis:** a validated `1.5.14` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** correctness and responsiveness — a guarded feels-like metric that can no longer render a false `0°` for National Weather Service households, a corrected Visual Crossing hourly clock that previously dropped every row silently, an air-quality failure cooldown, gesture-aware refresh-time scroll restoration in both panes, an open day or event popup that re-renders when calendar data is committed, bounded List-view staging in the Lite day popup, app-owned household popups that paint the calendar's own rows while their projection is in flight and cancel only reads, Lite popup latency marks with a stated budget, credential redaction in stored provider errors, coalesced clearing of the Lite scroll settle timers, and a no-behaviour-change split of the weather and calendar-grid sources.
+- **Required release proof:** Dash-Go Local Builder must use Go 1.26.8, extract and validate this exact repository-ready stable source handoff, prove the 43-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
+- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that Visual Crossing and the other enabled hourly sources now contribute hourly rows, that the feels-like metric reads a value or a dash rather than `0°`, that the popup timing marks report shell and content inside their budget, and that the update path installs cleanly with a clean server stop.
 - **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration and keys, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
 - **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
 ## Current published stable release
 
-- **Version:** `1.5.12`
+- **Version:** `1.5.13`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Status:** remains the published stable release until the validated 1.5.13 Builder output is published and verified.
+- **Status:** remains the published stable release until the validated 1.5.14 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
 
-## 1.5.13 stable scope
+## 1.5.14 stable scope
 
-- **Weather hourly coverage:** OpenWeather, Tomorrow.io, Pirate Weather, WeatherAPI, Visual Crossing, Weatherbit, AccuWeather, Xweather, Google Weather, and NWS hourly feed the hourly view; six of them add no provider request. Hourly values are normalized to one local wall clock before blending, bounded to the rendered horizon, and published with provenance.
-- **Weather blending correctness:** derived sunrise and sunset for provider gaps, disagreement flagged at the field threshold for two-source splits, single-source per-field provenance, and removal of the always-empty Go `alerts` field.
-- **Rotating messages:** verified-live provider ordering, a community Quotable mirror, Stoic Quotes, The Quotes Hub, clean-category Chuck Norris jokes, the removal of the dead Numbers API provider, two new keyless categories with local fallback pools, and one bounded whole-refresh deadline.
-- **Release integrity:** an OAuth loopback test whose server wait now outlasts its poll deadline by construction, a rotating-message catalog smoke, and eight new required source capabilities.
+- **Weather correctness:** a guarded feels-like metric so a provider that omits apparent temperature cannot render a false `0°`; a corrected Visual Crossing hourly clock (time-only entries joined to their parent day) that previously dropped every row while reporting success, now covered by mapper and regression fixtures; an air-quality failure cooldown that keeps the last good reading and stops doomed retries; and credential redaction, so a stored or displayed provider error cannot carry an API key.
+- **Calendar and popup responsiveness:** gesture-aware refresh-time scroll restoration in both panes (a rebuild that lands mid-gesture no longer snaps the agenda to the top or writes over the viewer on the calendar); live re-render of an open day or event popup when calendar data is committed; bounded List-view staging in the Lite day popup; app-owned household popups that paint the calendar's own rows while their projection is in flight and cancel reads but never a completion; and Lite popup latency marks measured against a stated shell/content budget.
+- **Pi performance:** the Lite calendar's row-culling and list-overscan controllers re-arm their settle timers inside the animation frame they already coalesce, so a scroll burst costs no timer churn, with a fast-flick fixture proving the prewarm window rather than assuming it.
+- **Source structure:** the weather and calendar-grid sources were split into focused modules with no behaviour change, with the bundle manifest, asset-manifest test, and every dependent smoke updated to follow the moved code; the weather review surface now covers current-condition disagreement and hourly provenance.
 
 ## 1.5.10 stable scope
 

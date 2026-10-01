@@ -5,7 +5,7 @@ import {resolve} from "node:path";
 const root=resolve(process.argv[2]||".");
 const read=rel=>readFileSync(resolve(root,rel),"utf8");
 const helpers=read("ui/js/calendar-span-helpers.js");
-const grid=read("ui/js/calendar-grid.js");
+const grid=read("ui/js/calendar-grid.js")+read("ui/js/calendar-grid-rows.js");
 const agenda=read("ui/js/calendar-agenda.js");
 const popup=read("ui/js/day-popup.js");
 const actions=read("ui/js/app-calendar-actions.js");

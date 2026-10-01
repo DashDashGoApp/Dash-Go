@@ -74,12 +74,44 @@ func TestWeatherHourlyMapsProvidersToTheCanonicalShape(t *testing.T) {
 		t.Errorf("nws hourly pop=%d", got)
 	}
 
-	// Visual Crossing publishes its own local clock with seconds.
+	// Visual Crossing publishes the hour as a time-only clock ("00:00:00") under
+	// the day that carries the date. The fixture here previously invented a full
+	// ISO stamp, so it validated the wrong shape: the adapter then contributed no
+	// hourly rows while still reporting a healthy source, and nothing failed.
 	visual := jsonutil.Map(visualCrossingHourlyGo(map[string]any{"days": []any{
-		map[string]any{"hours": []any{map[string]any{"datetime": "2026-07-11T14:00:00", "temp": 25.0, "conditions": "Partially cloudy", "precipprob": float64(5)}}},
+		map[string]any{"datetime": "2026-07-11", "hours": []any{
+			map[string]any{"datetime": "14:00:00", "temp": 25.0, "conditions": "Partially cloudy", "precipprob": float64(5)},
+		}},
+		map[string]any{"datetime": "2026-07-12", "hours": []any{
+			map[string]any{"datetime": "00:00:00", "temp": 18.5, "conditions": "Clear", "precipprob": float64(0)},
+		}},
 	}}))
-	if got := jsonutil.TextValue(jsonutil.List(visual["time"])[0]); got != "2026-07-11T14:00" {
-		t.Errorf("visual crossing hourly time=%q", got)
+	visualTimes := jsonutil.List(visual["time"])
+	if len(visualTimes) != 2 {
+		t.Fatalf("visual crossing hourly rows=%d want 2", len(visualTimes))
+	}
+	if got := jsonutil.TextValue(visualTimes[0]); got != "2026-07-11T14:00" {
+		t.Errorf("visual crossing hourly time=%q want the day joined to the hour clock", got)
+	}
+	if got := jsonutil.TextValue(visualTimes[1]); got != "2026-07-12T00:00" {
+		t.Errorf("visual crossing next-day time=%q", got)
+	}
+	if got := jsonutil.Int(jsonutil.List(visual["temperature_2m"])[0], 0); got != 25 {
+		t.Errorf("visual crossing hourly temperature=%d want canonical celsius", got)
+	}
+	// A full stamp is still accepted, so a future API change cannot silently
+	// empty this block a second time.
+	if got := visualCrossingHourlyStampGo("2026-07-11", "2026-07-11T14:00:00"); got != "2026-07-11T14:00" {
+		t.Errorf("full-stamp passthrough=%q", got)
+	}
+	if got := visualCrossingHourlyStampGo("", "14:00:00"); got != "" {
+		t.Errorf("a missing day date must not invent a stamp, got %q", got)
+	}
+	// Root cause, kept as documentation: the shared normalizer needs a full
+	// stamp, so a bare time-only clock normalized to nothing and the whole block
+	// disappeared without an error being raised anywhere.
+	if got := weatherHourlyFromLocalISO("00:00:00"); got != "" {
+		t.Errorf("time-only clocks must not normalize without their day, got %q", got)
 	}
 }
 

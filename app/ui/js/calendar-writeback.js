@@ -115,6 +115,7 @@ function calendarWritebackEventActions(ev,token){
     const cap=calendarWritebackEventCapability(ev,status);
     if(!cap){root.remove();return;}
     root.hidden=false;root.replaceChildren();
+    popupTimingMark("actions");
     if(cap.state==="conflict"){
       root.appendChild(calendarWritebackAttentionNote("Sync conflict","Normal event changes are paused to protect both versions. Resolve this calendar in Calendar Manager."));
       return;
@@ -166,5 +167,6 @@ function calendarWritebackMountDayAdd(root,day,token){
     if(!popupIsCurrent(token)||!root.isConnected||!calendarWritebackActiveCalendars(status).length)return;
     const add=calendarWritebackButton("+ Add event","primary",()=>openCalendarEventForm({day,status}));
     const row=el("div","calendar-writeback-day-add");row.appendChild(add);root.insertBefore(row,root.firstChild);
+    popupTimingMark("actions");
   });
 }

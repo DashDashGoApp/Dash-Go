@@ -1,5 +1,12 @@
 // 05-popups-03a-day-popup.js — staged, cached full-day Timeline/List popup.
 const DT_CARD_STAGE_CHUNK=16;
+// Stable content identity for "the events this popup is showing". A commit only
+// runs when the calendar signature changed, but an edit on another day still
+// produces new objects for this day, so a refresh compares content instead of
+// object references and rebuilds only when this day actually changed.
+function dtEventSetKey(evs){
+  return (evs||[]).map(ev=>[ev.id||ev.uid||"",+ev.start,ev.end?+ev.end:0,ev.allDay?1:0,ev.title||"",ev.location||"",ev.desc||"",(ev.cal&&ev.cal.name)||""].join("|")).join("\n");
+}
 function dtBuildDayModel(day,evs){
   const dayStart=startOfDay(day),dayEnd=addDays(dayStart,1);
   const allDay=evs.filter(ev=>ev.allDay);
@@ -84,7 +91,10 @@ function dtBuildCachedView(model,kind){
   if(kind==="timeline"){
     const timeline=dtBuildTimelineView(model);content.appendChild(timeline);
     content._dtTimelineStage=timeline._dtTimelineStage||null;
-  }else content.appendChild(dtBuildListView(model.day,model.evs,model));
+  }else{
+    const list=dtBuildListView(model.day,model.evs,model);content.appendChild(list);
+    content._dtListStage=list._dtListStage||null;
+  }
   return content;
 }
 function dtBindUserScrollGuard(body,token){
@@ -131,7 +141,9 @@ function showAppCalendarGroupPopup(day,group){
 }
 
 function showDayPopup(day,evs){
-  const model=dtBuildDayModel(day,evs),initial=(dtLiteDayPopupProfile()&&model.timed.length)?"list":(model.timed.length?"timeline":"list");let session=null;
+  let model=dtBuildDayModel(day,evs);
+  const initial=(dtLiteDayPopupProfile()&&model.timed.length)?"list":(model.timed.length?"timeline":"list");
+  let session=null,dataKey=dtEventSetKey(evs);
   popupOpenTransaction({
     mode:"daytimelinepop",title:FMT.dayLong.format(day),when:evs.length+(evs.length===1?" event":" events"),loading:"Preparing day timeline…",
     afterCommit:(token,body)=>{if(session&&session.token===token)session.afterCommit(body);}
@@ -140,6 +152,14 @@ function showDayPopup(day,evs){
       const root=el("div","dt-popup-session");
       root.appendChild(el("div","dt-empty","No events."));
       session={token,afterCommit(){calendarWritebackMountDayAdd(root,day,token);}};
+      // A day that had nothing can gain events on the next refresh. There is no
+      // view to update in place, so that case reopens the popup properly.
+      popupRegisterLiveRefresh(token,()=>{
+        const nextEvs=eventsOnDay(day);
+        if(!nextEvs.length)return false;
+        showDayPopup(day,nextEvs);
+        return true;
+      });
       return root;
     }
     dtBeginDayCardPaintContext(model);
@@ -151,14 +171,19 @@ function showDayPopup(day,evs){
       if(ev){e.stopPropagation();showEventPopup(ev);}
     });
     function viewFor(kind){return state.views[kind]||(state.views[kind]=dtBuildCachedView(model,kind));}
-    function mountView(kind){
+    function mountView(kind,opts){
       const previous=state.view;
       if(previous==="timeline"&&kind!=="timeline")dtCancelTimelineStage(state.views.timeline);
+      if(previous==="list"&&kind!=="list")dtCancelListStage(state.views.list);
       state.view=kind;toolbar.setActive(kind);
       const view=viewFor(kind);host.replaceChildren(view);
       if(state.body){
-        dtScrollInitialView(state.body,view,kind,model);
+        // A live refresh keeps the reader exactly where they were; only a fresh
+        // open or a deliberate view switch performs the initial position jump.
+        if(opts&&opts.preserve)view.dataset.dtScrolled="refresh";
+        else dtScrollInitialView(state.body,view,kind,model);
         if(kind==="timeline")dtStageTimelineCards(token,view);
+        else dtStageListCards(token,view);
       }
     }
     const toolbar=dtBuildViewBar(initial,next=>{if(next!==state.view&&popupIsCurrent(token))mountView(next);},model.timed.length>0);
@@ -170,11 +195,32 @@ function showDayPopup(day,evs){
       // measures event cards.
       body.dataset.scrollPolicy="day-timeline";
       dtBindUserScrollGuard(body,token);
-      popupDefer(token,ctx=>ctx.onCancel(()=>dtCancelTimelineStage(state.views.timeline)));
+      popupDefer(token,ctx=>ctx.onCancel(()=>{dtCancelTimelineStage(state.views.timeline);dtCancelListStage(state.views.list);}));
       dtScrollInitialView(body,first,initial,model);
       if(initial==="timeline")dtStageTimelineCards(token,first);
+      else dtStageListCards(token,first);
       calendarWritebackMountDayAdd(root,day,token);
+      popupTimingMark("settled");
     }};
+    // Rebuild in place when a commit replaces this day's events, so an open popup
+    // never disagrees with the grid behind it. The view cache was built from the
+    // previous model so it is dropped; the active view kind and the reader's
+    // scroll position are preserved, and none of the open-path work is repeated
+    // (no skeleton flash, no second writeback row, no scroll jump).
+    popupRegisterLiveRefresh(token,()=>{
+      const nextEvs=eventsOnDay(day);
+      const nextKey=dtEventSetKey(nextEvs);
+      if(nextKey===dataKey)return false;
+      dataKey=nextKey;
+      if(!nextEvs.length){showDayPopup(day,nextEvs);return true;}
+      const body=state.body,scrollTop=body?body.scrollTop:0,kind=state.view;
+      model=dtBuildDayModel(day,nextEvs);
+      dtBeginDayCardPaintContext(model);
+      state.views={};
+      mountView(kind,{preserve:true});
+      if(body)body.scrollTop=scrollTop;
+      return true;
+    });
     return root;
   });
 }

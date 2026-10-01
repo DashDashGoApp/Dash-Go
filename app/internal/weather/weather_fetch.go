@@ -198,6 +198,10 @@ func (s *Service) fetchOneWeatherProviderGo(ctx context.Context, job weatherFetc
 		result.Status = enrich(weatherHealthOKGo(id, pcfg, src))
 		return result
 	}
+	// Redact the credential here, once. Provider errors quote the full request
+	// URL, and every use below — the persisted rate state, the stale marker, and
+	// the status payload Control renders — would otherwise carry the API key.
+	err = redactWeatherError(err)
 
 	s.noteWeatherProviderErrorGo(id, err)
 	s.noteProviderBackoff("weather-"+id, err)

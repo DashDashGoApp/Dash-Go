@@ -6,7 +6,7 @@ import vm from "node:vm";
 import {fileURLToPath} from "node:url";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-const weather=fs.readFileSync(path.join(root,"ui/js/weather.js"),"utf8");
+const weather=fs.readFileSync(path.join(root,"ui/js/weather.js"),"utf8")+fs.readFileSync(path.join(root,"ui/js/weather-moon.js"),"utf8");
 const close=(actual,expected,message)=>assert.ok(Math.abs(actual-expected)<1e-9,`${message}: expected ${expected}, got ${actual}`);
 const normalized=phase=>((phase%1)+1)%1;
 const idFor=phase=>`mp${Math.round(normalized(phase)*10000)}`;

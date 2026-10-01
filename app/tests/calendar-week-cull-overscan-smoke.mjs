@@ -29,6 +29,7 @@ const listeners=new Map();
 const timers=new Map();
 const raf=[];
 let timerId=0;
+let scheduleCount=0;
 const scroll={
   dataset:{},scrollTop:150,clientHeight:200,
   querySelectorAll:selector=>selector===".weekrow"?rows:[],
@@ -41,7 +42,7 @@ const context={
   $:()=>scroll,
   requestAnimationFrame:fn=>{raf.push(fn);return raf.length;},
   cancelAnimationFrame:id=>{raf[id-1]=null;},
-  setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},
+  setTimeout:(fn,ms)=>{scheduleCount++;const id=++timerId;timers.set(id,{fn,ms});return id;},
   clearTimeout:id=>timers.delete(id)
 };
 context.globalThis=context;
@@ -73,6 +74,26 @@ const release=activeTimer(250);
 assert.ok(release,"culling must schedule a bounded warm-row release");
 runTimer(release);
 assert.deepEqual(near(),[1,2,3,4,5],"idle culling must return to a symmetric one-row overscan after the warm hold");
+
+// The settle timer is armed inside the coalesced frame, not once per event: a
+// burst of scroll events must cost no timer churn at all.
+const beforeBurst=scheduleCount;
+scroll.scrollTop=320;
+for(let i=0;i<6;i++){scroll.scrollTop+=20;listeners.get("scroll").fn();}
+assert.equal(scheduleCount-beforeBurst,0,"a scroll burst must not schedule timers outside the coalesced frame");
+flushRaf();
+assert.equal(scheduleCount-beforeBurst,1,"the coalesced frame arms the settle timer exactly once per frame");
+
+// S4: a fast flick must not outrun the prewarm — however large the step, every row
+// intersecting the viewport after one coalesced frame must be warm. This is the
+// question the 1-behind/2-ahead window exists to answer, tested rather than assumed.
+scroll.scrollTop=900;
+listeners.get("scroll").fn();
+flushRaf();
+const viewportTop=900,viewportBottom=900+200;
+const intersecting=rows.map((r,i)=>i).filter(i=>i*100+100>viewportTop&&i*100<viewportBottom);
+assert.ok(intersecting.length>=2,"the fixture must actually place rows in the viewport");
+for(const i of intersecting)assert.equal(rows[i].dataset.cullNear,"1",`row ${i} entered the viewport after a fast flick without being warm`);
 
 vm.runInContext("calendarSetWeekCullReady(false,scroll)",context);
 assert.deepEqual(near(),[],"disabling culling must clear warm-row markers before calendar fitting/rerendering");

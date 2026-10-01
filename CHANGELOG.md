@@ -1,3 +1,34 @@
+## [1.5.14] — 2026-09-30
+
+Dash-Go 1.5.14 is a correctness-and-responsiveness release. It fixes a wrong temperature shown to National Weather Service households, makes an open day or event popup follow the data it is actually showing, and removes work from the two surfaces the household touches every day.
+
+### Bug fixes
+
+- **A wrong number on the kiosk.** The feels-like metric is now guarded, so a source that omits apparent temperature — the National Weather Service does — can no longer render a false `Feels 0°` beside a correct temperature. The guard keeps the value as one atomic metric token, and a test now asserts the unguarded form cannot return.
+- **Visual Crossing hourly data was silently empty.** Its hourly entries publish a time-only clock (`00:00:00`) that belongs to the day above them; the shared normalizer needed a full stamp, so every row was dropped and the source reported success while contributing nothing. The adapter now joins the day's date to the hour's clock, accepts a full stamp unchanged, and refuses to invent a date when one is missing.
+- **Air quality no longer retries a dead endpoint on every refresh.** A failing air-quality request now keeps serving the last good reading and opens a short cooldown (shorter than the cache's own freshness window) instead of being re-attempted on every weather refresh and again on each browser retry.
+- **A refresh no longer snaps the agenda to the top.** A gesture that arrives while the agenda is rebuilding used to abandon the scroll restore entirely, and because the list is cleared before it is rebuilt, the restore left the viewer at the top. The restore now skips the element anchor for that rebuild but still restores the captured offset — and if the viewer has moved the list themselves, it does not touch it.
+- **The calendar no longer writes over a live gesture.** The calendar captured its scroll position and wrote it back with no input check at all, while the agenda had one. The same rule now covers both panes: a gesture that lands during a rebuild owns the position.
+
+### Improvements
+
+- **An open popup now follows the data.** A day or event popup held across a calendar commit re-renders from the new data instead of continuing to show events that no longer match the grid behind it. The day popup rebuilds in place, keeping the active view and the reader's scroll position; the event popup swaps only the details that data can change, leaving the deferred map and the writeback row alone, and reopens when the event's location moved. A deleted event closes the popup, but only when the calendar actually has data.
+- **The Lite day popup's List view stages in bounded chunks.** Its first sixteen rows commit with the shell, so rows and the initial position exist immediately, and the remainder lands in bounded frames — a busy day no longer builds in one frame.
+- **App-owned household popups paint before the round trip.** Chores and maintenance popups now show the rows the calendar already named while the day projection is in flight, labelled as still checking and not actionable until the server supplies its identifiers. Their reads are cancelled when the popup closes; a completion the household just asked for deliberately is not, because closing the popup must not discard it.
+- **The weather review surface explains more of the blend.** Source notes now cover current-condition disagreement (temperature, feels-like, humidity) and hourly provenance, so an hourly view that quietly fell back to a single provider is visible rather than implied.
+- **Popup shell and content latency is measurable on the device.** Lite profiles now emit bounded timing marks for the shell, first content, settled state, deferred map, and late writeback actions, against a stated budget, so the next round of tuning is measured rather than guessed.
+- **Provider failures keep credentials out of local records.** A provider error quotes the full request URL, and Go renders a timeout that way, so a stored error used to carry the API key in cleartext into the rate-state file and onto the Control surface. Credential query values are now redacted at the point of capture.
+
+### Performance and reliability
+
+- The Lite calendar's row-culling and list-overscan controllers now re-arm their settle timers inside the animation frame they already coalesce, so a scroll burst costs no timer churn instead of one re-arm per scroll event.
+- The cull prewarm window is now covered by a fast-flick fixture rather than an assumption: a four-row jump in one event leaves every row intersecting the viewport warm, which is why the window was left unchanged.
+
+### Build and release integrity
+
+- `ui/js/weather.js` and `ui/js/calendar-grid.js` were split into focused modules — `weather-now.js`, `weather-moon.js`, `weather-review-notes.js`, `calendar-grid-spans.js`, and `calendar-grid-rows.js` — with no behaviour change, and the bundle manifest, asset-manifest test, and every smoke that reads those files were updated to follow the moved code.
+- Added mapper coverage for the Visual Crossing hourly clock and the air-quality failure cooldown, plus behavioural tests for gesture-aware scroll restoration, popup live refresh, popup latency marks, and List staging.
+
 ## [1.5.13] — 2026-09-30
 
 Dash-Go 1.5.13 brings hourly weather to every provider that offers it, adds two rotating-message categories from keyless public sources, and closes the message-feed and blending defects found while reviewing both sections.

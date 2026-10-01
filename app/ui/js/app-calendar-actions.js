@@ -2,8 +2,32 @@
 // surfaces for app-owned household work. Complex edits stay in full apps.
 function appCalendarActionDate(day){ return localDateKey(startOfDay(day)); }
 function appCalendarActionOwner(group){ return String((group&&group.owner)||"").trim().toLowerCase(); }
-function appCalendarActionRequest(path,body){
-  return fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json",Accept:"application/json"}:undefined,body:body?JSON.stringify(body):undefined,cache:"no-store"}).then(response=>response.json().catch(()=>({})).then(payload=>response.ok?payload:Promise.reject(new Error(payload.error||"Household action failed"))));
+function appCalendarActionRequest(path,body,opts){
+  const signal=opts&&opts.signal;
+  return fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json",Accept:"application/json"}:undefined,body:body?JSON.stringify(body):undefined,cache:"no-store",signal}).then(response=>response.json().catch(()=>({})).then(payload=>response.ok?payload:Promise.reject(new Error(payload.error||"Household action failed"))));
+}
+// A popup that has to ask the server can still paint the rows the calendar cell
+// already showed, in the frame it commits. They are never actionable — without
+// the server's own identifier a row cannot be toggled — and the authoritative day
+// payload replaces them, so nothing painted here is presented as final state.
+function appCalendarActionPendingRows(events,date){
+  const rows=[],seen=new Set();
+  for(const ev of (events||[])){
+    const title=String((ev&&ev.title)||"").trim();
+    if(!title||seen.has(title))continue;
+    seen.add(title);
+    rows.push(appCalendarActionRow({title,status:"checking",actionable:false},date,()=>Promise.resolve()));
+  }
+  return rows;
+}
+// Reads are cancelled when the popup closes. A write is deliberately not: if the
+// household taps a checkbox and then closes the popup, discarding the completion
+// would silently lose the intent they expressed.
+function appCalendarActionAbortable(token){
+  if(typeof AbortController!=="function"||typeof popupDefer!=="function")return null;
+  const controller=new AbortController();
+  popupDefer(token,ctx=>ctx.onCancel(()=>controller.abort()));
+  return {signal:controller.signal};
 }
 function appCalendarActionOpen(info,day){
   closeScrim();
@@ -15,6 +39,7 @@ function appCalendarActionOpen(info,day){
 }
 function appCalendarActionStatus(item,date){
   const status=String(item&&item.status||"assigned");
+  if(status==="checking")return "Checking…";
   if(status==="completed"){
     if(item&&item.undoAvailable===false)return String(item.correctionMessage||"Completed · review in Maintenance");
     return "Done · tap again to reopen";
@@ -45,10 +70,17 @@ function appCalendarActionRow(item,date,onToggle){
   });
   return row;
 }
-function showChoresCalendarActionPopup(day,info){
+function showChoresCalendarActionPopup(day,info,events){
   const date=appCalendarActionDate(day);
-  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening chores…"},()=>{
-    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Loading chores…"),host=el("div","appgroup-action-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening chores…"},token=>{
+    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Checking chores…"),host=el("div","appgroup-action-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+    // The calendar cell already named these chores, so they are painted in the
+    // frame this popup commits and the day payload replaces them with actionable
+    // rows. Nothing here is final: the rows read "Checking…" and their checkboxes
+    // stay disabled until the server supplies the identifiers.
+    const pending=appCalendarActionPendingRows(events,date);
+    if(pending.length)host.replaceChildren(...pending);
+    const read=appCalendarActionAbortable(token);
     function render(payload){
       const items=Array.isArray(payload&&payload.items)?payload.items:[],done=Number(payload&&payload.completed)||0;
       intro.textContent=items.length?`${items.length} chore${items.length===1?"":"s"} · ${done} complete.`:"No chores are assigned for this day.";
@@ -59,14 +91,20 @@ function showChoresCalendarActionPopup(day,info){
         host.appendChild(appCalendarActionRow(item,date,desired=>appCalendarActionRequest("/api/chore-wheel/assignments/status",{assignmentId:item.assignmentId,date,completed:desired}).then(next=>render(next.day||next))));
       }
     }
-    appCalendarActionRequest("/api/chore-wheel/day?date="+encodeURIComponent(date)).then(render).catch(error=>{intro.textContent=error.message||"Chores are unavailable.";});
+    appCalendarActionRequest("/api/chore-wheel/day?date="+encodeURIComponent(date),null,read).then(render).catch(error=>{if(error&&error.name==="AbortError")return;intro.textContent=error.message||"Chores are unavailable.";});
     return root;
   });
 }
-function showMaintenanceCalendarActionPopup(day,info){
+function showMaintenanceCalendarActionPopup(day,info,events){
   const date=appCalendarActionDate(day);
-  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening maintenance tasks…"},()=>{
-    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Loading maintenance tasks…"),host=el("div","appgroup-action-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening maintenance tasks…"},token=>{
+    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Checking maintenance tasks…"),host=el("div","appgroup-action-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+    // Maintenance rows are the same flat shape as chore rows, so the tasks the
+    // calendar cell already showed are painted pending while the day projection
+    // is in flight; the server payload then replaces them.
+    const pending=appCalendarActionPendingRows(events,date);
+    if(pending.length)host.replaceChildren(...pending);
+    const read=appCalendarActionAbortable(token);
     function render(payload){
       const current=payload||{date,items:[],completedItems:[]},items=Array.isArray(current.items)?current.items:[],completed=Array.isArray(current.completedItems)?current.completedItems:[];
       intro.textContent=items.length||completed.length?`${items.length} due · ${completed.length} completed.`:"No maintenance tasks are due for this day.";
@@ -89,7 +127,7 @@ function showMaintenanceCalendarActionPopup(day,info){
         }
       }
     }
-    appCalendarActionRequest("/api/maintenance/day?date="+encodeURIComponent(date)).then(render).catch(error=>{intro.textContent=error.message||"Maintenance is unavailable.";});
+    appCalendarActionRequest("/api/maintenance/day?date="+encodeURIComponent(date),null,read).then(render).catch(error=>{if(error&&error.name==="AbortError")return;intro.textContent=error.message||"Maintenance is unavailable.";});
     return root;
   });
 }
@@ -99,8 +137,13 @@ function routineCalendarProgress(session){
 }
 function showRoutinesCalendarActionPopup(day,info){
   const date=appCalendarActionDate(day),expanded=new Set();let initialExpansion=true;
-  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening routine checklists…"},()=>{
-    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Loading person-centered routine checklists…"),host=el("div","appgroup-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+  popupOpenTransaction({mode:"eventpop",title:info.label,when:FMT.dayLong.format(day),loading:"Opening routine checklists…"},token=>{
+    const root=el("section","appgroup-popup appgroup-action-popup"),intro=el("p","appgroup-note","Checking person-centered routine checklists…"),host=el("div","appgroup-list"),open=el("button","appgroup-open-action",info.action);open.type="button";open.addEventListener("click",event=>{event.stopPropagation();appCalendarActionOpen(info,day);});root.append(intro,host,open);
+    // Routine rows are per-person cards rather than a flat list, so calendar event
+    // titles cannot preview them without a jarring reshape on arrival; the honest
+    // placeholder stands in until the day payload lands. The read is still
+    // cancellable, unlike a write.
+    const read=appCalendarActionAbortable(token);
     function mutate(session,payload){return appCalendarActionRequest("/api/routines/occurrence",{...payload,routineId:session.routineId,assignmentId:session.assignmentId,date}).then(next=>render(next.day||next));}
     function render(payload){
       const people=Array.isArray(payload&&payload.people)?payload.people:[];let allDone=0,allSteps=0,totalSessions=0;
@@ -137,15 +180,16 @@ function showRoutinesCalendarActionPopup(day,info){
       }
       initialExpansion=false;
     }
-    appCalendarActionRequest("/api/routines/day?date="+encodeURIComponent(date)).then(render).catch(error=>{intro.textContent=error.message||"Routine details are unavailable.";});
+    appCalendarActionRequest("/api/routines/day?date="+encodeURIComponent(date),null,read).then(render).catch(error=>{if(error&&error.name==="AbortError")return;intro.textContent=error.message||"Routine details are unavailable.";});
     return root;
   });
 }
 function showActionableAppCalendarGroupPopup(day,group){
   const owner=appCalendarActionOwner(group),info=appCalendarGroupInfo(owner);
   if(!info){showDayPopup(day,(group&&group.events)||[]);return;}
-  if(owner==="chore-wheel"){showChoresCalendarActionPopup(day,info);return;}
-  if(owner==="maintenance"){showMaintenanceCalendarActionPopup(day,info);return;}
+  const events=(group&&group.events)||[];
+  if(owner==="chore-wheel"){showChoresCalendarActionPopup(day,info,events);return;}
+  if(owner==="maintenance"){showMaintenanceCalendarActionPopup(day,info,events);return;}
   if(owner==="routines"){showRoutinesCalendarActionPopup(day,info);return;}
   showDayPopup(day,(group&&group.events)||[]);
 }

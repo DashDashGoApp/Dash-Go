@@ -7,7 +7,7 @@ Dash-Go fresh installs support Debian or Raspberry Pi OS **Bookworm** and recomm
 
 Dash-Go is designed to remain useful as a local household dashboard without an account or cloud connection. Optional integrations add calendar syncing, task syncing, notifications, weather, maps, radar, message content, and optional typography sources. Dash-Go installation and updates are provided through the official Dash-Go GitHub repository and GitHub Releases.
 
-This document describes the integrations available in Dash-Go 1.5.13, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
+This document describes the integrations available in Dash-Go 1.5.14, what they are used for, and the information they may receive. Third-party software licenses and attributions are listed separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Local-first operation
 
@@ -145,15 +145,16 @@ Weather features use the dashboard’s configured location coordinates. Open-Met
 - Xweather
 - National Weather Service, where supported
 
-Some providers require an API key. A configured key is stored locally and is sent only to that provider when making its request.
+Some providers require an API key. A configured key is stored locally and is sent only to that provider when making its request. A provider failure is recorded locally for diagnostics with credential values redacted, so a stored or displayed error cannot carry the key.
 
 Dash-Go blends every enabled source and states which sources supplied hourly and daily values. Hourly data is used from every provider that publishes it, and refreshed provider caches keep that work inside each provider's normal cadence:
 
 - Open-Meteo, the National Weather Service, WeatherAPI, OpenWeather, Tomorrow.io, Visual Crossing, Pirate Weather, Xweather, and AccuWeather all provide hourly values with Dash-Go's existing provider request or a single additional free, keyless National Weather Service request.
+- Each hourly value carries the hour's temperature, condition, and precipitation probability. Hourly precipitation amounts and hourly wind are not part of the hourly view.
 - Weatherbit's hourly endpoint requires a paid plan. Weatherbit remains available for current conditions and daily forecasts on its free plan, and its hourly values are used when the plan provides them.
 - Google Weather requires Google Maps Platform billing; its hourly values are used when that integration is configured.
 
-Dash-Go can also request air-quality data and National Weather Service severe-weather alerts. National Weather Service alert coverage is limited to areas supported by that service. Severe-weather banners come from the browser's own National Weather Service request, not from a forecast provider.
+Dash-Go can also request air-quality data and National Weather Service severe-weather alerts. The severe-weather banner comes from the browser's own request to `api.weather.gov`, carries only the configured coordinates, and involves no forecast provider — so the banner appears only where that service has coverage, which is the United States and its territories. Air quality is requested from Open-Meteo's air-quality service; when it is unavailable, Dash-Go keeps serving the last good reading and quiets repeat attempts for a short cooldown rather than retrying on every refresh.
 
 Sunrise and sunset are computed locally from the configured coordinates when a provider does not supply them, so no provider combination leaves them empty.
 

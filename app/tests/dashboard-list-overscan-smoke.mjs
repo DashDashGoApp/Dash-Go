@@ -8,7 +8,7 @@ import {fileURLToPath} from "node:url";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const source=fs.readFileSync(path.join(root,"ui/js/calendar-list-overscan.js"),"utf8");
 const agenda=fs.readFileSync(path.join(root,"ui/js/calendar-agenda.js"),"utf8");
-const weather=fs.readFileSync(path.join(root,"ui/js/weather.js"),"utf8");
+const weather=fs.readFileSync(path.join(root,"ui/js/weather.js"),"utf8")+fs.readFileSync(path.join(root,"ui/js/weather-now.js"),"utf8");
 const css=fs.readFileSync(path.join(root,"ui/css/dashboard/sidebar-weather-messages.css"),"utf8");
 
 assert.ok(source.split(/\n/).length<=400,"List overscan must stay a focused split module");

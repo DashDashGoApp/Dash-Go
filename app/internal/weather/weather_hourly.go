@@ -251,12 +251,32 @@ func weatherAPIHourlyGo(raw map[string]any, cfg Config) any {
 func visualCrossingHourlyGo(raw map[string]any) any {
 	var block weatherHourlyBlockGo
 	for _, dayItem := range jsonutil.List(raw["days"]) {
-		for _, hourItem := range jsonutil.List(anyMap(dayItem)["hours"]) {
+		day := anyMap(dayItem)
+		for _, hourItem := range jsonutil.List(day["hours"]) {
 			row := anyMap(hourItem)
-			block.add(weatherHourlyFromLocalISO(row["datetime"]), row["temp"], textCodeGo(xOr(row["conditions"], row["icon"])), row["precipprob"])
+			block.add(visualCrossingHourlyStampGo(day["datetime"], row["datetime"]), row["temp"], textCodeGo(xOr(row["conditions"], row["icon"])), row["precipprob"])
 		}
 	}
 	return block.payload()
+}
+
+// visualCrossingHourlyStampGo joins the parent day's date to the hour's clock.
+// Visual Crossing publishes each hour's datetime as a time-only string
+// ("00:00:00") that the caller must combine with the day it lives under, so
+// passing it straight to the shared normalizer — which requires a full stamp —
+// returned "" for every row. The block then came back nil, and the source
+// reported success while contributing no hourly data at all. A full stamp is
+// still accepted and passed straight through.
+func visualCrossingHourlyStampGo(date, clock any) string {
+	stamp := jsonutil.StringValue(clock)
+	if strings.Contains(stamp, "T") {
+		return weatherHourlyFromLocalISO(stamp)
+	}
+	day := jsonutil.StringValue(date)
+	if len(day) < 10 || len(stamp) < 5 {
+		return ""
+	}
+	return day[:10] + "T" + stamp[:5]
 }
 
 // weatherbitHourlyGo maps the dedicated hourly response. Weatherbit publishes

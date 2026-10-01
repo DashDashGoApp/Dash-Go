@@ -9,9 +9,9 @@ const read=p=>fs.readFileSync(path.join(app,p),"utf8");
 const index=read("index.html");
 const snap=read("ui/js/settings-idle-scroll.js");
 const lifecycle=read("ui/js/settings-scroll-lifecycle.js");
-const calendar=read("ui/js/calendar-grid.js");
+const calendar=read("ui/js/calendar-grid.js")+read("ui/js/calendar-grid-rows.js");
 const agenda=read("ui/js/calendar-agenda.js");
-const weather=read("ui/js/weather.js");
+const weather=read("ui/js/weather.js")+read("ui/js/weather-now.js");
 const popup=read("ui/css/dashboard/popups-alerts-maps.css");
 const popupJs=read("ui/js/day-popup.js");
 const timelineCss=read("ui/css/dashboard/day-timeline-popup.css");
@@ -62,6 +62,11 @@ for(const forbidden of ["offsetTop","getBoundingClientRect","querySelector","app
 }
 containsAll(lifecycle,["scrollIdleReturnReconcile(root)","onComplete"],"anchor restore idle-return reconciliation");
 containsAll(calendar,["const homeTop=cw.offsetTop;","setCalendarScrollHomeTop(homeTop)","calendarScrollSnapReconcile()"],"calendar render-time home-offset cache");
+// A gesture that arrives during a rebuild owns the position. The calendar leaves
+// its live offset alone; the agenda (whose list is cleared) restores numerically
+// instead of snapping to the top. Neither pane may overwrite a live gesture.
+containsAll(calendar,["const prevInputEpoch","scrollRootInputEpoch(scroll)!==prevInputEpoch","if(!gestureActive){"],"calendar gesture-aware scroll restore");
+containsAll(lifecycle,["if(gestureActive && root.scrollTop>4){ complete(); return; }","if(!gestureActive && snapshot.key){"],"agenda gesture-aware numeric fallback");
 
 containsAll(agenda,["scrollRootState(list,\"hot-list\")","captureScrollAnchor(list","restoreScrollAnchor(list","data-agenda-key","agendaBindDelegatedOpen"],"agenda anchored refresh");
 assert.ok(!agenda.includes("row.addEventListener(\"click\""),"Agenda rows must use one delegated opener");

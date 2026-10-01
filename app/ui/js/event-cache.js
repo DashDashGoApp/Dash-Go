@@ -153,7 +153,13 @@ function commitCalendarEvents(all,sigExtra,options){
       windowEnd:opts.windowEnd==null?EVENT_CACHE_WINDOW_END:+opts.windowEnd
     });
   }
-  const paint=()=>{ renderCalendar(); renderAgenda(); };
+  const paint=()=>{
+    renderCalendar(); renderAgenda();
+    // An open popup is showing the same data this repaint just replaced. It gets
+    // the chance to re-render from the new EVENTS slice rather than continuing to
+    // show events that disagree with the grid behind it.
+    if(typeof popupNotifyDataCommit==="function")popupNotifyDataCommit();
+  };
   if(typeof deferDashboardWork==="function" && deferDashboardWork("calendar-render",paint)) return true;
   paint();
   return true;

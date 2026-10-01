@@ -5,13 +5,15 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-const weather=fs.readFileSync(path.join(root,"ui","js","weather.js"),"utf8");
+const weather=fs.readFileSync(path.join(root,"ui","js","weather.js"),"utf8")+fs.readFileSync(path.join(root,"ui","js","weather-now.js"),"utf8");
 const css=fs.readFileSync(path.join(root,"ui","css","dashboard","sidebar-weather-messages.css"),"utf8");
 
 assert.match(weather,/metrics=el\("span","sub wx-current-metrics"\)/,
   "current weather details must use a dedicated wrapping metric row");
-assert.match(weather,/el\("span","wx-metric-token wx-feels-token","Feels "\+Math\.round\(c\.apparent_temperature\)\+"°"\)/,
+assert.match(weather,/el\("span","wx-metric-token wx-feels-token",Number\.isFinite\(c\.apparent_temperature\)\?"Feels "\+Math\.round\(c\.apparent_temperature\)\+"°":"Feels —"\)/,
   "feels-like value must remain an atomic metric token created as text");
+assert.ok(!/wx-feels-token","Feels "\+Math\.round/.test(weather),
+  "the feels-like token must be guarded so a provider that omits apparent temperature (NWS) cannot render a false 0°");
 assert.match(weather,/wind=el\("span","wx-metric-token wx-wind-token"\)/,
   "wind value and configured unit must remain one atomic token");
 assert.match(weather,/document\.createTextNode\(Math\.round\(c\.wind_speed_10m\)\+" "\+CONFIG\.windUnit\)/,

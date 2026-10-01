@@ -82,7 +82,7 @@ async function loadEventMap(q,wrap,task){
       if(!live())return;loadSeq++;const seq=loadSeq;clearTimeout(slowTimer);syncMapControlState();
       const zLabel=(EVENT_MAP_ZOOMS.find(x=>x.z===currentZoom)||{}).label||"map",sLabel=(EVENT_MAP_STYLES.find(x=>x.key===currentStyle)||{}).label||"Map";
       msg.textContent="Loading "+sLabel.toLowerCase()+" "+zLabel.toLowerCase()+" map…";msg.style.display="block";img.style.display="none";
-      img.onload=()=>{if(!live()||seq!==loadSeq)return;msg.style.display="none";img.style.display="block";};img.onerror=()=>{if(!live()||seq!==loadSeq)return;msg.textContent=sLabel+" map unavailable";};img.src=mapImageUrl(m,currentZoom,currentStyle);
+      img.onload=()=>{if(!live()||seq!==loadSeq)return;msg.style.display="none";img.style.display="block";popupTimingMark("map");};img.onerror=()=>{if(!live()||seq!==loadSeq)return;msg.textContent=sLabel+" map unavailable";};img.src=mapImageUrl(m,currentZoom,currentStyle);
       slowTimer=setTimeout(()=>{if(live()&&seq===loadSeq&&msg.parentNode&&img.style.display==="none")msg.textContent="Trying map providers…";},5000);
     }
     function addControlGroup(groupClass,heading,rowClass,choices,buttonClass){

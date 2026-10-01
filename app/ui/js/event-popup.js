@@ -9,6 +9,48 @@ function eventPopupWhen(ev){
   }
   return f;
 }
+// Stable content identity for an open event popup, so a commit that did not
+// change this event costs no DOM work. Events are rebuilt as fresh objects on
+// every commit, so identity is matched on the provider identifiers (falling back
+// to start-plus-title) and never on object reference.
+function eventPopupDataKey(ev){
+  if(!ev)return "";
+  return [ev.title||"",+ev.start,ev.end?+ev.end:0,ev.allDay?1:0,ev.location||"",ev.desc||"",(ev.cal&&ev.cal.name)||""].join("|");
+}
+function eventPopupSameEvent(a,b){
+  if(!a||!b)return false;
+  if(a.id&&b.id)return String(a.id)===String(b.id);
+  if(a.uid&&b.uid)return String(a.uid)===String(b.uid);
+  return +a.start===+b.start&&String(a.title||"")===String(b.title||"");
+}
+function eventPopupFindLive(ev){
+  const all=(typeof EVENTS!=="undefined"&&Array.isArray(EVENTS))?EVENTS:[];
+  for(const candidate of all)if(eventPopupSameEvent(candidate,ev))return candidate;
+  return null;
+}
+// The detail nodes provider data can change. Kept separate from the deferred map
+// and the writeback actions so a live refresh can swap them in place without
+// reloading a map tile or re-fetching the writeback status.
+function eventPopupDetails(ev){
+  const meta=el("div","eventpopupmeta");
+  if(ev.location){
+    const location=el("div","eventmetaitem eventlocation");
+    location.appendChild(el("span","eventmetakey","Location"));
+    if(CONFIG.showInteractiveMaps){
+      const b=el("button","locbtn");b.type="button";
+      b.append(document.createTextNode(ev.location),el("span","hint","Tap to open interactive Google Maps"));
+      b.addEventListener("click",e=>{e.stopPropagation();openInteractiveMap(ev.location);});location.appendChild(b);
+    }else location.appendChild(el("span","eventlocationtext",ev.location));
+    meta.appendChild(location);
+  }
+  if(ev.cal&&ev.cal.name){
+    const calendar=el("div","eventmetaitem eventcalendar");
+    calendar.append(el("span","eventmetakey","Calendar"),el("span","eventcalname",ev.cal.name));meta.appendChild(calendar);
+  }
+  let desc=null;
+  if(ev.desc){desc=el("div","eventpopupdesc");desc.style.marginTop="10px";desc.textContent=ev.desc;}
+  return {meta:meta.childNodes.length?meta:null,desc};
+}
 function showEventPopup(ev){
   // Managed Paydays/Trash/Recycle entries are identified by trusted generated
   // metadata. Never infer editability from an event title in a subscribed feed.
@@ -23,30 +65,51 @@ function showEventPopup(ev){
     showActionableAppCalendarEvent(ev);
     return;
   }
+  let dataKey=eventPopupDataKey(ev);
   popupOpenTransaction({mode:"eventpop",title:ev.title||"(no title)",when:()=>eventPopupWhen(ev),loading:"Opening event…"},token=>{
-    const frag=document.createDocumentFragment(),meta=el("div","eventpopupmeta");
-    if(ev.location){
-      const location=el("div","eventmetaitem eventlocation");
-      location.appendChild(el("span","eventmetakey","Location"));
-      if(CONFIG.showInteractiveMaps){
-        const b=el("button","locbtn");b.type="button";
-        b.append(document.createTextNode(ev.location),el("span","hint","Tap to open interactive Google Maps"));
-        b.addEventListener("click",e=>{e.stopPropagation();openInteractiveMap(ev.location);});location.appendChild(b);
-      }else location.appendChild(el("span","eventlocationtext",ev.location));
-      meta.appendChild(location);
-    }
-    if(ev.cal&&ev.cal.name){
-      const calendar=el("div","eventmetaitem eventcalendar");
-      calendar.append(el("span","eventmetakey","Calendar"),el("span","eventcalname",ev.cal.name));meta.appendChild(calendar);
-    }
-    if(meta.childNodes.length)frag.appendChild(meta);
+    const frag=document.createDocumentFragment(),details=eventPopupDetails(ev);
+    if(details.meta)frag.appendChild(details.meta);
     let mapWrap=null;
     if(ev.location){mapWrap=el("div","eventmap loading","Map loads after event details…");frag.appendChild(mapWrap);}
-    if(ev.desc){const d=el("div");d.style.marginTop="10px";d.textContent=ev.desc;frag.appendChild(d);}
-    if(!ev.location&&!ev.desc)frag.appendChild(el("div",null,"No additional details."));
+    if(details.desc)frag.appendChild(details.desc);
+    if(!ev.location&&!details.desc)frag.appendChild(el("div","eventpopupnone","No additional details."));
     const calendarActions=typeof calendarWritebackEventActions==="function"?calendarWritebackEventActions(ev,token):null;
     if(calendarActions)frag.appendChild(calendarActions);
     if(mapWrap)popupDefer(token,task=>{if(task.isCurrent()&&mapWrap.isConnected)loadEventMap(ev.location,mapWrap,task);});
+    // Keep the open popup correct when a commit replaces this event. The map and
+    // the writeback actions are deliberately left alone: only the detail nodes
+    // come from data that a refresh can change, and a moved location reopens the
+    // popup because the map itself would have to move.
+    popupRegisterLiveRefresh(token,()=>{
+      const next=eventPopupFindLive(ev);
+      const live=(typeof EVENTS!=="undefined"&&Array.isArray(EVENTS))?EVENTS:[];
+      if(!next){
+        // The event is gone from the calendar. Only close when we know the
+        // calendar actually has data, so a transiently empty list cannot dismiss
+        // a popup the household is reading.
+        if(live.length){closeScrim();return true;}
+        return false;
+      }
+      const nextKey=eventPopupDataKey(next);
+      if(nextKey===dataKey)return false;
+      dataKey=nextKey;
+      if((next.location||"")!==(ev.location||"")){showEventPopup(next);return true;}
+      ev=next;
+      const title=$("#poptitle");if(title)title.textContent=ev.title||"(no title)";
+      popupReplaceWhen(()=>eventPopupWhen(ev));
+      const body=$("popbody");
+      if(body){
+        const rebuilt=eventPopupDetails(ev),oldMeta=body.querySelector(".eventpopupmeta"),oldDesc=body.querySelector(".eventpopupdesc");
+        if(rebuilt.meta&&oldMeta)body.replaceChild(rebuilt.meta,oldMeta);
+        else if(rebuilt.meta)body.insertBefore(rebuilt.meta,body.firstChild);
+        if(rebuilt.desc&&oldDesc)body.replaceChild(rebuilt.desc,oldDesc);
+        else if(rebuilt.desc)body.appendChild(rebuilt.desc);
+        else if(oldDesc&&oldDesc.parentNode===body)body.removeChild(oldDesc);
+        if(rebuilt.meta||rebuilt.desc){const none=body.querySelector(".eventpopupnone");if(none&&none.parentNode===body)body.removeChild(none);}
+      }
+      return true;
+    });
+    popupTimingMark("settled");
     return frag;
   });
 }
@@ -231,6 +294,17 @@ function dtBuildListCard(ev,day,model){
   if(meta.childNodes.length) card.appendChild(meta);
   return card;
 }
+// The List view stages like the Timeline. The first bounded chunk is built with
+// the view itself so the shell has real content in the frame it commits (and the
+// initial position can be measured from a card); the remainder is appended in
+// bounded frames, so a 40-event day never lands as one synchronous build on the
+// Pi. Scrolling still does no staging or measuring: the fill is one-time.
+function dtAppendListChunk(stage){
+  const frag=document.createDocumentFragment(),limit=Math.min(stage.index+DT_CARD_STAGE_CHUNK,stage.rows.length);
+  for(;stage.index<limit;stage.index++)frag.appendChild(dtBuildListCard(stage.rows[stage.index],stage.day,stage.model));
+  stage.list.appendChild(frag);
+  if(stage.index>=stage.rows.length)stage.complete=true;
+}
 function dtBuildListView(day,evs,model){
   const wrap=el("div","dt-list");
   const sorted=[...evs].sort((a,b)=>{
@@ -238,8 +312,25 @@ function dtBuildListView(day,evs,model){
     if(aa!==bb) return aa-bb;
     return (+a.start)-(+b.start) || (+((a.end)||a.start))-(+((b.end)||b.start)) || String(a.title||"").localeCompare(String(b.title||""));
   });
-  for(const ev of sorted) wrap.appendChild(dtBuildListCard(ev,day,model));
+  const stage={list:wrap,rows:sorted,day,model,index:0,task:null,complete:false};
+  wrap._dtListStage=stage;
+  dtAppendListChunk(stage);
   return wrap;
+}
+function dtCancelListStage(view){
+  const stage=view&&view._dtListStage;
+  if(stage&&stage.task){stage.task.cancel();stage.task=null;}
+}
+function dtStageListCards(token,view){
+  const stage=view&&view._dtListStage;
+  if(!stage||stage.complete||stage.task)return;
+  function step(ctx){
+    stage.task=null;
+    if(!ctx.isCurrent()||!view.isConnected)return;
+    dtAppendListChunk(stage);
+    if(!stage.complete)stage.task=popupDefer(token,step);
+  }
+  stage.task=popupDefer(token,step);
 }
 function dtBuildViewBar(selected,onPick,showTimeline){
   const bar=el("div","dt-viewbar"),group=el("div","dt-viewtoggle"),buttons={};

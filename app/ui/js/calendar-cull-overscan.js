@@ -96,8 +96,12 @@ function calendarWeekCullOnScroll(){
   if(Math.abs(delta)>=CALENDAR_WEEK_CULL_SCROLL_EPSILON)state.direction=delta>0?1:-1;
   state.lastScrollTop=next;
   calendarWeekCullCancelTimer("warmTimer");state.warm.clear();
-  if(!state.raf)state.raf=requestAnimationFrame(()=>{state.raf=0;calendarWeekCullApply(false);});
-  calendarWeekCullScheduleSettle();
+  // The settle re-arm happens inside the already-coalesced frame: at most one
+  // re-arm per frame instead of one per scroll event. The deadline is still
+  // extended after the last event, so the idle-hold semantics are unchanged.
+  if(!state.raf)state.raf=requestAnimationFrame(()=>{
+    state.raf=0;calendarWeekCullApply(false);calendarWeekCullScheduleSettle();
+  });
 }
 function calendarWeekCullViewportHeight(){return Math.max(0,Number(CALENDAR_WEEK_CULL_STATE.viewportHeight)||0);}
 function calendarWeekCullCanPrewarmAt(top){

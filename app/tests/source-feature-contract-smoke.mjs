@@ -38,6 +38,17 @@ const expected=[
   "weather-sun-derivation-v1",
   "weather-dead-alerts-removal-v1",
   "oauth-loopback-test-stability-v1",
+  "weather-feels-guard-v1",
+  "weather-hourly-local-clock-v1",
+  "weather-provider-key-redaction-v1",
+  "scroll-gesture-aware-restore-v1",
+  "scroll-settle-coalescing-v1",
+  "popup-live-data-refresh-v1",
+  "app-calendar-popup-prefetch-v1",
+  "popup-list-staging-v1",
+  "popup-latency-budget-v1",
+  "aqi-failure-cooldown-v1",
+  "weather-review-notes-v1",
 ];
 
 assert.equal(featureContract.schema,1);

@@ -9,11 +9,12 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=rel=>fs.readFileSync(path.join(root,rel),"utf8");
 const fit=read("ui/js/dashboard-fit.js");
 const agenda=read("ui/js/calendar-agenda.js");
-const weather=read("ui/js/weather.js");
+const weather=read("ui/js/weather.js")+read("ui/js/weather-now.js");
 const calendar=read("ui/css/dashboard/calendar.css");
 const responsive=read("ui/css/dashboard/responsive.css");
 const liteCss=read("ui/css/dashboard/lite-dashboard.css");
 const grid=read("ui/js/calendar-grid.js");
+const gridRows=read("ui/js/calendar-grid-rows.js");
 const cull=read("ui/js/calendar-cull-overscan.js");
 const spanBars=read("ui/js/calendar-span-bars.js");
 const sidebar=read("ui/css/dashboard/sidebar-weather-messages.css");
@@ -27,8 +28,9 @@ assert.match(fit,/dashboardFitPrimeBootSignature\(\);\s*dashboardFitController\(
 assert.doesNotMatch(agenda,/dashboardFitSchedule/,"Agenda paint must not schedule fit work after every render");
 assert.doesNotMatch(weather,/dashboardFitSchedule/,"Weather paint/error paths must not schedule fit work after every render");
 assert.ok(grid.split(/\n/).length<=400,"Calendar grid renderer must stay below the split-source navigability cap");
+assert.ok(gridRows.split(/\n/).length<=400,"Calendar grid rows module must stay below the split-source navigability cap");
 assert.match(spanBars,/function fillSpanBar\(bar,it\)/,"Calendar span-bar display helpers must live in their focused split module");
-assert.match(grid,/fillSpanBar\(bar,it\);/,"Calendar grid must use the split span-bar display helper");
+assert.match(gridRows,/fillSpanBar\(bar,it\);/,"Calendar grid must use the split span-bar display helper");
 assert.match(calendar,/\.spanbar \.spantitle\{[\s\S]*?overflow-wrap:break-word;/,"span titles must retain safe long-token wrapping");
 assert.match(calendar,/\.ev \.etitle\{[\s\S]*?overflow-wrap:break-word;/,"event titles must retain safe long-token wrapping");
 assert.match(responsive,/\.ev,\.spanbar\{overflow-wrap:break-word;\}/,"calendar shells must use the lower-cost break-word mode");
@@ -58,7 +60,7 @@ assert.match(grid,/function finishCalendarDayEvents\(\)\{[\s\S]*?lists\.map\(pre
   "Lite culling may start only after Calendar event fitting completes, and the fit pass must keep its batched write→read→write phases");
 assert.match(grid,/function requestCalendarLayoutFit\(reason,opts\)\{[\s\S]*?_calendarFitSig=sig;[\s\S]*?calendarSetWeekCullReady\(false,scroll\);[\s\S]*?requestAnimationFrame\(\(\)=>runCalendarFitPipeline/,
   "Calendar must clear Lite culling before every geometry measurement pass");
-assert.match(grid,/function renderCalendar\(opts\)\{[\s\S]*?_calendarRenderSig=renderSig;[\s\S]*?calendarSetWeekCullReady\(false,scroll\);[\s\S]*?renderCalHead\(\);/,
+assert.match(gridRows,/function renderCalendar\(opts\)\{[\s\S]*?_calendarRenderSig=renderSig;[\s\S]*?calendarSetWeekCullReady\(false,scroll\);[\s\S]*?renderCalHead\(\);/,
   "Calendar must clear Lite culling before replacing week rows");
 assert.match(liteCss,/html\.profile-lite \.listsdock-ticker\.is-moving \.listsdock-ticker-track\{[\s\S]*?animation:none;[\s\S]*?will-change:auto;/,
   "Lite Lists ticker must be static and release its permanent compositor hint");

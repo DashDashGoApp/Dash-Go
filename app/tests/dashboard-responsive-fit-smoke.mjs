@@ -15,9 +15,9 @@ const listsDock=read("ui/css/dashboard/lists-dock.css");
 const index=read("index.html");
 const fit=read("ui/js/dashboard-fit.js");
 const boot=read("ui/js/boot.js");
-const weather=read("ui/js/weather.js");
+const weather=read("ui/js/weather.js")+read("ui/js/weather-now.js");
 const agenda=read("ui/js/calendar-agenda.js");
-const grid=read("ui/js/calendar-grid.js");
+const grid=read("ui/js/calendar-grid.js")+read("ui/js/calendar-grid-rows.js");
 const overlays=read("ui/js/popup-overlays.js");
 const runtime=read("ui/js/settings-runtime.js");
 

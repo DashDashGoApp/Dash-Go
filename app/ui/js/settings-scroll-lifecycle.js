@@ -49,9 +49,17 @@ function restoreScrollAnchor(root,snapshot,itemSelector,keyName,onComplete){
     if(typeof onComplete==="function")onComplete();
   };
   defer(()=>{
-    if(!root.isConnected||state.restoreToken!==token||state.inputEpoch!==snapshot.inputEpoch)return;
+    if(!root.isConnected||state.restoreToken!==token)return;
+    // A gesture during the rebuild invalidates the element anchor (the captured
+    // node may already be detached), so the anchor path is skipped — but it must
+    // NOT skip the restore itself. Callers clear the list before rebuilding,
+    // which clamps scrollTop to 0, so returning here would snap the list to the
+    // top under the viewer's finger. Unless the viewer has since moved the list
+    // themselves, fall back to the numeric offset captured before the wipe.
+    const gestureActive = state.inputEpoch!==snapshot.inputEpoch;
+    if(gestureActive && root.scrollTop>4){ complete(); return; }
     let target=null;
-    if(snapshot.key){
+    if(!gestureActive && snapshot.key){
       for(const item of root.querySelectorAll(itemSelector)){
         if(item.dataset&&item.dataset[keyName]===snapshot.key){target=item;break;}
       }

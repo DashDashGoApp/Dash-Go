@@ -46,4 +46,21 @@ assert.match(maintenance,/completedItems/,"Maintenance day response must return 
 assert.match(routineMutations,/skipped routine sessions cannot be changed from the calendar/,"Routine service must reject skipped occurrence mutation");
 assert.match(routineMutations,/future routine sessions cannot be completed from the calendar/,"Routine service must reject future occurrence mutation");
 assert.match(routineSchedule,/copy\["actionable"\]/,"Routine day payload must expose action eligibility");
+// Commit-frame content and cancellable reads (1.5.14). The calendar cell already
+// named these rows, so they are painted pending instead of leaving an empty list
+// while the day projection is in flight — but never as final state, and a
+// completion the household asked for must never be cancelled by closing the popup.
+assert.match(actions,/function appCalendarActionPendingRows/,"calendar rows already shown must be paintable while the day projection is in flight");
+assert.match(actions,/status:"checking",actionable:false/,"preview rows must be explicitly pending and non-actionable, never final state");
+assert.match(actions,/if\(status==="checking"\)return "Checking…"/,"preview rows must say what they are");
+assert.match(actions,/showChoresCalendarActionPopup\(day,info,events\)/,"chores must receive the calendar rows to preview");
+assert.match(actions,/showMaintenanceCalendarActionPopup\(day,info,events\)/,"maintenance must receive the calendar rows to preview");
+assert.match(actions,/const pending=appCalendarActionPendingRows\(events,date\)/,"preview rows are painted during the commit frame");
+assert.match(actions,/function appCalendarActionAbortable\(token\)/,"in-flight day reads must be cancellable");
+assert.match(actions,/popupDefer\(token,ctx=>ctx.onCancel\(\(\)=>controller\.abort\(\)\)\)/,"cancellation must be wired to the popup close path");
+assert.match(actions,/\/api\/chore-wheel\/day\?date="\+encodeURIComponent\(date\),null,read\)/,"the chore day read must carry the abort signal");
+assert.match(actions,/\/api\/maintenance\/day\?date="\+encodeURIComponent\(date\),null,read\)/,"the maintenance day read must carry the abort signal");
+assert.match(actions,/\/api\/routines\/day\?date="\+encodeURIComponent\(date\),null,read\)/,"the routine day read must carry the abort signal");
+assert.doesNotMatch(actions,/assignments\/status",\{assignmentId:item\.assignmentId,date,completed:desired\},read\)/,"a completion write must never be aborted by closing the popup");
+assert.match(actions,/error\.name==="AbortError"\)return/,"a cancelled read must not report a household-facing failure");
 console.log("PASS: app-owned calendar popups use server-authoritative reversible completion, safe guards, and routine checklist actions");
