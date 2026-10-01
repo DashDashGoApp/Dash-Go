@@ -66,6 +66,41 @@ func TestServeHTTPUntilSignalRejectsNilInputs(t *testing.T) {
 	}
 }
 
+// A grace period that expires mid-shutdown must still end as a clean stop,
+// never a fatal error — this is the regression shape behind the historical
+// "context deadline exceeded → status=1/FAILURE" unit restart.
+func TestServeHTTPUntilSignalGraceExpiryIsCleanStop(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	srv := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		<-release
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- serveHTTPUntilSignal(ctx, srv, listener, 50*time.Millisecond) }()
+	conn, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// Give the server a moment to accept the request, then start shutdown.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("grace-expiry shutdown returned %v; a planned stop must exit cleanly", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("shutdown never completed after grace expiry")
+	}
+	close(release)
+}
+
 // A long-lived stream (SSE) never becomes idle on its own. The release hook must
 // end it so a planned stop drains promptly, and the drain must still be a clean
 // stop rather than a fatal error.

@@ -2,6 +2,7 @@ package maps
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -42,11 +43,15 @@ func (s *Service) eventMapLookup(q string) map[string]any {
 	if len(key) < 3 {
 		return map[string]any{"ok": false, "error": "missing location"}
 	}
+	if hit := s.geocodeMemoGet(key); hit != nil {
+		return hit
+	}
 	cache := map[string]any{}
 	if m, ok := s.readJSONDefault(s.mapCacheFile(), map[string]any{}).(map[string]any); ok {
 		cache = m
 	}
 	if hit, ok := s.cachedEventMap(cache, key); ok {
+		s.geocodeMemoPut(key, hit)
 		return hit
 	}
 	variants := eventMapQueryVariants(rawQ)
@@ -73,28 +78,85 @@ func (s *Service) eventMapLookup(q string) map[string]any {
 	data := map[string]any{"ok": true, "lat": lat, "lon": lon, "label": label, "queryUsed": defaultString(usedQuery, variants[0]), "geocoder": geocoder, "osmUrl": osm, "cached": false}
 	data = s.decorateMapData(data)
 	cache[key] = map[string]any{"ts": time.Now().Unix(), "version": mapLookupVersion, "data": data}
-	if len(cache) > 200 {
-		type kv struct {
-			k  string
-			ts int
+	mapCachePrune(cache)
+	_ = fileio.WriteJSON(s.mapCacheFile(), cache)
+	s.geocodeMemoPut(key, data)
+	return data
+}
+
+// mapCachePrune keeps the geocode cache at 200 entries, evicting the oldest
+// first. Split out so every write path shares one policy.
+func mapCachePrune(cache map[string]any) {
+	if len(cache) <= 200 {
+		return
+	}
+	type kv struct {
+		k  string
+		ts int
+	}
+	items := []kv{}
+	for k, v := range cache {
+		items = append(items, kv{k: k, ts: jsonutil.Int(jsonutil.Map(v)["ts"], 0)})
+	}
+	slices.SortFunc(items, func(left, right kv) int { return compareInts(left.ts, right.ts) })
+	keep := map[string]bool{}
+	for _, it := range items[len(items)-200:] {
+		keep[it.k] = true
+	}
+	for k := range cache {
+		if !keep[k] {
+			delete(cache, k)
 		}
-		items := []kv{}
-		for k, v := range cache {
-			items = append(items, kv{k: k, ts: jsonutil.Int(jsonutil.Map(v)["ts"], 0)})
-		}
-		slices.SortFunc(items, func(left, right kv) int { return compareInts(left.ts, right.ts) })
-		keep := map[string]bool{}
-		for _, it := range items[len(items)-200:] {
-			keep[it.k] = true
-		}
-		for k := range cache {
-			if !keep[k] {
-				delete(cache, k)
+	}
+}
+
+// geocodeMemoGet returns an in-memory hit only when the on-disk cache file has
+// not changed since the memo was filled; a stale memo is dropped eagerly.
+func (s *Service) geocodeMemoGet(key string) map[string]any {
+	s.geocodeMemoMu.Lock()
+	defer s.geocodeMemoMu.Unlock()
+	if s.geocodeMemo == nil || len(s.geocodeMemo) == 0 {
+		return nil
+	}
+	if info, err := os.Stat(s.mapCacheFile()); err != nil || !info.ModTime().Equal(s.geocodeMemoMtime) {
+		s.geocodeMemo = nil
+		s.geocodeMemoMtime = time.Time{}
+		return nil
+	}
+	hit := s.geocodeMemo[key]
+	if hit == nil {
+		return nil
+	}
+	out := jsonutil.CloneMap(hit)
+	out["cached"] = true
+	return out
+}
+
+// geocodeMemoPut records a successful lookup only; negative results stay on
+// their on-disk TTL so their 24h retry window is unchanged.
+func (s *Service) geocodeMemoPut(key string, data map[string]any) {
+	if data == nil || data["ok"] != true {
+		return
+	}
+	s.geocodeMemoMu.Lock()
+	defer s.geocodeMemoMu.Unlock()
+	info, err := os.Stat(s.mapCacheFile())
+	if err != nil {
+		return
+	}
+	if s.geocodeMemo == nil || !info.ModTime().Equal(s.geocodeMemoMtime) {
+		s.geocodeMemo = map[string]map[string]any{}
+		s.geocodeMemoMtime = info.ModTime()
+	}
+	s.geocodeMemo[key] = jsonutil.CloneMap(data)
+	if len(s.geocodeMemo) > 200 {
+		for k := range s.geocodeMemo {
+			delete(s.geocodeMemo, k)
+			if len(s.geocodeMemo) <= 200 {
+				break
 			}
 		}
 	}
-	_ = fileio.WriteJSON(s.mapCacheFile(), cache)
-	return data
 }
 
 func tailStrings(in []string, n int) []string {

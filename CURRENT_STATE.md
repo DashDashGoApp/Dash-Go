@@ -4,23 +4,31 @@
 
 ## Current stable release candidate
 
-- **Version:** `1.5.14`
+- **Version:** `1.5.15`
 - **Track:** stable
-- **Promotion basis:** a validated `1.5.14` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
-- **Primary scope:** correctness and responsiveness — a guarded feels-like metric that can no longer render a false `0°` for National Weather Service households, a corrected Visual Crossing hourly clock that previously dropped every row silently, an air-quality failure cooldown, gesture-aware refresh-time scroll restoration in both panes, an open day or event popup that re-renders when calendar data is committed, bounded List-view staging in the Lite day popup, app-owned household popups that paint the calendar's own rows while their projection is in flight and cancel only reads, Lite popup latency marks with a stated budget, credential redaction in stored provider errors, coalesced clearing of the Lite scroll settle timers, and a no-behaviour-change split of the weather and calendar-grid sources.
+- **Promotion basis:** a validated `1.5.15` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** remove work, reclaim disk, and speed up maps — parallel tile fetches with one shared transport and a bounded render deadline, throttled map-cache cleanup, an in-memory geocode memo, ETag revalidation for cached map images, prewarm that renders the configured style first, a no-behaviour-change split of the HTTP static file, a regression test proving a shutdown grace expiry exits cleanly, quieter interrupted-update recovery logging, and housekeeping that prunes stale update-rollback snapshots (keeping the newest and its metadata) plus old doctor-set-aside weather caches.
 - **Required release proof:** Dash-Go Local Builder must use Go 1.26.8, extract and validate this exact repository-ready stable source handoff, prove the 43-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that Visual Crossing and the other enabled hourly sources now contribute hourly rows, that the feels-like metric reads a value or a dash rather than `0°`, that the popup timing marks report shell and content inside their budget, and that the update path installs cleanly with a clean server stop.
+- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that a cold hybrid map render is at least 40 % faster than the 1.5.14 baseline, that `cache/` drops below 60 MB after the update with rollback still working, and that the update path installs cleanly with a clean server stop.
 - **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration and keys, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
 - **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
 ## Current published stable release
 
-- **Version:** `1.5.13`
+- **Version:** `1.5.14`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Status:** remains the published stable release until the validated 1.5.14 Builder output is published and verified.
+- **Status:** remains the published stable release until the validated 1.5.15 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
+
+## 1.5.15 stable scope
+
+- **Map speed:** tiles are fetched in parallel (capped at three in flight) over one shared connection pool with warm TLS sessions, so a hybrid preview no longer pays a fresh handshake per tile; each render attempt is bounded by a total deadline instead of stacked per-tile timeouts; the first imagery failure aborts the remaining fetches; and draw order is preserved.
+- **Map cache efficiency:** the full image/tile cleanup directory scans now run at most once every twelve hours instead of after every render; successful geocode results are memoized in memory (invalidated by any on-disk cache change) so repeated popups skip the 33 KB cache re-read; cached map images answer `If-None-Match` with a 304 instead of re-downloading up to ~400 KB; and prewarm renders the configured style and its zooms before the rarer variants.
+- **Lifecycle integrity:** a regression test now proves a shutdown whose grace period expires still exits cleanly (the shape behind the historical `context deadline exceeded` unit restart), and interrupted-update recovery logging no longer reports a benign missing action-history entry as a fault.
+- **Disk reclamation:** housekeeping prunes update-rollback payload trees older than fourteen days — keeping the newest failed snapshot of each kind and its tiny metadata evidence — and caps doctor-set-aside weather caches to the newest one. A smoke test proves a fresh pending snapshot (a running update) is never touched.
+- **Source structure:** the HTTP static file was split from the server lifecycle file with no behaviour change, keeping both well inside the navigability guards.
 
 ## 1.5.14 stable scope
 

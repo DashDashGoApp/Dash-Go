@@ -17,7 +17,7 @@ const backup=read("cmd/dashboard-control-server/config_backups.go");
 const restore=read("cmd/dashboard-control-server/config_backup_restore.go");
 const installer=read("../installer/install.sh");
 const routes=read("cmd/dashboard-control-server/http_routes_post.go");
-const staticServer=read("cmd/dashboard-control-server/http_server.go");
+const staticServer=read("cmd/dashboard-control-server/http_server.go")+read("cmd/dashboard-control-server/http_static.go");
 const diagnostics=read("internal/platform/diagnostics.go");
 
 assert.match(peopleUI,/External notifications/,"People Control must offer per-person external-delivery preferences");

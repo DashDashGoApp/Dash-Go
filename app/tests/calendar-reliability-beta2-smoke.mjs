@@ -8,7 +8,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=rel=>fs.readFileSync(path.join(root,rel),"utf8");
 const cache=read("ui/js/event-cache.js");
 const parser=read("ui/js/ics-parser.js");
-const server=read("cmd/dashboard-control-server/http_server.go");
+const server=read("cmd/dashboard-control-server/http_server.go")+read("cmd/dashboard-control-server/http_static.go");
 const facade=read("cmd/dashboard-control-server/events_facade.go");
 const eventCache=read("internal/calendar/events/cache.go")+read("internal/calendar/events/serialize.go");
 const eventSources=read("internal/calendar/events/sources.go");

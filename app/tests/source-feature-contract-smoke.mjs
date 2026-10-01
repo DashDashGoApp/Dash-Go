@@ -110,7 +110,7 @@ assert.match(outbound,/3fff::\/20/);
 assert.doesNotMatch(read("internal/maps/maps_render.go"),/http\.ServeFile/);
 assert.match(read("internal/maps/maps_render.go"),/os\.OpenRoot/);
 
-const server=read("cmd/dashboard-control-server/http_server.go");
+const server=read("cmd/dashboard-control-server/http_static.go");
 assert.match(server,/connect-src 'self' https:\/\/api\.rainviewer\.com/);
 assert.doesNotMatch(server,/connect-src 'self' https:;/);
 const weatherIcons=read("ui/js/weather-icons.js");

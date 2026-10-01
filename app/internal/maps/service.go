@@ -39,6 +39,15 @@ type Service struct {
 	mapStatusMu    sync.Mutex
 	mapStatusCache map[string]any
 	mapStatusAt    time.Time
+
+	mapCleanupMu sync.Mutex
+	mapCleanupAt time.Time
+
+	// geocodeMemo caches successful geocode results in memory, validated
+	// against the on-disk cache file's mtime so an external edit still wins.
+	geocodeMemoMu    sync.Mutex
+	geocodeMemoMtime time.Time
+	geocodeMemo      map[string]map[string]any
 }
 
 func New(cfg ServiceConfig) *Service {

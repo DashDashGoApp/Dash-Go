@@ -2,8 +2,6 @@ package maps
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -302,61 +300,4 @@ func (s *Service) cachedTile(providerName string, z, x, y int, layer string) ([]
 		}
 	}
 	return nil, "", false
-}
-
-func fetchMapURL(rawURL string, timeout time.Duration, maxBytes int64) ([]byte, string, error) {
-	req, err := http.NewRequest("GET", rawURL, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("User-Agent", "Dash-Go/1.5.2 local-kiosk map preview (+local cache)")
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	ctype := strings.ToLower(resp.Header.Get("Content-Type"))
-	b, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
-	if err != nil {
-		return nil, "", err
-	}
-	if int64(len(b)) > maxBytes {
-		return nil, "", fmt.Errorf("response too large")
-	}
-	if !strings.Contains(ctype, "image") && !strings.Contains(ctype, "octet-stream") {
-		return nil, "", fmt.Errorf("not an image")
-	}
-	if len(b) < 50 {
-		return nil, "", fmt.Errorf("image response too small")
-	}
-	if ctype == "" {
-		ctype = "image/png"
-	}
-	return b, ctype, nil
-}
-
-func (s *Service) fetchTile(p mapProviderGo, rawURL string, z, x, y int, layer string) ([]byte, string, error) {
-	if b, mime, ok := s.cachedTile(p.Name, z, x, y, layer); ok {
-		return b, mime, nil
-	}
-	b, ctype, err := fetchMapURL(rawURL, 2*time.Second, 2*1024*1024)
-	if err != nil {
-		return nil, "", err
-	}
-	ext, mime := imageExtFromMime(ctype)
-	base := tileCacheBase(p.Name, z, x, y, layer)
-	if base != "" {
-		_ = os.MkdirAll(s.mapTileDir(), 0755)
-		final := filepath.Join(s.mapTileDir(), base+ext)
-		tmp := final + ".tmp"
-		if os.WriteFile(tmp, b, 0644) == nil {
-			_ = os.Rename(tmp, final)
-		} else {
-			_ = os.Remove(tmp)
-		}
-	}
-	return b, mime, nil
 }

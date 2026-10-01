@@ -5,7 +5,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
-const server=read("cmd/dashboard-control-server/http_server.go");
+const server=read("cmd/dashboard-control-server/http_server.go")+read("cmd/dashboard-control-server/http_static.go");
 const policy=read("cmd/dashboard-control-server/request_security.go");
 const outbound=read("internal/weather/outbound_security.go");
 const privateCalendar=read("tests/private-calendar-controls-smoke.mjs");

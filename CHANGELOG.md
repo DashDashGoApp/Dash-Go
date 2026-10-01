@@ -1,3 +1,27 @@
+## [1.5.15] — 2026-10-01
+
+Dash-Go 1.5.15 removes work and reclaims disk. Map previews fetch their tiles in parallel over one shared connection pool instead of one fresh connection per tile, every render is bounded by a single deadline instead of stacked timeouts, and the map caches stop paying full directory scans and cache re-reads on every popup. Housekeeping now prunes the multi-hundred-megabyte update-rollback leftovers that had been sitting on the device since June.
+
+### Performance and reliability
+
+- **Map previews load several times faster cold.** Tiles are fetched in parallel — capped at three in flight, draw order preserved — over one shared transport with warm TLS sessions, so a hybrid preview no longer pays a fresh handshake for each of up to twelve tiles. The first imagery failure aborts the remaining fetches instead of waiting out each one.
+- **One bounded render deadline replaces stacked timeouts.** Each provider attempt is capped by a total ~6 s deadline, so a dead provider costs its own budget once rather than a per-tile timeout on every render.
+- **Map caches stop rescanning after every render.** The image and tile cleanup directory scans now run at most once every twelve hours; caps, ages, and explicit clears are unchanged.
+- **Repeated map popups skip the geocode cache re-read.** Successful geocode results are memoized in memory, validated against the on-disk cache file so any external change wins immediately.
+- **Re-opened map popups revalidate instead of re-downloading.** Cached map images now carry an ETag, so a second open answers `If-None-Match` with a 304 rather than shipping up to ~400 KB again.
+- **Prewarm renders the configured style first.** The mapImageStyle the household actually sees is generated before the rarer variants, so the most-used image is ready earliest.
+
+### Bug fixes
+
+- **A shutdown whose grace period expires is no longer a failed unit.** A regression test now proves the fixed 1.5.14 behavior end-to-end: a planned stop that outlives its drain window still exits cleanly, the shape behind the historical `context deadline exceeded → status=1/FAILURE` restart recorded on the device.
+- **Interrupted-update recovery no longer logs a benign condition as an error.** Crash recovery for an externally launched update job regularly finds no matching action-history entry; that is context, not a fault, and the log line now says so.
+
+### Improvements
+
+- **Housekeeping reclaims stale update-rollback disk.** Failed and pending rollback payload trees older than fourteen days are pruned, keeping the newest snapshot of each kind and preserving the tiny `failure-reason.txt` / `payload-files.txt` evidence from pruned trees. A fresh pending snapshot — the running update — is never touched, and a smoke test proves it.
+- **Doctor set-aside weather caches are capped to the newest one** instead of accumulating indefinitely.
+- **The HTTP static handler moved to its own file** with no behaviour change, keeping both server sources comfortably inside the navigability limits.
+
 ## [1.5.14] — 2026-09-30
 
 Dash-Go 1.5.14 is a correctness-and-responsiveness release. It fixes a wrong temperature shown to National Weather Service households, makes an open day or event popup follow the data it is actually showing, and removes work from the two surfaces the household touches every day.

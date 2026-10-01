@@ -25,7 +25,7 @@ const controlApi=read("ui/js/control-api.js");
 const controlCore=read("ui/js/control-core.js");
 const controlMemory=read("ui/js/control-lite-memory.js");
 const controlCSS=read("ui/css/control/console-shell-tabs.css");
-const httpServer=read("cmd/dashboard-control-server/http_server.go");
+const httpServer=read("cmd/dashboard-control-server/http_server.go")+read("cmd/dashboard-control-server/http_static.go");
 
 // Local mutable resources already use request cache:no-store and server-side
 // Cache-Control:no-store. Stable URLs must not acquire unique timestamp keys.

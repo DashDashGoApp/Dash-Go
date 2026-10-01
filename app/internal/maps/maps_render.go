@@ -1,6 +1,7 @@
 package maps
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"math"
@@ -72,6 +73,8 @@ func pixelToLatLon(px, py float64, zoom int) (float64, float64) {
 }
 
 func (s *Service) renderArcGISExportSVG(lat, lon float64, zoom int, width, height int) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mapRenderDeadline)
+	defer cancel()
 	zoom, left, top, _, _, _, _, _ := tileBounds(lat, lon, zoom, width, height)
 	north, west := pixelToLatLon(left, top, zoom)
 	south, east := pixelToLatLon(left+float64(width), top+float64(height), zoom)
@@ -84,13 +87,13 @@ func (s *Service) renderArcGISExportSVG(lat, lon float64, zoom int, width, heigh
 	bbox := fmt.Sprintf("%.6f,%.6f,%.6f,%.6f", west, south, east, north)
 	base := "bbox=" + url.QueryEscape(bbox) + "&bboxSR=4326&imageSR=4326&size=" + url.QueryEscape(fmt.Sprintf("%d,%d", width, height)) + "&format=png32&transparent=false&f=image"
 	imgURL := "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?" + base
-	img, mime, err := fetchMapURL(imgURL, 5*time.Second, 2*1024*1024)
+	img, mime, err := fetchMapURLContext(ctx, imgURL, 5*time.Second, 2*1024*1024)
 	if err != nil {
 		return nil, "", err
 	}
 	pieces := []string{fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, width, height, width, height), `<rect width="100%" height="100%" fill="#1c2428"/>`, fmt.Sprintf(`<image x="0" y="0" width="%d" height="%d" href="data:%s;base64,%s"/>`, width, height, mime, base64.StdEncoding.EncodeToString(img))}
 	labelURL := "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/export?" + strings.Replace(base, "transparent=false", "transparent=true", 1)
-	if labels, labelMime, e := fetchMapURL(labelURL, 3*time.Second, 1024*1024); e == nil {
+	if labels, labelMime, e := fetchMapURLContext(ctx, labelURL, 3*time.Second, 1024*1024); e == nil {
 		pieces = append(pieces, fmt.Sprintf(`<image x="0" y="0" width="%d" height="%d" href="data:%s;base64,%s"/>`, width, height, labelMime, base64.StdEncoding.EncodeToString(labels)))
 	}
 	pieces = append(pieces, markerSVG(width, height), `</svg>`)
@@ -102,8 +105,13 @@ func (s *Service) renderTileSVG(p mapProviderGo, lat, lon float64, zoom int, wid
 	if len(p.Tiles) == 0 {
 		return nil, "", fmt.Errorf("no tile URLs")
 	}
-	pieces := []string{fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, width, height, width, height), `<rect width="100%" height="100%" fill="#d9d4c8"/>`}
-	count := 0
+	ctx, cancel := context.WithTimeout(context.Background(), mapRenderDeadline)
+	defer cancel()
+	reqs := []tileRequest{}
+	order := []struct {
+		tx, ty int
+		slot   int
+	}{}
 	for ty := y0; ty <= y1; ty++ {
 		if ty < 0 || ty >= n {
 			continue
@@ -113,22 +121,23 @@ func (s *Service) renderTileSVG(p mapProviderGo, lat, lon float64, zoom int, wid
 			if ux < 0 {
 				ux += n
 			}
-			var b []byte
-			var mime string
-			var err error
-			for offset := 0; offset < len(p.Tiles); offset++ {
-				tpl := p.Tiles[(ux+ty+offset)%len(p.Tiles)]
-				b, mime, err = s.fetchTile(p, tileURLTemplate(tpl, zoom, ux, ty), zoom, ux, ty, "")
-				if err == nil {
-					break
-				}
-			}
-			if err != nil || b == nil {
-				return nil, "", fmt.Errorf("tile fetch failed: %v", err)
-			}
-			pieces = append(pieces, dataImageTag(float64(tx)*256.0-left, float64(ty)*256.0-top, mime, b))
-			count++
+			order = append(order, struct {
+				tx, ty int
+				slot   int
+			}{tx, ty, len(reqs)})
+			reqs = append(reqs, tileRequest{ux: ux, uy: ty, templates: p.Tiles, z: zoom})
 		}
+	}
+	results := s.fetchTilesParallel(ctx, p, reqs, true)
+	pieces := []string{fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, width, height, width, height), `<rect width="100%" height="100%" fill="#d9d4c8"/>`}
+	count := 0
+	for _, pos := range order {
+		res := results[pos.slot]
+		if res.err != nil || res.b == nil {
+			return nil, "", fmt.Errorf("tile fetch failed: %v", res.err)
+		}
+		pieces = append(pieces, dataImageTag(float64(pos.tx)*256.0-left, float64(pos.ty)*256.0-top, res.mime, res.b))
+		count++
 	}
 	if count < 1 {
 		return nil, "", fmt.Errorf("no tiles fetched")
@@ -142,6 +151,8 @@ func (s *Service) renderLayeredTileSVG(p mapProviderGo, lat, lon float64, zoom i
 	if len(p.Layers) == 0 {
 		return nil, "", fmt.Errorf("no tile layers")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), mapRenderDeadline)
+	defer cancel()
 	pieces := []string{fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`, width, height, width, height), `<rect width="100%" height="100%" fill="#1c2428"/>`}
 	imagery := 0
 	lastErr := ""
@@ -149,7 +160,11 @@ func (s *Service) renderLayeredTileSVG(p mapProviderGo, lat, lon float64, zoom i
 		if len(layer.Tiles) == 0 {
 			continue
 		}
-		layerCount := 0
+		reqs := []tileRequest{}
+		order := []struct {
+			tx, ty int
+			slot   int
+		}{}
 		for ty := y0; ty <= y1; ty++ {
 			if ty < 0 || ty >= n {
 				continue
@@ -159,23 +174,23 @@ func (s *Service) renderLayeredTileSVG(p mapProviderGo, lat, lon float64, zoom i
 				if ux < 0 {
 					ux += n
 				}
-				var b []byte
-				var mime string
-				var err error
-				for offset := 0; offset < len(layer.Tiles); offset++ {
-					tpl := layer.Tiles[(ux+ty+offset)%len(layer.Tiles)]
-					b, mime, err = s.fetchTile(p, tileURLTemplate(tpl, zoom, ux, ty), zoom, ux, ty, layer.Name)
-					if err == nil {
-						break
-					}
-				}
-				if err != nil || b == nil {
-					lastErr = fmt.Sprintf("%s z%d/%d/%d: %v", layer.Name, zoom, ux, ty, err)
-					continue
-				}
-				pieces = append(pieces, dataImageTag(float64(tx)*256.0-left, float64(ty)*256.0-top, mime, b))
-				layerCount++
+				order = append(order, struct {
+					tx, ty int
+					slot   int
+				}{tx, ty, len(reqs)})
+				reqs = append(reqs, tileRequest{ux: ux, uy: ty, templates: layer.Tiles, z: zoom, layer: layer.Name})
 			}
+		}
+		results := s.fetchTilesParallel(ctx, p, reqs, layer.Name == "imagery")
+		layerCount := 0
+		for _, pos := range order {
+			res := results[pos.slot]
+			if res.err != nil || res.b == nil {
+				lastErr = fmt.Sprintf("%s z%d/%d/%d: %v", layer.Name, zoom, pos.tx, pos.ty, res.err)
+				continue
+			}
+			pieces = append(pieces, dataImageTag(float64(pos.tx)*256.0-left, float64(pos.ty)*256.0-top, res.mime, res.b))
+			layerCount++
 		}
 		if layer.Name == "imagery" {
 			imagery += layerCount
@@ -298,8 +313,10 @@ func (s *Service) fetchMapImage(lat, lon float64, zoom int, style string, force 
 		}
 		state["failures"] = fs
 		_ = fileio.WriteJSON(s.mapProviderFile(), state)
-		_ = s.cleanMapImageCache()
-		_ = s.cleanMapTileCache()
+		// Cache cleanup is a directory walk; running it after every render
+		// made each popup cost two full scans. Throttle it; caps and
+		// explicit clears are unchanged.
+		s.throttledMapCacheCleanup()
 		return path, mime
 	}
 	lastErr := "tile provider fetch failed"
@@ -361,5 +378,8 @@ func (s *Service) handleMapImage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", "public, max-age=604800")
+	// A re-opened popup revalidates with a 304 instead of re-downloading the
+	// full (up to ~400 KB) SVG. ServeContent honors the tag for us.
+	w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, info.Size(), info.ModTime().UnixNano()))
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }

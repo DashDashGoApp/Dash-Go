@@ -118,6 +118,27 @@ func mapTileCacheSummaryFromFiles(files []cacheFile, removed int, removedBytes i
 	return map[string]any{"removed": removed, "removedBytes": removedBytes, "count": len(files), "bytes": bytes, "maxBytes": 64 * 1024 * 1024, "maxFiles": 1800, "maxAgeDays": 60}
 }
 
+// mapCleanupInterval bounds how often a successful render may run the image
+// and tile cleanup directory scans. Explicit clear/status cleanup calls are
+// not throttled; only the per-render path is.
+const mapCleanupInterval = 12 * time.Hour
+
+// throttledMapCacheCleanup runs the bounded cache cleanups at most once per
+// interval. The first render after boot cleans immediately so a long-uptime
+// device cannot accumulate beyond caps while the timer window rotates.
+func (s *Service) throttledMapCacheCleanup() {
+	s.mapCleanupMu.Lock()
+	now := time.Now()
+	if !s.mapCleanupAt.IsZero() && now.Sub(s.mapCleanupAt) < mapCleanupInterval {
+		s.mapCleanupMu.Unlock()
+		return
+	}
+	s.mapCleanupAt = now
+	s.mapCleanupMu.Unlock()
+	_ = s.cleanMapImageCache()
+	_ = s.cleanMapTileCache()
+}
+
 func (s *Service) cleanMapImageCache() map[string]any {
 	summary, _ := s.cleanMapImageCacheWithFiles()
 	s.invalidateMapStatusCache()

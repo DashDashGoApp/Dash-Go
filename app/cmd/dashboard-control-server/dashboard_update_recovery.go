@@ -91,7 +91,10 @@ func (a *app) reconcileInterruptedUpdateStateLockedWith(now time.Time, lockHeld,
 		log.Printf("could not persist interrupted Dash-Go update status recovery: %v", err)
 	}
 	if err := a.finalizeUpdateActionHistory(job); err != nil && jobID != "" {
-		log.Printf("could not finalize interrupted Dash-Go update action %s: %v", jobID, err)
+		// Crash recovery often cannot find a matching action-history entry
+		// (e.g. an SSH-launched job never created one). The recovery itself
+		// succeeded, so this is context, not a fault.
+		log.Printf("interrupted Dash-Go update recovery for %s left no matching update action history entry: %v", jobID, err)
 	}
 	log.Printf("recovered interrupted Dash-Go update job %s", firstNonEmpty(jobID, "(unnamed)"))
 	return true

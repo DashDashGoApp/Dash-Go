@@ -78,11 +78,35 @@ func (s *Service) prewarmEventMaps(limit int) map[string]any {
 			continue
 		}
 		resolved++
+		// Render the configured/default variant first so the most-used popup
+		// image lands in cache before rarer zooms. This ordering only changes
+		// which image is ready earliest; all variants are still rendered.
+		settings := s.loadSettings()
+		firstStyle := normMapStyle(strOr(settings["mapImageStyle"], "standard"))
+		order := []struct {
+			style string
+			z     int
+		}{}
+		for _, z := range []int{13, 15, 17} {
+			order = append(order, struct {
+				style string
+				z     int
+			}{firstStyle, z})
+		}
 		for _, style := range []string{"standard", "hybrid"} {
 			for _, z := range []int{13, 15, 17} {
-				if s.ensureStaticMapImage(lat, lon, z, style) {
-					imagesWritten++
+				if style == firstStyle {
+					continue
 				}
+				order = append(order, struct {
+					style string
+					z     int
+				}{style, z})
+			}
+		}
+		for _, variant := range order {
+			if s.ensureStaticMapImage(lat, lon, variant.z, variant.style) {
+				imagesWritten++
 			}
 		}
 	}

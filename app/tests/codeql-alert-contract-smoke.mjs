@@ -19,7 +19,7 @@ const themePicker=read("ui/js/control-theme.js");
 const index=read("index.html");
 const responsive=read("tests/dashboard-responsive-fit-smoke.mjs");
 const radar=read("tests/lite-radar-snapshot-smoke.mjs");
-const httpServer=read("cmd/dashboard-control-server/http_server.go");
+const httpServer=read("cmd/dashboard-control-server/http_server.go")+read("cmd/dashboard-control-server/http_static.go");
 const privateCalendar=read("tests/private-calendar-controls-smoke.mjs");
 
 assert.match(weather,/crypto\/hmac/,"weather cache fingerprints must use keyed HMAC");
