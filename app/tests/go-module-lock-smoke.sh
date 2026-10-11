@@ -60,8 +60,8 @@ need_notice 'github.com/tdewolff/parse/v2' 'v2.8.12' 'MIT'
 # Do not retain a stale indirect requirement merely because it also appears in
 # the broader module metadata graph; `go mod tidy -diff` blocks that drift.
 for spec in \
-  'golang.org/x/net v0.56.0 BSD 3-Clause' \
-  'golang.org/x/crypto v0.53.0 BSD 3-Clause'; do
+  'golang.org/x/net v0.60.0 BSD 3-Clause' \
+  'golang.org/x/crypto v0.57.0 BSD 3-Clause'; do
   module=${spec%% *}
   rest=${spec#* }
   version=${rest%% *}
@@ -81,13 +81,13 @@ done
 for spec in \
   'github.com/unraid/apprise-go|v0.2.6|BSD 2-Clause' \
   'github.com/gomarkdown/markdown|v0.0.0-20260417124207-7d523f7318df|BSD 2-Clause' \
-  'golang.org/x/crypto|v0.53.0|BSD 3-Clause' \
+  'golang.org/x/crypto|v0.57.0|BSD 3-Clause' \
   'golang.org/x/mod|v0.36.0|BSD 3-Clause' \
-  'golang.org/x/net|v0.56.0|BSD 3-Clause' \
+  'golang.org/x/net|v0.60.0|BSD 3-Clause' \
   'golang.org/x/sync|v0.21.0|BSD 3-Clause' \
-  'golang.org/x/sys|v0.46.0|BSD 3-Clause' \
-  'golang.org/x/term|v0.44.0|BSD 3-Clause' \
-  'golang.org/x/text|v0.38.0|BSD 3-Clause' \
+  'golang.org/x/sys|v0.48.0|BSD 3-Clause' \
+  'golang.org/x/term|v0.46.0|BSD 3-Clause' \
+  'golang.org/x/text|v0.42.0|BSD 3-Clause' \
   'golang.org/x/tools|v0.45.0|BSD 3-Clause' \
   'gopkg.in/yaml.v3|v3.0.1|MIT AND Apache-2.0'; do
   IFS='|' read -r module version license <<< "$spec"
@@ -103,9 +103,9 @@ fi
 if grep -Fq 'golang.org/x/crypto v0.51.0' "$MOD" "$SUM"; then
   fail 'vulnerable golang.org/x/crypto v0.51.0 lock residue must not remain'
 fi
-need_line "$SUM" 'golang.org/x/crypto v0.53.0 h1:QZ4Muo8THX6CizN2vPPd5fBGHyogrdK9fG4wLPFUsto='
-need_line "$SUM" 'golang.org/x/crypto v0.53.0/go.mod h1:DNLU434OwVakk9PzuwV8w62mAJpRJL3vsgcfp4Qnsio='
-need_line "$SUM" 'golang.org/x/net v0.56.0 h1:Rw8j/hFzGvJUZwNBXnAtf5sVDVt+65SK2C7IxCxZt5o='
-need_line "$SUM" 'golang.org/x/net v0.56.0/go.mod h1:D3Ku6r+V6JROoZK144D2XfMHFcMq/0zSfLelVTCFKec='
+need_line "$SUM" 'golang.org/x/crypto v0.57.0 h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M='
+need_line "$SUM" 'golang.org/x/crypto v0.57.0/go.mod h1:Fdz0i5U6CoizGwLda9DttjSk6qlZo25zYNtR+ycvuZA='
+need_line "$SUM" 'golang.org/x/net v0.60.0 h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='
+need_line "$SUM" 'golang.org/x/net v0.60.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg='
 
 printf 'PASS: reviewed Go dependency notices and tidy Go dependency locks are present; the builder will verify the linked release-binary graph\n'

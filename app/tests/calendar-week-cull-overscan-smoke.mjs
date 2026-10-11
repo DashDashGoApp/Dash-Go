@@ -99,4 +99,33 @@ vm.runInContext("calendarSetWeekCullReady(false,scroll)",context);
 assert.deepEqual(near(),[],"disabling culling must clear warm-row markers before calendar fitting/rerendering");
 assert.equal(listeners.has("scroll"),false,"disabling culling must remove its scroll listener");
 
+// The scroll path must not rewrite row markers when the warm window did not
+// change: an unconditional dataset write is an attribute mutation (style
+// invalidation) on every row, and it was the dominant per-frame cost of
+// scrolling the calendar on a single-core board. Asserted, not assumed.
+let writes=0;
+for(const r of rows){
+  const raw=r.dataset;
+  r.dataset=new Proxy(raw,{
+    set(target,key,value){writes++;target[key]=value;return true;},
+    deleteProperty(target,key){writes++;delete target[key];return true;}
+  });
+}
+vm.runInContext("calendarSetWeekCullReady(true,scroll)",context);
+scroll.scrollTop=260;
+listeners.get("scroll").fn();
+flushRaf();
+runTimer(activeTimer(250));
+writes=0;
+vm.runInContext("calendarWeekCullApply(true)",context);
+vm.runInContext("calendarWeekCullApply(true)",context);
+assert.equal(writes,0,"re-applying an unchanged warm window must not rewrite any row marker");
+writes=0;
+const scheduledBefore=scheduleCount;
+listeners.get("scroll").fn();
+flushRaf();
+assert.equal(writes,0,"a scroll event that moved nothing must not rewrite any row marker");
+assert.equal(scheduleCount-scheduledBefore,0,"a scroll event that moved nothing must not schedule a timer");
+vm.runInContext("calendarSetWeekCullReady(false,scroll)",context);
+
 console.log("PASS: Lite Calendar culling uses cached directional 1-behind/2-ahead overscan and releases warm rows after a bounded idle hold");

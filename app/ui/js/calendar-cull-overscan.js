@@ -44,19 +44,17 @@ function calendarWeekCullRangeAt(state,top){
   if(last<first)last=first;
   return {first,last};
 }
-function calendarWeekCullVisibleRange(state){
-  return calendarWeekCullRangeAt(state,Number(state.scroll&&state.scroll.scrollTop)||0);
-}
 function calendarWeekCullRowsAt(state,top,before,after){
   const range=calendarWeekCullRangeAt(state,top),target=new Set();
   for(let i=Math.max(0,range.first-Math.max(0,before||0));i<=Math.min(state.rows.length-1,range.last+Math.max(0,after||0));i++)target.add(i);
   return target;
 }
 function calendarWeekCullTarget(state,includeWarm){
-  const range=calendarWeekCullVisibleRange(state);
-  let before=CALENDAR_WEEK_CULL_BEHIND_OVERSCAN,after=CALENDAR_WEEK_CULL_BEHIND_OVERSCAN;
-  if(state.direction>0)after=CALENDAR_WEEK_CULL_AHEAD_OVERSCAN;
-  else if(state.direction<0)before=CALENDAR_WEEK_CULL_AHEAD_OVERSCAN;
+  // At rest (direction 0) the window is symmetric and owned by the idle
+  // constant, so the idle and travelling windows cannot drift apart.
+  let before=CALENDAR_WEEK_CULL_IDLE_OVERSCAN,after=CALENDAR_WEEK_CULL_IDLE_OVERSCAN;
+  if(state.direction>0){before=CALENDAR_WEEK_CULL_BEHIND_OVERSCAN;after=CALENDAR_WEEK_CULL_AHEAD_OVERSCAN;}
+  else if(state.direction<0){before=CALENDAR_WEEK_CULL_AHEAD_OVERSCAN;after=CALENDAR_WEEK_CULL_BEHIND_OVERSCAN;}
   const target=calendarWeekCullRowsAt(state,Number(state.scroll&&state.scroll.scrollTop)||0,before,after);
   if(includeWarm)for(const i of state.warm)target.add(i);
   for(const i of state.prewarm)target.add(i);
@@ -66,11 +64,19 @@ function calendarWeekCullApply(includeWarm){
   const state=CALENDAR_WEEK_CULL_STATE;
   if(!state.scroll||!state.rows.length)return;
   const target=calendarWeekCullTarget(state,includeWarm);
-  for(let i=0;i<state.rows.length;i++){
+  // Write only on membership change, exactly as the Agenda/Weather list path
+  // does. An unconditional dataset write is an attribute mutation (style
+  // invalidation) on every row even when the window is identical, which was the
+  // dominant per-frame cost of scrolling the calendar on a single-core board.
+  for(const i of state.active){
+    if(target.has(i))continue;
     const row=state.rows[i];
-    if(!row||!row.dataset)continue;
-    if(target.has(i))row.dataset.cullNear="1";
-    else delete row.dataset.cullNear;
+    if(row&&row.dataset)delete row.dataset.cullNear;
+  }
+  for(const i of target){
+    if(state.active.has(i))continue;
+    const row=state.rows[i];
+    if(row&&row.dataset)row.dataset.cullNear="1";
   }
   state.active=target;
 }
@@ -93,7 +99,13 @@ function calendarWeekCullScheduleSettle(){
 function calendarWeekCullOnScroll(){
   const state=CALENDAR_WEEK_CULL_STATE;
   const next=Math.max(0,Number(state.scroll&&state.scroll.scrollTop)||0),delta=next-state.lastScrollTop;
-  if(Math.abs(delta)>=CALENDAR_WEEK_CULL_SCROLL_EPSILON)state.direction=delta>0?1:-1;
+  const moved=Math.abs(delta)>=CALENDAR_WEEK_CULL_SCROLL_EPSILON;
+  // A zero-delta event moved nothing: leave the armed warm window and its
+  // release timer alone rather than tearing down and rebuilding the same
+  // window. Pi touch gestures open with sub-pixel scroll events, so this is the
+  // first frames of the gesture the owner reports as slow to start.
+  if(!moved&&!state.raf)return;
+  if(moved)state.direction=delta>0?1:-1;
   state.lastScrollTop=next;
   calendarWeekCullCancelTimer("warmTimer");state.warm.clear();
   // The settle re-arm happens inside the already-coalesced frame: at most one

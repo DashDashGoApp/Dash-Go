@@ -1,3 +1,31 @@
+## [1.5.19] — 2026-10-10
+
+Dash-Go 1.5.19 removes per-frame work from the calendar's scroll path on Lite. The week-row culling controller rewrote its cull marker on all thirteen week rows on every scroll frame, then again on the post-scroll settle, and again when the warm window was released — even though the window was usually identical, in which case every one of those writes was pure overhead. A marker write is an attribute mutation, so it invalidates style on the row; on the single-core Pi Zero 2 W that was the dominant steady-state cost of scrolling the calendar, and it is what the owner reports as "slow to start". This release writes a marker only when a row genuinely enters or leaves the warm window, and a scroll event that moved nothing no longer rebuilds the window it just discarded. The cull window, the 250 ms warm hold, the pane-edge fade, and the snap-back timing are all unchanged, and nothing new runs on the device. The release also moves the build to Go 1.26.9 and `golang.org/x/net` v0.60.0, closing standard-library and `x/net` advisories published since 1.5.18.
+
+### Performance and reliability
+
+- **The calendar's week-row cull no longer rewrites markers it already set.** `calendarWeekCullApply` computed the warm window and then wrote `data-cull-near` across every one of the thirteen week rows whether or not it had changed. It now writes only the rows that actually entered or left the window — the same membership test the Agenda/Weather list path (`dashboardListOverscanApply`) has always used. The guaranteed no-op passes (the warm release after a settle, and any frame where the window did not change) now cost zero DOM writes instead of thirteen.
+- **A scroll event that moved nothing now costs nothing.** `calendarWeekCullOnScroll` treated an event with no measurable movement as real work: it cancelled the warm release timer, dropped the warm window, and re-armed the settle timer — tearing down and rebuilding the identical window. It now returns immediately when the container has not moved and no frame is already queued, leaving the armed warm window intact. Pi touch gestures open with sub-pixel scroll events, so those are exactly the first frames of a gesture.
+- **Removed a wasted geometry search from every frame.** `calendarWeekCullTarget` computed the visible range and then discarded it, because the row-window helper recomputes it from the same cached metrics. The dead computation is gone. As before, the scroll path reads only cached geometry and never forces layout.
+
+### Improvements
+
+- **One idle-window constant instead of two coincidences.** With no scroll direction established, the cull window borrowed the behind-travel overscan constant for its forward edge, while a dedicated `CALENDAR_WEEK_CULL_IDLE_OVERSCAN` sat unused. The idle path now reads the idle constant. The value is the same (one row either side), so the window is unchanged; the two windows simply can no longer drift apart if one is tuned later.
+- **Removed the now-unreachable `calendarWeekCullVisibleRange`** helper.
+
+### Security
+
+- **The release moves to Go 1.26.9 and `golang.org/x/net` v0.60.0.** Eleven advisories published since 1.5.18 cover the Go standard library's `net/http`, `crypto/tls`, `mime/multipart`, and `os` (GO-2026-6603 through GO-2026-6617) with fixes in **go1.26.9**, and `golang.org/x/net` with fixes in **v0.60.0**. The server binary embeds the standard library and `x/net`, so these fixes ship to the device in this release rather than only clearing the build gate. `golang.org/x/crypto` moved v0.53.0 → **v0.57.0** as a transitive requirement of the new `x/net`. The pinned `govulncheck` (v1.5.0) reports no reachable known vulnerabilities on the bumped tree; the gate is fail-closed and had blocked this release until the patch releases landed.
+
+### Build and release integrity
+
+- **The no-rewrite guarantee is asserted, not assumed.** `calendar-week-cull-overscan-smoke.mjs` now wraps each fixture row's dataset in a counting proxy and proves that re-applying an unchanged warm window performs zero marker writes, and that a zero-delta scroll event performs neither a marker write nor a timer schedule. Run against the 1.5.18 controller, the same assertions report 24 writes and fail — so the test measures the fix rather than passing vacuously. All existing cull assertions (idle window, directional 1-behind/2-ahead travel, prewarm, settle, warm release) still pass.
+- **The Doctor release smoke no longer inspects the build host's live state (found, not caused).** `doctor-smoke.sh` judges a synthetic fixture, but it sealed only the fixture's own config paths (`DOCTOR_XSESSION_FILE`, `DOCTOR_AUTOLOGIN_FILE`) while the managed LightDM lookup kept reading the machine's real `/etc/lightdm` and `/usr/share/lightdm/lightdm.conf.d`. On a Linux build host that has a display manager installed and its own autologin configuration, the post-repair scan reported a planned LightDM repair, so the smoke's "no automatic repairs are currently planned" assertion failed and the build stopped at the packaging gate; it had passed on hosts without `pgrep`/`lightdm` by accident. The smoke now seals `DASH_LIGHTDM_ROOT` and `DASH_LIGHTDM_VENDOR_DIR` to empty fixture paths, so it tests the fixture on any build host. Test-hermeticity only: no shipped script, installer, or kiosk behaviour changes.
+
+### Upgrade notes
+
+- No configuration or data change, and no user-visible change. The cull window (one row behind and two ahead while travelling, symmetric one row either side at rest, 250 ms warm hold after scrolling stops), the calendar's pane-edge fade, and the idle snap-back timing are all as they were.
+
 ## [1.5.18] — 2026-10-01
 
 Dash-Go 1.5.18 widens the rotating-message section's offline content. The local fallback pools — the lines that keep the sidebar rotating when the dashboard has no network — were the thinnest content in the section, so the quote, joke, and fact pools grew substantially. This is a pure data change to the server's local pools: the same nine categories and twenty-nine providers, the same measured fit and fade, the same local-first rotation — and no new process, timer, code path, or JavaScript on the device.

@@ -14,13 +14,13 @@ The complete license texts named below are provided in `third_party_licenses/`.
 | `github.com/gomarkdown/markdown` | `v0.0.0-20260417124207-7d523f7318df` | BSD 2-Clause | Markdown conversion used by Apprise-Go |
 | `github.com/tdewolff/minify/v2` | `v2.24.13` | MIT | Deterministic generated JavaScript minification with identifiers retained |
 | `github.com/tdewolff/parse/v2` | `v2.8.12` | MIT | ECMAScript parsing used by the generated-bundle minifier |
-| `golang.org/x/crypto` | `v0.53.0` | BSD 3-Clause | Cryptographic support used by Apprise-Go |
+| `golang.org/x/crypto` | `v0.57.0` | BSD 3-Clause | Cryptographic support used by Apprise-Go |
 | `golang.org/x/mod` | `v0.36.0` | BSD 3-Clause | Go module metadata support in the resolved Go module graph |
-| `golang.org/x/net` | `v0.56.0` | BSD 3-Clause | HTML-processing support used by Apprise-Go |
+| `golang.org/x/net` | `v0.60.0` | BSD 3-Clause | HTML-processing support used by Apprise-Go |
 | `golang.org/x/sync` | `v0.21.0` | BSD 3-Clause | Concurrency support in the resolved Go module graph |
-| `golang.org/x/sys` | `v0.46.0` | BSD 3-Clause | Low-level operating-system support in the resolved Go module graph |
-| `golang.org/x/term` | `v0.44.0` | BSD 3-Clause | Terminal support in the resolved Go module graph |
-| `golang.org/x/text` | `v0.38.0` | BSD 3-Clause | International text processing support in the resolved Go module graph |
+| `golang.org/x/sys` | `v0.48.0` | BSD 3-Clause | Low-level operating-system support in the resolved Go module graph |
+| `golang.org/x/term` | `v0.46.0` | BSD 3-Clause | Terminal support in the resolved Go module graph |
+| `golang.org/x/text` | `v0.42.0` | BSD 3-Clause | International text processing support in the resolved Go module graph |
 | `golang.org/x/tools` | `v0.45.0` | BSD 3-Clause | Go tooling support in the resolved Go module graph |
 | `gopkg.in/yaml.v3` | `v3.0.1` | MIT AND Apache-2.0 | YAML configuration parsing used by Apprise-Go |
 

@@ -138,8 +138,14 @@ printf '%s\n' \
   'Dash-Go kiosk already running as pid 15307; this duplicate launcher will exit' > "$FIXTURE/logs/openbox-session.log"
 
 run_doctor(){
+  # Isolate the build host's own live state: the fixture must be judged on its
+  # own contents, never on the machine running the release build. A host with a
+  # display manager installed and its own autologin config otherwise reads as a
+  # planned LightDM repair, which fails the post-repair "no automatic repairs"
+  # assertion on Linux build hosts while passing where pgrep/lightdm are absent.
   PATH="$FAKE_BIN:$PATH" HOME="$HOME_FIXTURE" DASH="$FIXTURE" DOCTOR_SKIP_SYSTEM=1 DOCTOR_PROFILE=lite \
     DOCTOR_XSESSION_FILE="$TMP/no-xsession" DOCTOR_AUTOLOGIN_FILE="$TMP/no-autologin" \
+    DASH_LIGHTDM_ROOT="$TMP/no-lightdm" DASH_LIGHTDM_VENDOR_DIR="$TMP/no-lightdm-vendor" \
     bash "$ROOT/bin/doctor.sh" "$@"
 }
 
