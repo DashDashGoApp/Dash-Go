@@ -29,9 +29,14 @@ func (s *Service) ComplimentsPayload() map[string]any     { return s.compliments
 func (s *Service) LoadBirthdays() []any    { return s.loadBirthdays() }
 func (s *Service) LoadCelebrations() []any { return s.loadCelebrations() }
 func NextNumericID(items []any) int        { return nextNumericID(items) }
-func ApplyOverrides(items []any, overrides map[string]any) []any {
-	return applyMessageOverrides(items, overrides)
+func ApplyOverrides(items []any, overrides map[string]any, patterns []string) []any {
+	return applyMessageOverrides(items, overrides, patterns)
 }
+
+// ContentKeywordPatterns exposes the active content-filter blocklist (built-in
+// defaults plus owner patterns from message-keywords.json) for callers that
+// apply overrides outside the service's own read path.
+func (s *Service) ContentKeywordPatterns() []string { return s.contentKeywordPatterns() }
 
 func CleanCompliment(body, existing map[string]any) (map[string]any, error) {
 	return cleanCompliment(body, existing)

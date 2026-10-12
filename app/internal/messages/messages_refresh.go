@@ -12,7 +12,7 @@ import (
 
 func (s *Service) messageCachePayload() map[string]any {
 	cache := jsonutil.Map(s.readJSONDefault(filepath.Join(s.configDir, "message-cache.json"), map[string]any{"items": []any{}, "generatedAt": 0, "sources": []any{}, "sourceStatus": []any{}}))
-	cache["items"] = applyMessageOverrides(jsonutil.List(cache["items"]), s.messageOverrides())
+	cache["items"] = applyMessageOverrides(jsonutil.List(cache["items"]), s.messageOverrides(), s.contentKeywordPatterns())
 	if _, ok := cache["sourceStatus"].([]any); !ok {
 		cache["sourceStatus"] = []any{}
 	}
@@ -61,7 +61,7 @@ func (s *Service) refreshMessages(ctx context.Context, includeNetwork, manual bo
 			}
 		}
 	}
-	items := applyMessageOverrides(rawItems, s.messageOverrides())
+	items := applyMessageOverrides(rawItems, s.messageOverrides(), s.contentKeywordPatterns())
 	if len(items) > 120 {
 		items = items[:120]
 	}

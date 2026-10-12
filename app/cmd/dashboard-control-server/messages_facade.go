@@ -72,9 +72,6 @@ func (a *app) handleSpecialDates(w http.ResponseWriter, path string, body map[st
 	a.messagesService().HandleSpecialDates(w, path, body)
 }
 
-func applyMessageOverrides(items []any, overrides map[string]any) []any {
-	return messagespkg.ApplyOverrides(items, overrides)
-}
 func cleanCompliment(body, existing map[string]any) (map[string]any, error) {
 	return messagespkg.CleanCompliment(body, existing)
 }

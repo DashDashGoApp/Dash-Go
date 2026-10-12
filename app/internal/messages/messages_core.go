@@ -169,7 +169,7 @@ func (s *Service) messageOverrides() map[string]any {
 	return ov
 }
 
-func applyMessageOverrides(items []any, ov map[string]any) []any {
+func applyMessageOverrides(items []any, ov map[string]any, patterns []string) []any {
 	removed := map[string]bool{}
 	for _, id := range jsonutil.List(ov["removed"]) {
 		removed[jsonutil.StringValue(id)] = true
@@ -201,6 +201,11 @@ func applyMessageOverrides(items []any, ov map[string]any) []any {
 				it["weight"] = clamp(jsonutil.Int(edit["weight"], 1), 1, 10000)
 				it["edited"] = true
 			}
+		}
+		// The filter runs on the final displayed text, including owner edits:
+		// re-adding a blocked phrase through the editor must not surface it.
+		if _, blocked := blockedByKeywords(source, text, patterns); blocked {
+			continue
 		}
 		it["id"] = id
 		it["text"] = text

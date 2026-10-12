@@ -1,3 +1,25 @@
+## [1.5.20] — 2026-10-11
+
+Dash-Go 1.5.20 adds a household-safety content filter to the rotating Messages section so that poor-taste jokes and quotes are removed before they ever reach the screen. It is one check at the single point every message passes through on its way to the kiosk, scoped to the joke and quote feeds: any line that names sexual violence or a person publicly identified with it is dropped — in the clean, joke, and opt-in adult feeds alike, and in owner-edited text too, so re-adding a blocked phrase through the editor does not surface it. The list ships with a deliberately tight built-in set (the sexual-violence terms and the quoted names Bill Cosby, Jared Fogel, and Harvey Weinstein, each chosen to carry little chance of colliding with an innocent line), and the owner can extend it without a code change: keywords appended to the JSON array at `message-keywords.json` next to the other message settings take effect on the next read of the cached feed. Matching is case-insensitive and whitespace-tolerant; a single word must match as a whole word so "rape" never fires inside "grape", while a multi-word name matches the phrase as written.
+
+### Features
+
+- **A content filter blocks poor-taste jokes and quotes before display.** Every item in the joke, quote, and opt-in adult feeds is checked against the content blocklist at the one shared choke point it passes through on its way to the screen. A match drops the item for that read — it is not shown on the kiosk and is not replaced with a visible error.
+
+- **The filter is scoped to the feeds it guards.** Only the `jokes`, `quotes`, and `nsfw-jokes` categories are filtered, so a legitimate trivia answer, "this day in history" line, riddle, fact, or wellbeing nudge can never be eaten by the filter.
+
+- **The blocklist ships with built-in household-safety defaults.** The first list covers the examples the owner named: the words "rape", "rapist", "pedophile", "pedo", and "molester"; the phrases "child abuse", "child molestation", "child molester", "child grooming", and "underage"; and the quoted names "Bill Cosby", "Jared Fogel", and "Harvey Weinstein". The set is deliberately tight so it collides with no innocent line; broader netting (e.g. "predator", "groomer") is left to the owner to add.
+
+- **The owner can extend the list without a release.** A JSON array of keyword strings at `message-keywords.json` in the message settings directory adds to (never replaces) the built-ins, is deduplicated against them, and takes effect on the next read of the cached feed. Invalid or blank entries are ignored.
+
+### Improvements
+
+- **Matching is whole-word for single keywords and phrase-based for names.** A single-word pattern must match as a whole word so "rape" does not fire inside "grape" or "rap", while a multi-word pattern matches the phrase as written because it is already specific. The check is case-insensitive and tolerant of irregular spacing.
+
+### Upgrade notes
+
+- The filter runs on the final displayed text, including owner edits: editing a joke or quote to re-introduce a blocked phrase is dropped rather than surfaced. No settings or device layout change; the existing remove/edit message controls are unchanged.
+
 ## [1.5.19] — 2026-10-10
 
 Dash-Go 1.5.19 removes per-frame work from the calendar's scroll path on Lite. The week-row culling controller rewrote its cull marker on all thirteen week rows on every scroll frame, then again on the post-scroll settle, and again when the warm window was released — even though the window was usually identical, in which case every one of those writes was pure overhead. A marker write is an attribute mutation, so it invalidates style on the row; on the single-core Pi Zero 2 W that was the dominant steady-state cost of scrolling the calendar, and it is what the owner reports as "slow to start". This release writes a marker only when a row genuinely enters or leaves the warm window, and a scroll event that moved nothing no longer rebuilds the window it just discarded. The cull window, the 250 ms warm hold, the pane-edge fade, and the snap-back timing are all unchanged, and nothing new runs on the device. The release also moves the build to Go 1.26.9 and `golang.org/x/net` v0.60.0, closing standard-library and `x/net` advisories published since 1.5.18.

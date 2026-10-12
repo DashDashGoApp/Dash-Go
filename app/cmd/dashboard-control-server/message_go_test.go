@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
+	messagespkg "github.com/DashDashGoApp/Dash-Go/app/internal/messages"
 )
 
 func TestGoMessageRefreshLocalFallback(t *testing.T) {
@@ -32,12 +33,13 @@ func TestGoMessageEnabledKeepsOnlyCurrentCategories(t *testing.T) {
 }
 
 func TestGoMessageOverridesApply(t *testing.T) {
+	a := testApp(t)
 	items := []any{
 		map[string]any{"id": "keep", "text": "Old", "source": "quotes", "weight": 1},
 		map[string]any{"id": "gone", "text": "Gone", "source": "quotes", "weight": 1},
 	}
 	ov := map[string]any{"removed": []any{"gone"}, "edits": map[string]any{"keep": map[string]any{"text": "New", "weight": 7}}}
-	got := applyMessageOverrides(items, ov)
+	got := messagespkg.ApplyOverrides(items, ov, a.messagesService().ContentKeywordPatterns())
 	if len(got) != 1 {
 		t.Fatalf("expected one item after remove, got %#v", got)
 	}
