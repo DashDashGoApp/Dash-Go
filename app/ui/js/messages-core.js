@@ -55,12 +55,21 @@ function eligibleMessage(c,text,weight){
     priority: kind==="temporary" || kind==="scheduled" || kind==="birthday"
   };
 }
+// The pool content revision bumps whenever the compliment list reloads, so
+// the eligibility memo below invalidates together with it.
+let COMP_LIST_REVISION=0;
+function bumpCompListRevision(){ COMP_LIST_REVISION+=1; }
 // Build the list of eligible compliments for right now, with resolved text.
+// One rebuild per (list revision, time bucket, day, holiday context): repeated
+// picks inside the same window reuse the cached array without mutating it.
+let _ELIGIBLE_COMPLIMENT_MEMO=null;
 function eligibleCompliments(){
   const bucket=timeBucket();
   const now=new Date();
   const md=String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
   const holidayContexts=todaysHolidayContexts(now),holidayName=holidayDisplayName(holidayContexts);
+  const sig=COMP_LIST_REVISION+"|"+bucket+"|"+md+"|"+(Array.isArray(holidayContexts)?holidayContexts:[]).map(c=>String((c&&c.key)||"")+"|"+(Array.isArray(c&&c.layers)?c.layers.join(","):"")).join(";");
+  if(_ELIGIBLE_COMPLIMENT_MEMO&&_ELIGIBLE_COMPLIMENT_MEMO.sig===sig)return _ELIGIBLE_COMPLIMENT_MEMO.list;
   let out=[];
   for(const c of (COMP_LIST||CONFIG.compliments)){
     if(!c || !c.text) continue;
@@ -97,6 +106,7 @@ function eligibleCompliments(){
         out.push(eligibleMessage(c, c.text, c.weight||1));
     }
   }
+  _ELIGIBLE_COMPLIMENT_MEMO={sig,list:out};
   return out;
 }
 // Weighted random pick with a small persisted recent-history memory. This
@@ -140,8 +150,12 @@ function flushMessageHistorySave(){
   if(_MESSAGE_HISTORY_CACHE) _safeJsonSave(MESSAGE_ROTATION_STORE,_MESSAGE_HISTORY_CACHE);
 }
 function scheduleMessageHistorySave(){
+  // The debounced save lands after the fade-in completes (two fades plus a margin after
+  // the pick starts the fade-out), keeping the synchronous write off the visible swap.
+  const fadeMs=typeof complimentFadeValueMs==="function"?complimentFadeValueMs(CONFIG.complimentFadeMs):750;
+  const delay=Math.max(1200,fadeMs*2+300);
   if(_MESSAGE_HISTORY_SAVE_TIMER) clearTimeout(_MESSAGE_HISTORY_SAVE_TIMER);
-  _MESSAGE_HISTORY_SAVE_TIMER=setTimeout(flushMessageHistorySave,1200);
+  _MESSAGE_HISTORY_SAVE_TIMER=setTimeout(flushMessageHistorySave,delay);
 }
 function saveMessageRotationHistory(h){
   _MESSAGE_HISTORY_CACHE=normalizeMessageHistory(h);
@@ -198,7 +212,9 @@ function fairMessageCandidates(pool){
   }
   return candidates.length ? candidates : pool;
 }
-function adjustedMessagePool(pool){
+// Adjusted weights as a parallel array (one number per candidate, same order)
+// so the memoized eligible pool is never copied into per-pick {...c,weight} objects.
+function adjustedMessageWeights(pool){
   const h=messageRotationHistory();
   const recent=h.recent||[];
   const prefs=messageCategoryPrefs();
@@ -206,20 +222,23 @@ function adjustedMessagePool(pool){
   const last8=recent.slice(-8);
   const feedHeavy=last8.filter(x=>String(x.category||"").startsWith("feed:")).length>=5;
   const hasDefaultish=pool.some(c=>c.kind==="default" || c.kind==="custom");
-  return pool.map(c=>{
+  const weights=new Array(pool.length);
+  for(let i=0;i<pool.length;i++){
+    const c=pool[i];
     let weight=Math.max(0.01,+c.weight||1);
     if(c.key===(_lastCompItem&&_lastCompItem.key)) weight*=0.05;
     if(c.category===lastCat && !c.priority) weight*=0.60;
     if(prefs.less[c.category]) weight*=Math.max(0.25,Math.min(1,+prefs.less[c.category]||1));
     if(feedHeavy && hasDefaultish && String(c.category).startsWith("feed:")) weight*=0.42;
     if(feedHeavy && (c.kind==="default" || c.kind==="custom")) weight*=1.85;
-    return {...c,weight};
-  });
+    weights[i]=weight;
+  }
+  return weights;
 }
 function pauseComplimentMotion(){
   if(_compFadeTimer){ clearTimeout(_compFadeTimer); _compFadeTimer=null; }
   const t=$("#comptext");
-  if(t) t.style.opacity=1;
+  if(t) compSetVisible(t,true);
 }
 function messagePauseActive(){ return _messageRotationPauses.size>0; }
 function acquireMessageRotationPause(reason, ttlMs){

@@ -29,6 +29,12 @@ func (s *Service) messageSourcesStatus() map[string]any {
 // the section on its normal cadence and preserves whatever was already gathered.
 const messageRefreshBudget = 25 * time.Second
 
+// rotatingFeedMaxRunes is the rotating-feed length gate: a provider line
+// longer than this is dropped, never truncated — a clamped quote reads worse
+// than no quote, and the local pool fills the slot. The device's 1.5.20 cache
+// topped out at 195 chars, so 200 loses nothing already in rotation.
+const rotatingFeedMaxRunes = 200
+
 func (s *Service) refreshMessages(ctx context.Context, includeNetwork, manual bool) map[string]any {
 	bounded, cancel := context.WithTimeout(ctx, messageRefreshBudget)
 	defer cancel()
@@ -105,18 +111,15 @@ func (s *Service) fetchMessageCategory(ctx context.Context, c messageCategory, i
 				attempts = 2
 			}
 			for range attempts {
-				vals, err := s.fetchMessageProvider(ctx, p, want)
+				// Ask for a few extra lines so the length gate (below) can
+				// still fill the quota when a provider returns long entries.
+				vals, err := s.fetchMessageProvider(ctx, p, want+4)
 				if err != nil {
 					s.noteProviderBackoff("message-"+p, err)
 					errorsOut = append(errorsOut, map[string]any{"provider": p, "error": truncate(err.Error(), 140)})
 					continue
 				}
-				norm := []map[string]any{}
-				for _, t := range vals {
-					if it := messageItem(t, c.ID, c.NSFW, 1); it != nil {
-						norm = append(norm, it)
-					}
-				}
+				norm := rotatingFeedItems(vals, c)
 				norm = dedupeMessageItems(norm)
 				if len(norm) > 0 {
 					s.clearProviderBackoff("message-" + p)
@@ -149,6 +152,23 @@ func (s *Service) fetchMessageCategory(ctx context.Context, c messageCategory, i
 	}
 	ok := len(items) > 0 && (served != "local" || !includeNetwork || len(c.Providers) == 0)
 	return messageFetchResult{Items: items, Status: map[string]any{"id": c.ID, "label": c.Label, "ok": ok, "servedBy": served, "servedByLabel": providerLabels[served], "providerCount": len(c.Providers), "skipped": skipped, "errors": errorsOut, "localSupplement": supplemented, "generator": "go"}}
+}
+
+// rotatingFeedItems normalizes raw provider lines into message items,
+// dropping any line longer than rotatingFeedMaxRunes instead of clamping it.
+// cleanMessageText's 300-rune clamp remains only as the last-resort guard for
+// owner-edited text.
+func rotatingFeedItems(vals []string, c messageCategory) []map[string]any {
+	out := []map[string]any{}
+	for _, t := range vals {
+		if len([]rune(cleanMessageText(t))) > rotatingFeedMaxRunes {
+			continue
+		}
+		if it := messageItem(t, c.ID, c.NSFW, 1); it != nil {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 func (s *Service) localMessageItems(localKey, source string, nsfw bool, count int, manual bool) []map[string]any {

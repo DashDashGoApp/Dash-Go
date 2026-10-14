@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"html"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -8,6 +9,43 @@ import (
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
+
+// sanitizeFeedText applies the feed text hygiene rules in one place, for
+// every provider line, local entry, and owner edit:
+//   - decode the HTML entities feeds leak into plain text (amp, quot, nbsp...);
+//   - normalize stray "”~Author" / "~Author" tails to the standard " — Author"
+//     shape (The Quotes Hub ships "…”~Sherlock Holmes." style lines);
+//   - drop " — Unknown" / " — Anonymous" author suffixes (keep the text);
+//   - collapse doubled punctuation (".." -> ".").
+//
+// It is deliberately conservative: a line that does not match one of the
+// shapes passes through byte-for-byte, and no content-filter scope is widened
+// (1.5.20 limits the filter to the joke and quote feeds on purpose).
+var (
+	reTildeAuthor   = regexp.MustCompile(`(?s)^(.{8,}?)\s*~\s*([A-Z][\p{L}\p{M}'\- ]{1,38})\s*\.?\s*$`)
+	reUnknownAuthor = regexp.MustCompile(`(?is)\s*—\s*(?:unknown|anonymous|unnamed)(?:\s+author)?\s*\.?\s*$`)
+	// RE2 has no backreferences, so the run is matched as "first punctuation
+	// char + 1-3 more" and collapsed with a $1 substitution. This covers
+	// "..", "...", "!!", "??", and mixed runs like ".?" -> "." while leaving
+	// ordinary punctuation (digits after a dot, single sentence ends) alone.
+	reDoubledPunct = regexp.MustCompile(`([,.!?])[,.!?]{1,3}`)
+)
+
+func sanitizeFeedText(s string) string {
+	if s == "" {
+		return s
+	}
+	s = html.UnescapeString(s)
+	if m := reTildeAuthor.FindStringSubmatch(s); m != nil {
+		s = m[1] + " — " + strings.TrimSpace(m[2])
+	} else if m := reUnknownAuthor.FindStringSubmatchIndex(s); m != nil {
+		// Byte indices; the match starts at the whitespace before the dash,
+		// so cutting at the match start drops the whole author tail.
+		s = s[:m[0]]
+	}
+	s = reDoubledPunct.ReplaceAllString(s, "$1")
+	return strings.TrimSpace(s)
+}
 
 // builtinContentKeywords are the household-safety defaults: jokes or quotes
 // about sexual violence, or quoting a person publicly identified with it,

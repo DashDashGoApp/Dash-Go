@@ -84,7 +84,8 @@ function renderCtrlDashboardTypography(){
     const fit=typeof complimentFitDiagnostics==="function"?complimentFitDiagnostics():null;
     if(fit){
       const label=fit.clipped?`${fit.clipped} message${fit.clipped===1?"":"s"} used the final safe clip this session.`:"No message fits have required the final safe clip this session.";
-      editor.appendChild(el("div","dashboard-typography-note dashboard-typography-fit-health",`${label} ${fit.corrected} rendered fit correction${fit.corrected===1?"":"s"}.`));
+      const dropped=fit.dropped?`${fit.dropped} unreadable message${fit.dropped===1?"":"s"} dropped this session.`:"No unreadable message was dropped this session.";
+      editor.appendChild(el("div","dashboard-typography-note dashboard-typography-fit-health",`${label} ${fit.corrected} rendered fit correction${fit.corrected===1?"":"s"}. ${dropped}`));
     }
   }
   wrap.appendChild(editor);

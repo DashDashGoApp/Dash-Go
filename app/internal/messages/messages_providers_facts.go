@@ -2,6 +2,7 @@ package messages
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -29,6 +30,34 @@ func (f *messageFetcher) factProvider(provider string, want int) ([]string, erro
 		var data map[string]any
 		err := f.getJSON("https://catfact.ninja/fact", nil, &data)
 		return []string{cleanMessageText(data["fact"])}, err
+	case "wikimedia_featured":
+		// Today's featured article: a stable, keyless, already-curated daily
+		// line. The news list in the same feed is not household-curated and
+		// is deliberately ignored.
+		now := time.Now()
+		var data map[string]any
+		u := fmt.Sprintf("https://api.wikimedia.org/feed/v1/wikipedia/en/featured/%04d/%02d/%02d", now.Year(), int(now.Month()), now.Day())
+		if err := f.getJSON(u, nil, &data); err != nil {
+			return nil, err
+		}
+		tfa := jsonutil.Map(data["tfa"])
+		title := cleanMessageText(tfa["displaytitle"])
+		if title == "" {
+			title = strings.ReplaceAll(cleanMessageText(tfa["title"]), "_", " ")
+		}
+		extract := cleanMessageText(tfa["extract"])
+		if title == "" || extract == "" {
+			return nil, nil
+		}
+		sentence := extract
+		if idx := strings.IndexAny(extract, ".!?"); idx >= 0 {
+			sentence = strings.TrimSpace(extract[:idx+1])
+		}
+		line := "Today's featured article: " + title + ": " + sentence
+		if len([]rune(line)) > 160 {
+			return nil, nil
+		}
+		return []string{line}, nil
 	case "meowfacts":
 		var data map[string]any
 		err := f.getJSON("https://meowfacts.herokuapp.com/", nil, &data)

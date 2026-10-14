@@ -49,6 +49,7 @@ const expected=[
   "popup-latency-budget-v1",
   "aqi-failure-cooldown-v1",
   "weather-review-notes-v1",
+  "message-readable-drop-v1",
 ];
 
 assert.equal(featureContract.schema,1);
@@ -160,5 +161,13 @@ assert.doesNotMatch(read("internal/weather/weather_blend_go.go"),/mergeAlertsGo/
 assert.doesNotMatch(read("internal/weather/weather_payload.go"),/"alerts":/);
 assert.match(read("cmd/dashboard-control-server/google_oauth_loopback_test.go"),/loopbackTestServerWait/);
 assert.match(read("cmd/dashboard-control-server/google_oauth_loopback_test.go"),/loopbackTestPollDeadline/);
+
+// 1.5.21: readable drop loop, the single display funnel, the embedded local
+// pools, and the 200-rune rotating-feed gate.
+assert.match(read("ui/js/messages-schedule.js"),/pickReadableCompliment/);
+assert.match(read("ui/js/messages-fit.js"),/function compSetVisible/);
+assert.ok(fs.existsSync("internal/messages/local_messages.json"));
+assert.match(read("internal/messages/messages_local_pools.go"),new RegExp("//go:embed local_messages\\.json"));
+assert.match(read("internal/messages/messages_refresh.go"),/rotatingFeedMaxRunes = 200/);
 
 console.log(`PASS: ${version} required source-feature contract (${expected.length} features)`);

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.5.20",
+  "version": "1.5.21",
   "requiredSourceFeatures": [
     "scoped-settings-invalidation-v1",
     "focused-jsonv2-gate-v1",
@@ -44,6 +44,7 @@
     "popup-list-staging-v1",
     "popup-latency-budget-v1",
     "aqi-failure-cooldown-v1",
-    "weather-review-notes-v1"
+    "weather-review-notes-v1",
+    "message-readable-drop-v1"
   ]
 }

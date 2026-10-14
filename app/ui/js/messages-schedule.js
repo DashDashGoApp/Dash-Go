@@ -149,25 +149,69 @@ async function loadCompliments(){
   const schedItems=activeScheduledMessages(sched);
   const bdays=CONFIG.compliments.filter(c=>c._bday);
   COMP_LIST=[...tmpItems, ...schedItems, ...base, ...feedItems, ...bdays];
+  // A refreshed pool is new content: bump the eligibility memo and re-admit dropped picks.
+  bumpCompListRevision();
+  compUnreadableClear();
   if(typeof updateStale==="function") updateStale();
 }
-function pickCompliment(){
+// The readable contract's drop loop, next to where the pick happens. A pick
+// that cannot reach its tier drop threshold is dropped and remembered for
+// this geometry revision; priority items are never dropped. If even the
+// shortest eligible non-priority message is unreadable the current message
+// is kept and the rotation rescheduled; recordMessagePick runs at the call
+// site, only for a pick that is actually rendered.
+function pickReadableCompliment(){
   const pool=eligibleCompliments();
-  if(!pool.length){ _lastCompItem=null; _lastCompText=""; return ""; }
-  let candidates=fairMessageCandidates(pool);
-  candidates=adjustedMessagePool(candidates);
-  const total=candidates.reduce((s,c)=>s+Math.max(0.01,+c.weight||1),0);
-  let chosen=candidates[candidates.length-1], r=Math.random()*total;
-  for(const c of candidates){ r-=Math.max(0.01,+c.weight||1); if(r<=0){ chosen=c; break; } }
-  _lastCompItem=chosen; _lastCompText=chosen.text; recordMessagePick(chosen); return chosen.text;
+  if(!pool.length){_lastCompItem=null;_lastCompText="";return null;}
+  const lite=complimentLiteProfile();
+  const el=typeof document!=="undefined"?document.getElementById("comptext"):null;
+  const metrics=lite?complimentLiteMetricsForFit(el):complimentLiteViewportMetrics();
+  const droppedNow=new Set();
+  const excluded=key=>compUnreadableHas(key)||droppedNow.has(key);
+  const choose=list=>{
+    if(!list.length)return null;
+    const candidates=fairMessageCandidates(list),weights=adjustedMessageWeights(candidates);
+    const total=weights.reduce((s,w)=>s+Math.max(0.01,+w||1),0);
+    let chosen=candidates[candidates.length-1],r=Math.random()*total;
+    for(let i=0;i<candidates.length;i++){r-=Math.max(0.01,+weights[i]||1);if(r<=0){chosen=candidates[i];break;}}
+    return chosen;
+  };
+  for(let attempt=0;attempt<4;attempt++){
+    const item=choose(pool.filter(c=>!excluded(c.key)));
+    if(!item)break;
+    const fit=complimentLiteFit(complimentDisplayText(item.text),metrics,1,{priority:!!item.priority});
+    if(fit.readable!==false){
+      _lastCompItem=item;_lastCompText=item.text;
+      return item;
+    }
+    droppedNow.add(item.key);
+    compUnreadableAdd(item.key);
+    noteComplimentDropped();
+  }
+  // Every weighted attempt dropped: the shortest remaining eligible non-priority message is the last chance.
+  const fallback=pool.filter(c=>!c.priority&&!excluded(c.key)).sort((a,b)=>a.text.length-b.text.length)[0];
+  if(fallback){
+    const fit=complimentLiteFit(complimentDisplayText(fallback.text),metrics,1,{priority:false});
+    if(fit.readable!==false){
+      _lastCompItem=fallback;_lastCompText=fallback.text;
+      return fallback;
+    }
+    compUnreadableAdd(fallback.key);
+    noteComplimentDropped();
+  }
+  return null;
 }
 function forceNextCompliment(){
   const t=$("#comptext");
-  if(!t) return;
-  if(_compFadeTimer){ clearTimeout(_compFadeTimer); _compFadeTimer=null; }
-  if(_compRotateTimer){ clearTimeout(_compRotateTimer); _compRotateTimer=null; }
-  const text=pickCompliment();
-  t.style.opacity=1;
-  fitCompliment(text);
+  if(!t)return;
+  if(_compFadeTimer){clearTimeout(_compFadeTimer);_compFadeTimer=null;}
+  if(_compRotateTimer){clearTimeout(_compRotateTimer);_compRotateTimer=null;}
+  const chosen=pickReadableCompliment();
+  if(!chosen){compSetVisible(t,true);scheduleNextCompliment(_lastCompText||"",5000);return;}
+  const text=chosen.text,priority=!!chosen.priority;
+  compSetVisible(t,true);
+  resetComplimentFit(t);
+  applyComplimentFitResult(t,computeComplimentFit(text,t,{priority}));
+  recordMessagePick(chosen);
   scheduleNextCompliment(text);
 }

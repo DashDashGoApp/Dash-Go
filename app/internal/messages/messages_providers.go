@@ -95,12 +95,13 @@ func (s *Service) fetchMessageProvider(ctx context.Context, provider string, wan
 		return f.jokeProvider(provider, want)
 	case "quotable", "quotable_mirror", "stoic_quotes", "thequoteshub", "favqs",
 		"zenquotes", "typefit_quotes", "dummyjson_quotes",
-		"api_ninjas_quotes", "api_ninjas_quotes_positive", "affirmations", "advice_slip":
+		"api_ninjas_quotes", "api_ninjas_quotes_positive", "affirmations", "advice_slip",
+		"positive_api", "bored_api":
 		return f.quoteProvider(provider, want)
-	case "uselessfacts", "api_ninjas_facts", "catfact", "meowfacts",
+	case "uselessfacts", "wikimedia_featured", "api_ninjas_facts", "catfact", "meowfacts",
 		"riddles_api", "api_ninjas_riddles":
 		return f.factProvider(provider, want)
-	case "wikimedia_onthisday", "wikimedia_births", "opentdb":
+	case "wikimedia_onthisday", "wikimedia_births", "opentdb", "the_trivia_api":
 		return f.historyProvider(provider, want)
 	}
 	return nil, fmt.Errorf("unknown provider %s", provider)

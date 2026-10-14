@@ -1,3 +1,29 @@
+## [1.5.21] — 2026-10-14
+
+Dash-Go 1.5.21 makes the rotating Messages band readable by construction. Instead of forcing every line to fit at whatever size the screen allows, the kiosk now targets a per-tier readable floor (16 px and up for long lines) and, when a non-priority message cannot reach that floor within three lines, it is dropped and replaced — up to four re-picks, then the shortest remaining candidate as the last chance, and if even that is unreadable the current message stays. The work itself moved off the visible moment: the pick and its fit now complete while the previous line is fully visible and static, and the new text is written only after the fade-out, with the fade-in starting one frame after the layout verifies. The same band now carries more of the household's own content: a built-in pool of 278 verified, household-safe quotes, facts, trivia, history, riddles, wellbeing, and family lines ships inside the binary (so the section works with no internet at all), and two new kid-safe online sources join the rotation alongside the trivia and history sources that were already there.
+
+### Features
+
+- **Unreadable messages are dropped, never forced.** Non-priority lines that cannot reach their tier's reading floor within three lines are replaced by readable ones (bounded at four re-picks, with a shortest-remaining last chance); the kiosk never displays an unreadable line and never loops forever.
+- **Built-in household content pool.** A reviewable, source-attributed pool of 278 quotes, facts, trivia, history, riddles, wellbeing, family, and warm compliment lines is embedded in the binary and fills the rotation when the online feeds are slow, stale, or offline.
+- **New kid-safe online sources.** The trivia and history sources join the rotation by default on fresh installs, and two family-safe providers (positive messages and kid-friendly activities) add to the wellbeing and family pools.
+
+### Improvements
+
+- **The rotation works while the line is still.** The pick and its measurement now run while the previous message is fully visible and static; the new text is written only after the fade-out completes, and the fade-in begins one frame after the new layout verifies. No new timers, and no new work on the visible frame.
+- **Readable-size tiers.** Long lines target 16 px or larger and may use up to three lines; the base (non-Lite) rendering path is unchanged — it still fits up to five lines at 26 px and down, exactly as before.
+- **Family board lines are bigger.** The family board's small text steps up from 12 px to 14 px, and the compliment lines gain a small layout containment hint so a text change cannot ripple into the rest of the sidebar.
+- **Rotating feeds are capped before display.** Quotes, trivia, facts, and history lines longer than 200 characters are dropped before they are shown, so a long feed line can never crowd out the weather or force a mid-line break.
+
+### Bug fixes
+
+- **Long lines can no longer break in the middle of a character.** The text limiter now counts characters the way the screen renders them, so an accented, multibyte, or emoji line is never cut in half of a character.
+- **Duplicated and unused front-end code removed.** A second copy of the compliment styling block, an unused spacer element, and two unused helper paths were deleted, keeping the change set small.
+
+### Upgrade notes
+
+- The front-end bundle grows by about 13.6 KB net (owner-approved): this is the size of the new readable-fit contract and the hidden Lite color-fade modes, offset as far as the plan allows by the removed dead code. The base dashboard's fade behavior is unchanged, and a controlled A/B on the kiosk found no measurable difference between the current fade and none, so the existing fade remains the default.
+
 ## [1.5.20] — 2026-10-11
 
 Dash-Go 1.5.20 adds a household-safety content filter to the rotating Messages section so that poor-taste jokes and quotes are removed before they ever reach the screen. It is one check at the single point every message passes through on its way to the kiosk, scoped to the joke and quote feeds: any line that names sexual violence or a person publicly identified with it is dropped — in the clean, joke, and opt-in adult feeds alike, and in owner-edited text too, so re-adding a blocked phrase through the editor does not surface it. The list ships with a deliberately tight built-in set (the sexual-violence terms and the quoted names Bill Cosby, Jared Fogel, and Harvey Weinstein, each chosen to carry little chance of colliding with an innocent line), and the owner can extend it without a code change: keywords appended to the JSON array at `message-keywords.json` next to the other message settings take effect on the next read of the cached feed. Matching is case-insensitive and whitespace-tolerant; a single word must match as a whole word so "rape" never fires inside "grape", while a multi-word name matches the phrase as written.

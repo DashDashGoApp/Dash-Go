@@ -46,6 +46,8 @@ function complimentLiteCommitGeometry(el){
   next.revision=COMP_LITE_GEOMETRY.revision;
   next.cacheKey+="@"+next.revision;
   COMP_LITE_GEOMETRY.metrics=next;COMP_LITE_GEOMETRY.cacheKey=complimentLiteSnapshotKey(next);
+  // A new lane width/height is a new readable geometry: re-admit anything dropped under the old one.
+  if(typeof compUnreadableClear==="function")compUnreadableClear();
   return true;
 }
 function complimentLiteCaptureNow(el){
@@ -155,14 +157,15 @@ function complimentLiteLineCount(text,size,metrics,limit){
   return Math.max(1,lines);
 }
 function complimentLiteReadingFloors(metrics){
-  const base={xl:[64,44,32],base:[48,34,24],compact:[40,28,20],dense:[34,24,18],min:[30,22,16]}[metrics.tier]||[48,34,24];
-  const multiplier=complimentTypographyMultiplier();
-  return base.map(value=>Math.max(COMP_FIT.hardFloor,Math.round(value*multiplier)));
+  // The one COMP_READABLE table drives both fit paths; the multiplier may
+  // raise floors but never lower one below its table value.
+  const table=complimentReadableTier(metrics),multiplier=complimentTypographyMultiplier();
+  return table.floors.map(value=>Math.max(COMP_FIT.hardFloor,Math.round(value*(multiplier>1?multiplier:1))));
 }
 function complimentLiteVisualCaps(metrics){
   const base={xl:92,base:72,compact:58,dense:48,min:40}[metrics.tier]||72;
   const multiplier=complimentTypographyMultiplier();
-  return [base,base*.84,base*.70].map((value,index)=>{
+  return [base,base*.84,base*.70,base*.58].map((value,index)=>{
     const lines=index+1,ratio=complimentFitLineHeight(lines);
     const reserve=complimentVerticalFitReserve(value*multiplier,lines,true);
     return Math.max(COMP_FIT.hardFloor,Math.floor(Math.min(value*multiplier,Math.max(18,metrics.contentHeight-reserve)/(lines*ratio))));
@@ -172,7 +175,7 @@ function complimentLiteMetricsForLines(metrics,lines){
   if(!metrics||lines<=1)return metrics;
   const outer=Math.max(Number(metrics.outerHeight)||0,(Number(metrics.contentHeight)||0)+(Number(metrics.elPadV)||0));
   const compactPad=Math.min(Math.max(0,Number(metrics.elPadV)||0),12);
-  if(!outer||compactPad>=Number(metrics.elPadV)||0)return metrics;
+  if(!outer||compactPad>=Number(metrics.elPadV))return metrics;
   return {...metrics,elPadV:compactPad,contentHeight:Math.max(18,outer-compactPad),layoutLines:lines};
 }
 function complimentLiteLargestForLines(text,metrics,target,floor,cap){
@@ -187,16 +190,29 @@ function complimentLiteLargestForLines(text,metrics,target,floor,cap){
   while(low<=high){const mid=Math.floor((low+high)/2);if(fits(mid)){best=mid;low=mid+1;}else high=mid-1;}
   return best;
 }
-function complimentLiteFit(text,metrics,minimumLines){
+function complimentLiteFit(text,metrics,minimumLines,opts){
+  // Readable contract: non-priority text comes back readable only at or above
+  // its tier drop threshold, else readable:false so the drop loop replaces it.
+  // Priority text is never unreadable: floors 1-3, the priority floor on the
+  // fourth line, the hard floor as last resort on the clamp/ellipsis guard.
   const floors=complimentLiteReadingFloors(metrics),caps=complimentLiteVisualCaps(metrics);
-  const firstTarget=Math.max(1,Math.min(3,Number(minimumLines)||1));
-  for(let target=firstTarget;target<=3;target++){
-    const floor=floors[target-1],size=complimentLiteLargestForLines(text,metrics,target,floor,caps[target-1]);
-    if(size)return {size,lines:target,maxLines:3,fits:true,preferredFloor:floor,targetLines:target,box:metrics,lite:true};
+  const priority=!!(opts&&opts.priority);
+  const maxTarget=priority?COMP_FIT.maxLines:COMP_FIT.maxTargetLines;
+  const firstTarget=Math.max(1,Math.min(maxTarget,Number(minimumLines)||1));
+  for(let target=firstTarget;target<=maxTarget;target++){
+    const floor=target<=3?floors[target-1]:Math.max(floors[2],complimentReadableThreshold(metrics,"priority"));
+    const size=complimentLiteLargestForLines(text,metrics,target,floor,caps[target-1]);
+    if(size)return {size,lines:Math.min(target,complimentLiteLineCount(text,size,metrics,target)),maxLines:target<=3?3:4,fits:true,readable:true,preferredFloor:floor,targetLines:target,box:metrics,lite:true};
   }
-  // Exceptional content (very long pasted material or a hostile token) keeps
-  // the tier's three-line reading floor where possible, then uses the existing
-  // WebKit line clamp/ellipsis rather than silently shrinking ordinary prose.
-  const preferredFloor=floors[2],reserve=complimentVerticalFitReserve(preferredFloor,3,true),emergency=Math.max(COMP_FIT.hardFloor,Math.min(preferredFloor,Math.floor(Math.max(18,metrics.contentHeight-reserve)/(3*complimentFitLineHeight(3)))));
-  return {size:emergency,lines:3,maxLines:3,fits:false,preferredFloor,targetLines:3,box:metrics,lite:true};
+  if(!priority){
+    // Three-line reading floor one last time; if that misses the drop threshold the pick is dropped, never rendered unreadable.
+    const dropFloor=complimentReadableThreshold(metrics,"drop");
+    const size=complimentLiteLargestForLines(text,metrics,3,dropFloor,caps[2]);
+    if(size)return {size,lines:Math.min(3,complimentLiteLineCount(text,size,metrics,3)),maxLines:3,fits:true,readable:true,preferredFloor:dropFloor,targetLines:3,box:metrics,lite:true};
+    return {size:0,lines:3,maxLines:3,fits:false,readable:false,preferredFloor:dropFloor,targetLines:3,box:metrics,lite:true};
+  }
+  const priorityFloor=complimentReadableThreshold(metrics,"priority");
+  const reserve=complimentVerticalFitReserve(priorityFloor,4,true);
+  const emergency=Math.max(COMP_FIT.hardFloor,Math.min(priorityFloor,Math.floor(Math.max(18,metrics.contentHeight-reserve)/(4*complimentFitLineHeight(4)))));
+  return {size:emergency,lines:4,maxLines:4,fits:false,readable:true,preferredFloor:priorityFloor,targetLines:4,box:metrics,lite:true};
 }

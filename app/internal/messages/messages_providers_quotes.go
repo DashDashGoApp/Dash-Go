@@ -25,8 +25,10 @@ func (f *messageFetcher) quoteProvider(provider string, want int) ([]string, err
 		}
 		return mirrorQuoteTexts(jsonutil.List(data["quotes"]), want), nil
 	case "stoic_quotes":
+		// The apex domain 307-redirects to www.; pointing at www directly
+		// saves a round trip on every refresh.
 		var data map[string]any
-		err := f.getJSON("https://stoic-quotes.com/api/quote", nil, &data)
+		err := f.getJSON("https://www.stoic-quotes.com/api/quote", nil, &data)
 		return namedQuoteTexts(data, 0), err
 	case "thequoteshub":
 		// This feed mixes short aphorisms with multi-sentence novel excerpts, so
@@ -39,9 +41,29 @@ func (f *messageFetcher) quoteProvider(provider string, want int) ([]string, err
 		err := f.getJSON("https://favqs.com/api/qotd", nil, &data)
 		return quoteRowsTexts([]map[string]any{jsonutil.Map(data["quote"])}), err
 	case "zenquotes":
+		// /api/quotes returns ~50 attributed quotes per call; /api/random
+		// returns one. The free tier asks for attribution, so the author
+		// stays in the line.
 		var rows []map[string]any
-		err := f.getJSON("https://zenquotes.io/api/random", nil, &rows)
-		return quoteRowsTexts(rows), err
+		err := f.getJSON("https://zenquotes.io/api/quotes", nil, &rows)
+		if err != nil {
+			return nil, err
+		}
+		out := []string{}
+		for _, r := range rows {
+			body := cleanMessageText(r["h"])
+			if body == "" {
+				continue
+			}
+			if author := cleanMessageText(r["a"]); author != "" {
+				body += " — " + author
+			}
+			out = append(out, body)
+			if len(out) >= max(1, want) {
+				break
+			}
+		}
+		return out, nil
 	case "typefit_quotes":
 		var rows []map[string]any
 		err := f.getJSON("https://type.fit/api/quotes", nil, &rows)
@@ -68,6 +90,27 @@ func (f *messageFetcher) quoteProvider(provider string, want int) ([]string, err
 		}
 		rows, err := f.apiNinjas("/v2/randomquotes", params)
 		return quoteRowsTexts(rows), err
+	case "positive_api":
+		// Keyless single-phrase service; last in the wellbeing chain so it
+		// only serves when the established providers fail.
+		var data map[string]any
+		err := f.getJSON("https://positive-api.online/phrase", nil, &data)
+		return []string{cleanMessageText(data["text"])}, err
+	case "bored_api":
+		// Kid-friendly household activity ideas; the API flags each one.
+		var data map[string]any
+		err := f.getJSON("https://bored-api.appbrewery.com/random", nil, &data)
+		if err != nil {
+			return nil, err
+		}
+		if !jsonutil.Truthy(data["kidFriendly"]) {
+			return nil, nil
+		}
+		activity := cleanMessageText(data["activity"])
+		if activity == "" {
+			return nil, nil
+		}
+		return []string{"Idea: " + activity}, nil
 	}
 	return nil, fmt.Errorf("unknown quote provider %s", provider)
 }

@@ -43,7 +43,7 @@ assert.match(liteCompliments,/function complimentLiteScheduleGeometryCapture\(el
 assert.match(liteCompliments,/for\(const node of \[parent,sun,stale\]\)/,"Lite must observe footer geometry sources, not rotating text");
 assert.doesNotMatch(liteCompliments,/observer\.observe\(el\)/,"Lite must not observe #comptext on every message swap");
 assert.doesNotMatch(liteCompliments,/function complimentLiteTextBucket/,"Lite must no longer use broad shape-bucket cache keys");
-const liteFitLogic=(liteCompliments.match(/function complimentLiteFit\(text,metrics,minimumLines\)\{[\s\S]*?\n\}/)?.[0]||"").replace(/\/\/.*$/gm,"");
+const liteFitLogic=(liteCompliments.match(/function complimentLiteFit\(text,metrics,minimumLines,opts\)\{[\s\S]*?\n\}/)?.[0]||"").replace(/\/\/.*$/gm,"");
 assert.ok(liteFitLogic,"Lite message fit function must be present");
 assert.doesNotMatch(liteFitLogic,/getComputedStyle|clientWidth|clientHeight|getBoundingClientRect|scrollWidth|scrollHeight/,"Lite message rotation must not force layout reads");
 assert.match(liteCss,/@supports \(content-visibility:auto\)\{[\s\S]*?html\.profile-lite #calscroll\[data-week-cull-ready="1"\] \.weekrow\{[\s\S]*?content-visibility:auto;[\s\S]*?contain-intrinsic-size:auto var\(--rowheight\);/,
@@ -70,6 +70,18 @@ assert.match(liteCss,/html\.profile-lite #comptext\{[\s\S]*?will-change:auto;[\s
   "Lite messages must drop only the idle compositor hints while keeping the fade");
 assert.doesNotMatch(liteCss,/html\.profile-lite #comptext\{[\s\S]*?transition:none;/,
   "Lite message swaps must retain the existing visual fade");
+// W7 hidden Lite fade modes (owner-set "liteMessageFade" in settings.json): the
+// default "opacity" fade above stays, and each colour mode must also keep a
+// visible transition — never "transition:none" — while swapping through the
+// transparent colour instead of an opacity layer.
+assert.match(liteCss,/html\.profile-lite\[data-litefade="color"\] #comptext\{[\s\S]*?transition:color var\(--compfade\) ease-in-out;/,
+  "the color fade mode must fade the text colour with the shared fade duration");
+assert.match(liteCss,/html\.profile-lite\[data-litefade="color-stepped"\] #comptext\{[\s\S]*?transition:color var\(--compfade\) steps\(6,jump-none\);/,
+  "the color-stepped fade mode must fade the text colour in bounded steps");
+assert.match(liteCss,/#comptext\.comp-fading\{[\s\S]*?color:transparent;/,
+  "a hidden message in the color modes must fade out through the transparent colour");
+assert.doesNotMatch(liteCss,/transition:none/,
+  "no Lite fade mode may remove the message transition");
 assert.match(liteCss,/html\.profile-lite #compliment \.cb-launch,\s*html\.profile-lite #snapback\{[\s\S]*?box-shadow:none;/,
   "Lite paint diet must remove only the selected decorative static shadows");
 

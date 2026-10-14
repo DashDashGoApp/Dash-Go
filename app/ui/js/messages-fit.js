@@ -2,18 +2,37 @@
 // Lite-specific cached geometry and Canvas fitting live in 00b so ordinary
 // cached rotations stay layout-read-free on Pi Zero class devices. A new cache
 // entry receives one bounded rAF verification before it is trusted thereafter.
-const COMP_FIT={hardFloor:12,maxLines:4,maxTargetLines:3,minVisualSize:42,maxVisualSize:72};
+const COMP_FIT={hardFloor:16,maxLines:4,maxTargetLines:3,minVisualSize:42,maxVisualSize:72};
+// Readable-size contract for both fit paths: preferred [1,2,3]-line floors,
+// the drop threshold a non-priority message may never render below, and the
+// fourth-line floor for priority text. The multiplier may raise floors, never lower drop.
+const COMP_READABLE={
+  xl:     {floors:[64,46,36],drop:36,priority:30},
+  base:   {floors:[48,36,28],drop:28,priority:24},
+  compact:{floors:[40,30,22],drop:22,priority:20},
+  dense:  {floors:[34,26,20],drop:20,priority:18},
+  min:    {floors:[30,22,18],drop:18,priority:16}};
 const COMP_FIT_CACHE_LIMIT=120;
 const COMP_FIT_CACHE=new Map();
-// Session-only diagnostics expose rare final CSS-clamp clips in Dashboard
-// Control without storing message text or adding work during rotation.
-const COMP_FIT_DIAGNOSTICS={clipped:0,corrected:0,lastClippedAt:0};
+// Session-only unreadable set, keyed per geometry revision so a lane change
+// re-admits a dropped pick. Keys only; message text is never stored here.
+const COMP_UNREADABLE=new Set();
+const COMP_UNREADABLE_LIMIT=200;
+// Session-only diagnostics for Dashboard Control: clips, corrections, and
+// dropped unreadable picks. Counts and timestamps only, never message text.
+const COMP_FIT_DIAGNOSTICS={clipped:0,corrected:0,lastClippedAt:0,dropped:0,lastDroppedAt:0};
 function complimentFitDiagnostics(){ return {...COMP_FIT_DIAGNOSTICS}; }
+const compUnreadableRevision=()=>{const g=typeof COMP_LITE_GEOMETRY!=="undefined"?COMP_LITE_GEOMETRY:null;return g?Number(g.revision)||0:0;};
+function compUnreadableAdd(key){
+  COMP_UNREADABLE.add(compUnreadableRevision()+"|"+String(key||""));
+  while(COMP_UNREADABLE.size>COMP_UNREADABLE_LIMIT)COMP_UNREADABLE.delete(COMP_UNREADABLE.values().next().value);
+}
+function compUnreadableHas(key){return COMP_UNREADABLE.has(compUnreadableRevision()+"|"+String(key||""));}
+function compUnreadableClear(){ COMP_UNREADABLE.clear(); }
+function noteComplimentDropped(){COMP_FIT_DIAGNOSTICS.dropped+=1;COMP_FIT_DIAGNOSTICS.lastDroppedAt=Date.now();}
 function noteComplimentFitClipped(fit){
-  if(!fit||fit.fits!==false||fit.clipDiagnosticRecorded) return;
-  fit.clipDiagnosticRecorded=true;
-  COMP_FIT_DIAGNOSTICS.clipped+=1;
-  COMP_FIT_DIAGNOSTICS.lastClippedAt=Date.now();
+  if(!fit||fit.fits!==false||fit.clipDiagnosticRecorded)return;
+  fit.clipDiagnosticRecorded=true;COMP_FIT_DIAGNOSTICS.clipped+=1;COMP_FIT_DIAGNOSTICS.lastClippedAt=Date.now();
 }
 function complimentCleanText(text){ return String(text||"").trim().replace(/\s+/g," "); }
 function complimentNumber(style,property){ return parseFloat(style&&style[property])||0; }
@@ -45,8 +64,18 @@ function complimentLineTarget(text,metrics,minimumLines){
   return Math.max(forced,Math.min(COMP_FIT.maxTargetLines,Math.max(minimum,Math.ceil(clean.length/charsPerLine))));
 }
 function complimentTypographyMultiplier(){
-  const raw=typeof messageTypographySizeMultiplier==="function"?messageTypographySizeMultiplier():1;
-  return Number.isFinite(+raw)?Math.max(.60,Math.min(1.50,+raw)):1;
+  const user=messageTypographySizeMultiplier();
+  return Math.max(0.55,Math.min(1.45,Math.max(user,Number(CONFIG.messageTypographyMultiplier)||1)));
+}
+function complimentReadableTier(metrics){
+  const tier=metrics&&metrics.tier?String(metrics.tier):(typeof document!=="undefined"&&document.documentElement&&document.documentElement.dataset&&document.documentElement.dataset.fit)||"";
+  return COMP_READABLE[tier]||COMP_READABLE.base;
+}
+// Raised by the typography multiplier when it is above 1; it may raise floors
+// but never lowers the tier's drop threshold below its table value.
+function complimentReadableThreshold(metrics,kind){
+  const table=complimentReadableTier(metrics),base=kind==="priority"?table.priority:table.drop,m=complimentTypographyMultiplier();
+  return Math.max(base,Math.round(base*(m>1?m:1)));
 }
 function complimentRenderedLineHeight(lines){return Number(lines)<=1?1.03:1.08;}
 function complimentFitLineHeight(lines){return Number(lines)<=1?1.06:1.13;}
@@ -72,7 +101,7 @@ function complimentStartSizeFor(text,metrics,minimumLines){
 }
 function complimentFloorSize(metrics){
   // Preserve a resolution/box-scaled reading floor whenever it fits. The
-  // absolute 12px fallback is reserved for a genuinely constrained box.
+  // absolute hard floor (16px) is reserved for genuinely constrained boxes.
   return Math.max(COMP_FIT.hardFloor,Math.round(complimentVisualCap(metrics)*.39*complimentTypographyMultiplier()));
 }
 function complimentLiteProfile(){ return dashboardLiteProfile(); }
@@ -96,14 +125,16 @@ function resetComplimentFit(el){
   delete el.dataset.fitLines;delete el.dataset.fitSize;delete el.dataset.fitClipped;delete el.dataset.fitLayout;delete el.dataset.fitCorrected;
 }
 function complimentBoxBucket(metrics){return Math.round(metrics.contentWidth/2)*2+"x"+Math.round(metrics.contentHeight/2)*2;}
-function complimentFitKey(text,start,floor,lite,metrics){
-  // Lite must cache exact normalized text against a stable geometry revision;
-  // same-length messages can wrap very differently, especially with long words.
+function complimentFitKey(text,start,floor,lite,metrics,priority){
+  // Lite keys exact normalized text to a stable geometry revision; priority
+  // fits get their own key space so the two kinds of fits never cross-apply.
   const geometry=lite?String((metrics&&metrics.cacheKey)||(metrics&&metrics.revision)||complimentBoxBucket(metrics)):complimentBoxBucket(metrics);
-  return [lite?"lite":"full",complimentTypographyBucket(),geometry,start,floor,complimentCleanText(text)].join("|");
+  return [lite?"lite":"full",complimentTypographyBucket(),geometry,start,floor,priority?"priority":"",complimentCleanText(text)].join("|");
 }
 function applyComplimentFit(el,fit,metrics){
-  const size=Math.max(COMP_FIT.hardFloor,Math.round((fit&&fit.size)||complimentFloorSize(metrics||complimentBoxMetrics(el))));
+  // Non-priority text never falls below the tier drop threshold; priority text uses the 16px hard floor as its fourth-line last resort.
+  const minSize=fit&&fit.priority?COMP_FIT.hardFloor:Math.max(COMP_FIT.hardFloor,complimentReadableThreshold(metrics,"drop"));
+  const size=Math.max(minSize,Math.round((fit&&fit.size)||complimentFloorSize(metrics||complimentBoxMetrics(el))));
   const lines=Math.max(1,Math.round(Number(fit&&fit.lines)||1));
   el.style.fontSize=size+"px";
   el.style.lineHeight=String(complimentRenderedLineHeight(lines));
@@ -127,10 +158,13 @@ function complimentRenderedLineCount(el){
   const lh=parseFloat(getComputedStyle(el).lineHeight)||sz*1.08;
   return Math.max(1,Math.ceil((el.scrollHeight-1)/lh));
 }
-function measureComplimentFit(el,text,start,floor,metrics,minimumLines){
+function measureComplimentFit(el,text,start,floor,metrics,minimumLines,priority){
   const box=metrics||complimentBoxMetrics(el),maxH=Math.max(42,box.outerHeight),maxW=Math.max(1,box.outerWidth);
-  const targetLines=complimentLineTarget(text,box,minimumLines);
-  const preferredFloor=Math.max(COMP_FIT.hardFloor,Math.min(Math.max(COMP_FIT.hardFloor,start-1),floor));
+  // Non-priority text stops at the tier drop threshold; priority text may take a fourth line down to the priority floor, then the hard floor.
+  const drop=complimentReadableThreshold(box,"drop");
+  const priorityFloor=complimentReadableThreshold(box,"priority");
+  const lineCap=priority?COMP_FIT.maxLines:COMP_FIT.maxTargetLines;
+  const targetLines=Math.min(lineCap,complimentLineTarget(text,box,minimumLines));
   const old={fontSize:el.style.fontSize,lineHeight:el.style.lineHeight,webkitLineClamp:el.style.webkitLineClamp,letterSpacing:el.style.letterSpacing,visibility:el.style.visibility};
   el.style.visibility="hidden";el.style.webkitLineClamp="unset";el.style.lineHeight=String(complimentRenderedLineHeight(targetLines));el.style.letterSpacing=targetLines<=1?"-0.025em":"-0.014em";
   const measureAt=sz=>{
@@ -141,19 +175,27 @@ function measureComplimentFit(el,text,start,floor,metrics,minimumLines){
     const budget=complimentFitLineHeight(lines)*lines*sz+box.elPadV;
     return {lines,requiredH:Math.max(el.scrollHeight,budget)};
   };
-  const fits=sz=>{
+  const fitsIn=(sz,lineMax)=>{
     const measured=measureAt(sz);
     const availableH=Math.max(18,maxH-complimentVerticalFitReserve(sz,measured.lines,false));
-    return measured.lines<=COMP_FIT.maxLines&&Math.max(measured.requiredH,el.scrollHeight)<=availableH&&el.scrollWidth<=maxW+1;
+    return measured.lines<=lineMax&&Math.max(measured.requiredH,el.scrollHeight)<=availableH&&el.scrollWidth<=maxW+1;
   };
-  const findLargest=(low,high)=>{let best=low;while(low<=high){const mid=Math.floor((low+high)/2);if(fits(mid)){best=mid;low=mid+1;}else high=mid-1;}return best;};
-  let best=COMP_FIT.hardFloor;
-  if(fits(start))best=start;
-  else if(fits(preferredFloor))best=findLargest(preferredFloor,start-1);
-  else if(fits(COMP_FIT.hardFloor))best=findLargest(COMP_FIT.hardFloor,Math.max(COMP_FIT.hardFloor,preferredFloor-1));
-  el.style.fontSize=best+"px";const finalFits=fits(best),lines=Math.min(COMP_FIT.maxLines,measureAt(best).lines);
+  const findLargest=(low,high,lineMax)=>{let best=low;while(low<=high){const mid=Math.floor((low+high)/2);if(fitsIn(mid,lineMax)){best=mid;low=mid+1;}else high=mid-1;}return best;};
+  let best=0;
+  if(start>=drop&&fitsIn(start,COMP_FIT.maxTargetLines))best=start;
+  else if(fitsIn(drop,COMP_FIT.maxTargetLines))best=findLargest(drop,Math.max(start,drop),COMP_FIT.maxTargetLines);
+  if(priority&&!best){
+    if(fitsIn(priorityFloor,COMP_FIT.maxLines))best=findLargest(priorityFloor,Math.max(start,priorityFloor),COMP_FIT.maxLines);
+    else if(fitsIn(COMP_FIT.hardFloor,COMP_FIT.maxLines))best=findLargest(COMP_FIT.hardFloor,Math.max(COMP_FIT.hardFloor,priorityFloor-1),COMP_FIT.maxLines);
+  }
+  let finalFits=false,lines=targetLines;
+  if(best>0){
+    el.style.fontSize=best+"px";
+    finalFits=fitsIn(best,lineCap);
+    lines=Math.min(lineCap,measureAt(best).lines);
+  }
   el.style.fontSize=old.fontSize;el.style.lineHeight=old.lineHeight;el.style.webkitLineClamp=old.webkitLineClamp;el.style.letterSpacing=old.letterSpacing;el.style.visibility=old.visibility;
-  return {size:best,lines,maxH,maxW,fits:finalFits,preferredFloor,targetLines,box};
+  return {size:best,lines,maxH,maxW,fits:finalFits,readable:priority?true:best>=drop,preferredFloor:floor,targetLines,box};
 }
 function complimentRenderedOverflow(el,fit){
   const planned=Math.max(1,Number(fit&&fit.lines)||1);
@@ -170,60 +212,119 @@ function complimentRenderedOverflow(el,fit){
     return {overflow:lines>planned||vertical||horizontal,lines:Math.max(planned,lines)};
   }finally{el.style.webkitLineClamp=clamp;}
 }
-function complimentCorrectRenderedFit(el,key,fit,metrics,lite,observedLines){
-  const minimum=Math.max(1,Math.min(lite?3:COMP_FIT.maxLines,Number(observedLines)||1));
+function complimentCorrectRenderedFit(el,key,fit,metrics,lite,observedLines,onVerified){
+  const minimum=Math.max(1,Math.min(fit.priority?COMP_FIT.maxLines:lite?3:COMP_FIT.maxLines,Number(observedLines)||1));
   let next;
   if(lite){
     const candidateMetrics=typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,minimum):metrics;
-    next=complimentLiteFit(fit.displayText,candidateMetrics,minimum);
+    next=complimentLiteFit(fit.displayText,candidateMetrics,minimum,{priority:!!fit.priority});
   }else{
     const candidateMetrics=complimentBoxMetrics(el);
     const start=complimentStartSizeFor(fit.displayText,candidateMetrics,minimum);
-    next=measureComplimentFit(el,fit.displayText,start,complimentFloorSize(candidateMetrics),candidateMetrics,minimum);
+    next=measureComplimentFit(el,fit.displayText,start,complimentFloorSize(candidateMetrics),candidateMetrics,minimum,!!fit.priority);
   }
-  next={...next,displayText:fit.displayText,layout:fit.layout||"single",correctionAttempts:Math.max(0,Number(fit.correctionAttempts)||0)+1};
+  // A re-fit below the drop threshold cannot be applied: end with the current fit as the final bounded clip.
+  if(next&&next.readable===false&&!next.priority){
+    fit.renderVerified=true;fit.fits=false;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);
+    if(typeof onVerified!=="function")return;try{onVerified();}catch(_){}
+    return;
+  }
+  next={...next,displayText:fit.displayText,layout:fit.layout||"single",priority:!!fit.priority,correctionAttempts:Math.max(0,Number(fit.correctionAttempts)||0)+1};
   COMP_FIT_DIAGNOSTICS.corrected+=1;
-  cacheComplimentFit(key,next);el.textContent=next.displayText;complimentApplyFitAndVerify(el,key,next,metrics,lite);
+  cacheComplimentFit(key,next);el.textContent=next.displayText;complimentApplyFitAndVerify(el,key,next,metrics,lite,onVerified);
 }
-function complimentScheduleRenderedVerification(el,key,fit,metrics,lite){
+function complimentScheduleRenderedVerification(el,key,fit,metrics,lite,onVerified){
   if(!el||!key||fit.renderVerified||fit.renderVerifyPending)return;
   fit.renderVerifyPending=true;
+  const notify=()=>{
+    if(typeof onVerified!=="function")return;
+    try{onVerified();}catch(_){}
+  };
   const verify=()=>{
     fit.renderVerifyPending=false;
-    if(el.__dashComplimentFitKey!==key||el.__dashComplimentFit!==fit)return;
+    if(el.__dashComplimentFitKey!==key||el.__dashComplimentFit!==fit){notify();return;}
     const observed=complimentRenderedOverflow(el,fit);
-    if(!observed.overflow){fit.renderVerified=true;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);return;}
-    if(Number(fit.correctionAttempts)||0){fit.renderVerified=true;fit.fits=false;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);return;}
-    complimentCorrectRenderedFit(el,key,fit,metrics,lite,observed.lines);
+    if(!observed.overflow){fit.renderVerified=true;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);notify();return;}
+    if(Number(fit.correctionAttempts)||0){fit.renderVerified=true;fit.fits=false;noteComplimentFitClipped(fit);cacheComplimentFit(key,fit);notify();return;}
+    complimentCorrectRenderedFit(el,key,fit,metrics,lite,observed.lines,notify);
   };
   if(typeof requestAnimationFrame==="function")requestAnimationFrame(verify);else setTimeout(verify,0);
 }
-function complimentApplyFitAndVerify(el,key,fit,metrics,lite){
+function complimentApplyFitAndVerify(el,key,fit,metrics,lite,onVerified){
   el.__dashComplimentFitKey=key;el.__dashComplimentFit=fit;
-  applyComplimentFit(el,fit,metrics);complimentScheduleRenderedVerification(el,key,fit,metrics,lite);
+  applyComplimentFit(el,fit,metrics);complimentScheduleRenderedVerification(el,key,fit,metrics,lite,onVerified);
 }
-function fitCompliment(rawText){
+function fitCompliment(rawText,opts){
   const el=document.getElementById("comptext");if(!el)return;
   const text=complimentCleanText(rawText===undefined?(el.__dashComplimentRawText||el.textContent||""):rawText);
   el.__dashComplimentRawText=text;
+  // Without explicit options the refit keeps the displayed item's priority, so a
+  // four-line priority fit is never measured against the non-priority drop rule.
+  const priority=opts?!!opts.priority:!!(typeof _lastCompItem!=="undefined"&&_lastCompItem&&_lastCompItem.priority);
   // Never let a previous message's inline size determine the next fit.
   resetComplimentFit(el);
+  applyComplimentFitResult(el,computeComplimentFit(text,el,{priority}));
+}
+function computeComplimentFit(text,el,opts){
   const lite=complimentLiteProfile(),metrics=lite?complimentLiteMetricsForFit(el):complimentBoxMetrics(el);
-  const baseline=lite?complimentLiteFit(text,metrics):null;
+  const priority=!!(opts&&opts.priority);
+  const baseline=lite?complimentLiteFit(text,metrics,1,{priority}):null;
   const start=lite?baseline.size:complimentStartSizeFor(text,metrics);
   const floor=lite?baseline.preferredFloor:complimentFloorSize(metrics);
-  const key=complimentFitKey(text,start,floor,lite,metrics),cached=COMP_FIT_CACHE.get(key);
-  if(cached){el.textContent=cached.displayText||text;complimentApplyFitAndVerify(el,key,cached,metrics,lite);return;}
+  const key=complimentFitKey(text,start,floor,lite,metrics,priority),cached=COMP_FIT_CACHE.get(key);
+  if(cached)return {fit:cached,metrics,lite,key};
   const assess=(displayText,candidate)=>{
     const plannedLines=Math.max(1,Number(candidate&&candidate.lines)||1);
-    if(lite)return complimentLiteFit(displayText,typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,plannedLines):metrics,plannedLines);
+    if(lite)return complimentLiteFit(displayText,typeof complimentLiteMetricsForLines==="function"?complimentLiteMetricsForLines(metrics,plannedLines):metrics,plannedLines,{priority});
     if(plannedLines>1)el.dataset.fitLines=String(plannedLines);else delete el.dataset.fitLines;
     const candidateMetrics=complimentBoxMetrics(el),candidateStart=complimentStartSizeFor(displayText,candidateMetrics,plannedLines),candidateFloor=complimentFloorSize(candidateMetrics);
-    el.textContent=displayText;return measureComplimentFit(el,displayText,candidateStart,candidateFloor,candidateMetrics,plannedLines);
+    el.textContent=displayText;return measureComplimentFit(el,displayText,candidateStart,candidateFloor,candidateMetrics,plannedLines,priority);
   };
   const decision=typeof complimentLayoutChoose==="function"?complimentLayoutChoose(text,assess):{candidate:{displayText:text,kind:"single"},fit:assess(text)};
-  const fit={...(decision.fit||baseline||{}),displayText:(decision.candidate&&decision.candidate.displayText)||text,layout:(decision.candidate&&decision.candidate.kind)||"single"};
-  el.textContent=fit.displayText;cacheComplimentFit(key,fit);complimentApplyFitAndVerify(el,key,fit,metrics,lite);
+  const fit={...(decision.fit||baseline||{}),displayText:(decision.candidate&&decision.candidate.displayText)||text,layout:(decision.candidate&&decision.candidate.kind)||"single",priority};
+  return {fit,metrics,lite,key};
+}
+function applyComplimentFitResult(el,result,onVerified){
+  const fit=result.fit,metrics=result.metrics,lite=result.lite,key=result.key;
+  el.__dashComplimentFitKey=key;el.__dashComplimentFit=fit;
+  // A non-priority message that cannot reach the tier drop threshold is never rendered:
+  // the lane stays empty for this rotation, and the tap target #compliment stays intact.
+  if(fit&&fit.readable===false){
+    el.textContent="";applyComplimentFit(el,fit,metrics);
+    if(typeof onVerified!=="function")return;try{onVerified();}catch(_){}
+    return;
+  }
+  el.textContent=(fit&&fit.displayText)||"";
+  cacheComplimentFit(key,fit);
+  applyComplimentFit(el,fit,metrics);
+  if(fit.renderVerified||fit.renderVerifyPending){
+    // Another verification already owns this element's fit: one fallback rAF keeps the
+    // double-rAF rule — the fade-in starts only after the element painted at opacity 0.
+    if(typeof onVerified!=="function")return;
+    if(typeof requestAnimationFrame==="function")requestAnimationFrame(onVerified);else setTimeout(onVerified,0);
+    return;
+  }
+  complimentScheduleRenderedVerification(el,key,fit,metrics,lite,onVerified);
+}
+// Hidden Lite fade-mode selector: opacity is the default and leaves the base
+// CSS untouched; color / color-stepped fade the text colour instead of an
+// opacity layer. Owner-set in settings.json only — the fade contract forbids UI.
+function liteMessageFadeMode(raw){
+  const value=typeof raw==="string"?raw:(typeof SETTINGS!=="undefined"&&SETTINGS?SETTINGS.liteMessageFade:"");
+  const mode=String(value||"").toLowerCase();
+  return mode==="color"||mode==="color-stepped"?mode:"opacity";
+}
+// Single funnel for every #comptext visibility change, so pause, force, and
+// instant swaps behave identically in all fade modes.
+function compSetVisible(el,visible){
+  if(!el||!el.style)return;
+  if(liteMessageFadeMode()==="opacity"){
+    el.style.opacity=visible?"1":"0";
+    if(el.classList)el.classList.remove("comp-fading");
+  }else{
+    el.style.opacity="";
+    if(el.classList)el.classList.toggle("comp-fading",!visible);
+  }
 }
 function complimentFadeValueMs(value){const raw=Number(value);return Number.isFinite(raw)?Math.max(0,Math.min(5000,Math.round(raw))):750;}
 function complimentFadeLabel(value){const ms=complimentFadeValueMs(value);if(ms===0)return "Instant";if(ms<=150)return "Very fast";if(ms<=350)return "Fast";if(ms<=800)return "Normal";if(ms<=1500)return "Slow";return "Very slow";}

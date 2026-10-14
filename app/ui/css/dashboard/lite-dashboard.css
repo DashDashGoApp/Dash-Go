@@ -31,6 +31,20 @@ html.profile-lite #comptext{
   will-change:auto;
   backface-visibility:visible;
 }
+/* W7 hidden Lite fade modes (owner-set "liteMessageFade" in settings.json; the
+   "opacity" default above stays untouched). Instead of fading an element
+   opacity layer — which forces a compositor surface on a non-composited
+   WebKit — the text colour fades; .comp-fading is toggled by compSetVisible. */
+html.profile-lite[data-litefade="color"] #comptext{
+  transition:color var(--compfade) ease-in-out;
+}
+html.profile-lite[data-litefade="color-stepped"] #comptext{
+  transition:color var(--compfade) steps(6,jump-none);
+}
+html.profile-lite[data-litefade="color"] #comptext.comp-fading,
+html.profile-lite[data-litefade="color-stepped"] #comptext.comp-fading{
+  color:transparent;
+}
 
 /* Remove only decorative static drop shadows. Keep functional inset contrast
    such as the calendar Today ring and preserve all scroll-container layers. */

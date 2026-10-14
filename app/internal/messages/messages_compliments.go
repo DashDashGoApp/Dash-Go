@@ -15,8 +15,10 @@ import (
 
 func cleanTextLimit(v any, limit int) string {
 	s := strings.TrimSpace(controlChars.ReplaceAllString(jsonutil.StringValue(v), " "))
-	if len(s) > limit {
-		s = s[:limit]
+	// The limit is in runes, never bytes: a byte cut can split a multi-byte
+	// rune (em dash, emoji) and store invalid UTF-8 on the kiosk.
+	if runes := []rune(s); len(runes) > limit {
+		s = string(runes[:limit])
 	}
 	return s
 }

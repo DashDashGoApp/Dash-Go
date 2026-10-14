@@ -14,7 +14,8 @@ let SETTINGS={ alertsMutedUntil:0, alertsDocked:false, alertsDockedRank:0,
                calendarTextWeight:700, calendarTextSize:0, calendarTextFont:"default",
                clockTextSize:0, clockTextWeight:600, clockTextFont:"default",
                weatherTextSize:0, weatherTextWeight:600, weatherTextFont:"default",
-               messageTextSize:0, messageTextWeight:800, messageTextFont:"default" };
+               messageTextSize:0, messageTextWeight:800, messageTextFont:"default",
+               liteMessageFade:"opacity" };
 // Early modules use this mirrored object instead of touching the later lexical
 // SETTINGS binding. Keep it synchronized whenever runtime settings are replaced.
 function syncDashboardRuntimeSettings(){
@@ -233,7 +234,7 @@ const DASHBOARD_SETTINGS_IMPACT={
 };
 const DASHBOARD_SETTINGS_KNOWN_KEYS=new Set([
   ...Object.values(DASHBOARD_SETTINGS_IMPACT).flatMap(set=>[...set]),
-  "showInteractiveMaps","mapImageStyle","radarCustomTiles","radarCustomWms","pixelShiftEnabled","allowPrivateWxApi"
+  "showInteractiveMaps","mapImageStyle","radarCustomTiles","radarCustomWms","pixelShiftEnabled","allowPrivateWxApi","liteMessageFade"
 ]);
 function dashboardSettingsImpact(patch){
   const keys=Object.keys(patch||{});
@@ -281,6 +282,10 @@ function applySettings(s){
   if(Number.isFinite(+CONFIG.rowHeight)) root.style.setProperty("--dash-rowheight-preference",(+CONFIG.rowHeight)+"px");
   if(Number.isFinite(+CONFIG.sidebarWidth)) root.style.setProperty("--dash-sidebarwidth-preference",(+CONFIG.sidebarWidth)+"px");
   if(Number.isFinite(+CONFIG.complimentFadeMs)) root.style.setProperty("--compfade",(+CONFIG.complimentFadeMs)+"ms");
+  // Hidden Lite fade mode (owner-set in settings.json only; no Profile/Control
+  // UI): the attribute gates the Lite color-mode rules, default "opacity".
+  if(typeof s.liteMessageFade==="string")SETTINGS.liteMessageFade=liteMessageFadeMode(s.liteMessageFade);
+  root.setAttribute("data-litefade",liteMessageFadeMode());
 
   if(impact.full||impact.visual) applyVisualSettings();
   if(impact.full||impact.typography) applyDashboardTypographySettings();
@@ -363,5 +368,5 @@ async function postSettings(){
     return true;
   }catch(err){ console.warn("settings save failed",err); return false; }
 }
-
+if(typeof document!=="undefined"&&document.documentElement)document.documentElement.setAttribute("data-litefade",liteMessageFadeMode());
 applyVisualSettings();

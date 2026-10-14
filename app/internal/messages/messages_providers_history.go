@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
@@ -42,6 +43,30 @@ func (f *messageFetcher) historyProvider(provider string, want int) ([]string, e
 			if question != "" && answer != "" {
 				out = append(out, question+" Answer: "+answer)
 			}
+		}
+		return out, nil
+	case "the_trivia_api":
+		// The Trivia API is keyless and returns several questions per call.
+		// The category list mirrors opentdb's household-safe policy: no
+		// society-and-culture, film-and-tv, or TV-game trivia.
+		params := url.Values{
+			"limit":        {strconvI(clamp(want, 1, 10))},
+			"difficulties": {"easy,medium"},
+			"categories":   {"science,geography,general_knowledge,food_and_drink,arts_and_literature,sport_and_leisure,history"},
+		}
+		var rows []map[string]any
+		err := f.getJSON("https://the-trivia-api.com/v2/questions?"+params.Encode(), nil, &rows)
+		if err != nil {
+			return nil, err
+		}
+		out := []string{}
+		for _, row := range rows {
+			question := cleanMessageText(jsonutil.Map(row["question"])["text"])
+			answer := cleanMessageText(row["correctAnswer"])
+			if question == "" || answer == "" {
+				continue
+			}
+			out = append(out, strings.TrimRight(question, ".!?")+"? Answer: "+strings.TrimRight(answer, ". ")+".")
 		}
 		return out, nil
 	}
