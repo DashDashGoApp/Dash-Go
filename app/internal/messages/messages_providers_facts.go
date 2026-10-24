@@ -41,10 +41,9 @@ func (f *messageFetcher) factProvider(provider string, want int) ([]string, erro
 			return nil, err
 		}
 		tfa := jsonutil.Map(data["tfa"])
-		title := cleanMessageText(tfa["displaytitle"])
-		if title == "" {
-			title = strings.ReplaceAll(cleanMessageText(tfa["title"]), "_", " ")
-		}
+		// The plain page title: the feed's displaytitle carries HTML
+		// markup that would leak into the ticker line.
+		title := strings.ReplaceAll(cleanMessageText(tfa["title"]), "_", " ")
 		extract := cleanMessageText(tfa["extract"])
 		if title == "" || extract == "" {
 			return nil, nil

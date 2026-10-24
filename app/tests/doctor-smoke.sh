@@ -122,6 +122,8 @@ cat > "$FIXTURE/cache/test-crontab" <<EOF_CRON
 5 9 * * * echo keep-me
 */20 * * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --gen-events-cache >/dev/null 2>&1
 17 5 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1
+17 17 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1
+@reboot sleep 120 && $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1
 0 4 1 * * $FIXTURE/bin/update-holidays.sh
 22 4 */3 * * $FIXTURE/bin/update-iss-passes.sh >/dev/null 2>&1
 37 4 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/gen-default-calendars.sh >/dev/null 2>&1
@@ -231,10 +233,14 @@ grep -q '"events"' "$FIXTURE/cache/events.cache.json"
 
 event_line="*/20 * * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --gen-events-cache >/dev/null 2>&1"
 message_line="17 5 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1"
+message_afternoon_line="17 17 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1"
+message_boot_line="@reboot sleep 120 && $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-control-server --update-message-feeds >/dev/null 2>&1"
 housekeeping_line="7 3 * * * $FIXTURE/bin/dashboard-lowprio.sh $FIXTURE/bin/dashboard-housekeeping.sh >/dev/null 2>&1"
 health_guard_line="*/30 * * * * $FIXTURE/bin/dashboard-health-guard.sh >/dev/null 2>&1"
 [ "$(grep -Fxc "$event_line" "$FIXTURE/cache/test-crontab")" = 1 ]
 [ "$(grep -Fxc "$message_line" "$FIXTURE/cache/test-crontab")" = 1 ]
+[ "$(grep -Fxc "$message_afternoon_line" "$FIXTURE/cache/test-crontab")" = 1 ]
+[ "$(grep -Fxc "$message_boot_line" "$FIXTURE/cache/test-crontab")" = 1 ]
 [ "$(grep -Fxc "$housekeeping_line" "$FIXTURE/cache/test-crontab")" = 1 ]
 [ "$(grep -Fxc "$health_guard_line" "$FIXTURE/cache/test-crontab")" = 1 ]
 grep -Fqx "0 4 1 * * $FIXTURE/bin/update-holidays.sh" "$FIXTURE/cache/test-crontab"

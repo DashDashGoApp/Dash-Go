@@ -43,7 +43,8 @@ func (f *messageFetcher) quoteProvider(provider string, want int) ([]string, err
 	case "zenquotes":
 		// /api/quotes returns ~50 attributed quotes per call; /api/random
 		// returns one. The free tier asks for attribution, so the author
-		// stays in the line.
+		// stays in the line. Use the plain-text field: the feed's HTML
+		// variant leaks markup into the ticker line.
 		var rows []map[string]any
 		err := f.getJSON("https://zenquotes.io/api/quotes", nil, &rows)
 		if err != nil {
@@ -51,7 +52,7 @@ func (f *messageFetcher) quoteProvider(provider string, want int) ([]string, err
 		}
 		out := []string{}
 		for _, r := range rows {
-			body := cleanMessageText(r["h"])
+			body := cleanMessageText(r["q"])
 			if body == "" {
 				continue
 			}

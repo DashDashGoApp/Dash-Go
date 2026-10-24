@@ -502,6 +502,11 @@ dashboard_cron_expected_lines(){
   [ -x "$BIN_DIR/update-iss-passes.sh" ] && printf '22 4 */3 * * %s/update-iss-passes.sh >/dev/null 2>&1\n' "$BIN_DIR"
   [ -x "$BIN_DIR/gen-default-calendars.sh" ] && printf '37 4 * * * %s %s/gen-default-calendars.sh >/dev/null 2>&1\n' "$lowprio" "$BIN_DIR"
   [ -x "$BIN_DIR/dashboard-control-server" ] && printf '17 5 * * * %s %s/dashboard-control-server --update-message-feeds >/dev/null 2>&1\n' "$lowprio" "$BIN_DIR"
+  # A second daily window plus a boot-time catch-up: a missed 05:17 refresh
+  # (device down or rebooted afterwards) heals at the next window or boot
+  # instead of leaving the rotating messages stale for a full day.
+  [ -x "$BIN_DIR/dashboard-control-server" ] && printf '17 17 * * * %s %s/dashboard-control-server --update-message-feeds >/dev/null 2>&1\n' "$lowprio" "$BIN_DIR"
+  [ -x "$BIN_DIR/dashboard-control-server" ] && printf '@reboot sleep 120 && %s %s/dashboard-control-server --update-message-feeds >/dev/null 2>&1\n' "$lowprio" "$BIN_DIR"
   [ -x "$BIN_DIR/dashboard-control-server" ] && printf '%s %s %s/dashboard-control-server --gen-events-cache >/dev/null 2>&1\n' "$cadence" "$lowprio" "$BIN_DIR"
   [ -x "$BIN_DIR/dashboard-housekeeping.sh" ] && printf '7 3 * * * %s %s/dashboard-housekeeping.sh >/dev/null 2>&1\n' "$lowprio" "$BIN_DIR"
   [ -x "$BIN_DIR/dashboard-health-guard.sh" ] && printf '*/30 * * * * %s/dashboard-health-guard.sh >/dev/null 2>&1\n' "$BIN_DIR"

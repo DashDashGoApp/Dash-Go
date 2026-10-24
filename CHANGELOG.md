@@ -1,3 +1,16 @@
+## [1.5.22] — 2026-10-23
+
+Dash-Go 1.5.22 fixes three things the kiosk made visible in the field: the weather sidebar's UV and air-quality pills no longer clip at the edge of the column when both pills do not fit one line — they wrap to a second line instead; two rotating-message sources stop leaking raw HTML markup into the ticker line; and the message refresh schedule gains a second daily window plus a boot-time catch-up, so a day when the 05:17 refresh is missed (the device was down, or it rebooted afterwards) heals itself at the next window or the next boot instead of leaving the section stale for a full day.
+
+### Bug fixes
+
+- **The air-quality and UV pills no longer clip.** The pill row in the current-conditions block wraps to a second line when the sidebar column is too narrow to hold both pills, instead of being cut off at the edge of the block.
+- **HTML markup no longer leaks into the rotating messages.** The ZenQuotes source now reads the feed's plain-text field (its HTML variant was surfacing as tags on screen), and the Wikimedia featured-article line now uses the plain page title (the feed's display-title field carries HTML markup).
+
+### Improvements
+
+- **The message refresh heals a missed day.** Alongside the 05:17 refresh, the scheduler now runs a second daily refresh at 17:17 and a boot-time catch-up 120 seconds after any boot, both through the same low-priority, bounded refresh job. No new resident process and no new work on the running server: the existing one-shot job simply has two more windows to run in.
+
 ## [1.5.21] — 2026-10-14
 
 Dash-Go 1.5.21 makes the rotating Messages band readable by construction. Instead of forcing every line to fit at whatever size the screen allows, the kiosk now targets a per-tier readable floor (16 px and up for long lines) and, when a non-priority message cannot reach that floor within three lines, it is dropped and replaced — up to four re-picks, then the shortest remaining candidate as the last chance, and if even that is unreadable the current message stays. The work itself moved off the visible moment: the pick and its fit now complete while the previous line is fully visible and static, and the new text is written only after the fade-out, with the fade-in starting one frame after the layout verifies. The same band now carries more of the household's own content: a built-in pool of 278 verified, household-safe quotes, facts, trivia, history, riddles, wellbeing, and family lines ships inside the binary (so the section works with no internet at all), and two new kid-safe online sources join the rotation alongside the trivia and history sources that were already there.

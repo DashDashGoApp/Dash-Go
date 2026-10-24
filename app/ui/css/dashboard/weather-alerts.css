@@ -49,8 +49,10 @@ html.demo-mode #alerttab{top:36px;}
 @keyframes alertpulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
 
 /* UV / air-quality pills inside the current-conditions block. The colored
-   left edge is the standard category color; text stays theme-colored. */
-.wxpills{display:inline-flex;gap:10px;margin-top:3px;}
+   left edge is the standard category color; text stays theme-colored. The
+   row wraps to a second line instead of clipping at the block edge when the
+   sidebar column is too narrow for both pills. */
+.wxpills{display:inline-flex;flex-wrap:wrap;gap:10px;row-gap:3px;margin-top:3px;max-width:100%;}
 .pill{
   font-family:var(--mono);font-size:14px;padding:1px 8px;border-radius:9px;
   border:1px solid var(--line);border-left-width:4px;color:var(--fg);
