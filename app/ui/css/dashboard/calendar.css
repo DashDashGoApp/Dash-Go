@@ -205,5 +205,15 @@ html[data-theme="paper"] .ev.appcalgroup,html[data-theme="softmorning"] .ev.appc
 #pop.eventpop .routine-calendar-step input{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto}
 #pop.eventpop .routine-calendar-session small{color:var(--dim);font-weight:750}
 
-/* Scrolling week rows fade out at the pane edge instead of cutting glyphs. */
-#calscroll{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),rgba(0,0,0,0));mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),rgba(0,0,0,0));}
+/* Scrolling week rows fade out at the pane edge instead of cutting glyphs.
+   This is a static overlay on the pane, NOT a mask-image on the scroller: with
+   compositing disabled on the Pi (WEBKIT_DISABLE_COMPOSITING_MODE=1) a mask on
+   a scrolling container forces the whole masked subtree to be re-rasterized on
+   every repaint of the window, which made event tags flicker and land a pixel
+   off while the rotating message repainted. The overlay paints the identical
+   gradient once, over the pane, and costs a single flat fill. */
+#calwrap::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:26px;
+  z-index:2;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(0,0,0,0),var(--bg));
+}

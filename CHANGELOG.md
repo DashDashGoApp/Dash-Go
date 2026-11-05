@@ -1,3 +1,22 @@
+## [1.5.23] — 2026-11-05
+
+Dash-Go 1.5.23 fixes the calendar header that named the same weekday twice when the visible week crossed a daylight-saving changeover, and stops the calendar pane from re-rasterizing its whole grid every time another part of the dashboard repaints. It also makes four date-arithmetic paths DST-safe and removes two sources of needless style invalidation.
+
+### Bug fixes
+
+- **The weekday header no longer repeats a day.** The header row stepped by `i × 86400000` milliseconds, so a week containing a DST changeover landed column two at 23:00 of the previous day and printed `Sunday Sunday Monday …` for the whole week (Nov 1 2026 was the fall-back Sunday). It now steps by calendar days. The Agenda's day list used the same arithmetic and stepped the same way; it now shares the calendar-day helper.
+- **Weekly and bi-weekly message schedules count weeks by calendar days.** The week index was floor-divided from a millisecond span, so a span crossing a changeover could report one week index too low and skip a scheduled message. The index is now computed from a rounded day count.
+- **Unbounded `DAILY`/`WEEKLY` recurrence series no longer skip an occurrence after a changeover.** The fast-forward step that jumps a series into the visible window rounds the day count before dividing, so a 25-hour day cannot land the series one step short.
+
+### Security
+
+- **`golang.org/x/net` is bumped to v0.62.0 for GO-2026-6860.** The advisory is reachable from the notification dispatcher through Apprise's HTML parsing (`html.Parse`); `govulncheck` now reports no reachable known vulnerabilities.
+
+### Performance and reliability
+
+- **The calendar pane's edge fade is a static overlay, not a mask on the scrolling grid.** With compositing disabled on the Pi, a `mask-image` on a scroll container re-rasterizes the entire masked subtree on every repaint of the window — the calendar repainted its whole grid whenever the rotating message refreshed, which is what made event tags flicker and land a pixel off. The fade is now one flat gradient painted over the pane, with the same 26 px band and the same colour.
+- **The Lists dock writes its visibility only when it changes.** The dock rewrote the same `hidden` and `aria-hidden` attributes on every stream frame; an attribute write is a style invalidation even when the value is identical.
+
 ## [1.5.22] — 2026-10-23
 
 Dash-Go 1.5.22 fixes three things the kiosk made visible in the field: the weather sidebar's UV and air-quality pills no longer clip at the edge of the column when both pills do not fit one line — they wrap to a second line instead; two rotating-message sources stop leaking raw HTML markup into the ticker line; and the message refresh schedule gains a second daily window plus a boot-time catch-up, so a day when the 05:17 refresh is missed (the device was down, or it rebooted afterwards) heals itself at the next window or the next boot instead of leaving the section stale for a full day.

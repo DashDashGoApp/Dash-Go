@@ -101,7 +101,9 @@ function expand(ev, winStart, winEnd){
   // Fast-forward to just before the window when COUNT is unbounded, instead of
   // stepping one occurrence at a time from a possibly years-old DTSTART.
   if(count===Infinity && t<winStart){
-    const steps=Math.floor((startOfDay(winStart)-startOfDay(t))/(stepDays*DAY));
+    // Day count is rounded before dividing: DST makes some days 23/25 hours, so
+    // raw ms division can land one step short and skip an occurrence.
+    const steps=Math.floor(Math.round((startOfDay(winStart)-startOfDay(t))/DAY)/stepDays);
     if(steps>0){
       t=new Date(t.getFullYear(),t.getMonth(),t.getDate()+steps*stepDays,
                  s.getHours(),s.getMinutes(),s.getSeconds());

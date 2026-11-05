@@ -45,7 +45,9 @@ function activeScheduledMessages(items){
       if(rec==="weekly" || rec==="biweekly" || rec==="xweeks"){
         const days=Array.isArray(m.days)&&m.days.length ? m.days.map(Number) : [start.getDay()];
         if(!days.includes(now.getDay())) continue;
-        const weeks=Math.floor((today-startDay)/(86400000*7));
+        // Rounded day difference: a span that crosses a DST changeover is
+        // 23 or 25 hours per day, and plain floor division drops a whole week.
+        const weeks=Math.floor(Math.round((today-startDay)/DAY)/7);
         if(rec==="biweekly" && weeks%2!==0) continue;
         if(rec==="xweeks"){
           const interval=Math.max(3,Math.min(4,+m.intervalWeeks||3));

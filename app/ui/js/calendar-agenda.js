@@ -76,7 +76,9 @@ function renderAgenda(){
     return "IN "+i+" DAYS";
   };
   for(let i=0,days=agendaVisibleDays();i<days;i++){
-    const day=new Date(+today+i*DAY),dayKey=agendaDayKey(day);
+    // DST-safe day stepping (see renderCalHead): ms arithmetic repeats a day
+    // across a changeover, which shifted every agenda block after it.
+    const day=addDays(today,i),dayKey=agendaDayKey(day);
     const dow=day.getDay(),evs=agendaOrderedEvents(eventsOnDay(day));
     const block=el("div","agday"+(i===0?" today":"")+(dow===6?" sat":dow===0?" sun":""));
     block.dataset.agendaDay=dayKey;block.dataset.agendaKey="day:"+dayKey;

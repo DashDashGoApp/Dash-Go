@@ -65,7 +65,10 @@ function renderCalHead(){
   const fmt=FMT.weekday;
   const abbr=new Intl.DateTimeFormat(LOCALE,{weekday:"short"});
   for(let i=0;i<7;i++){
-    const d=new Date(+base+i*DAY);
+    // Calendar-day arithmetic, not ms addition: a week that contains a DST
+    // changeover makes +i*DAY land at 23:00 of the previous day, which labeled
+    // two columns with the same weekday (the "Sunday Sunday Monday" header).
+    const d=addDays(base,i);
     const dow=d.getDay();
     const div=el("div",dow===6?"dow-sat":dow===0?"dow-sun":"");
     div.appendChild(el("span","dow-full",fmt.format(d)));

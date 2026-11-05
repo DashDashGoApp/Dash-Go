@@ -99,8 +99,11 @@ function dashboardListsDockSetVisible(visible){
     app.classList.toggle("lists-dock-expanded",visible&&DASH_LIST_DOCK.expanded);
   }
   if(shell){
-    shell.hidden=!visible;
-    shell.setAttribute("aria-hidden",String(!visible));
+    // Write only on change: an attribute write is a style invalidation even
+    // when the value is identical, and this runs on every Lists stream frame.
+    if(shell.hidden!==!visible)shell.hidden=!visible;
+    const aria=String(!visible);
+    if(shell.getAttribute("aria-hidden")!==aria)shell.setAttribute("aria-hidden",aria);
     if(!visible){
       shell.querySelector("#listsdock-head")?.replaceChildren();
       shell.querySelector("#listsdock-body")?.replaceChildren();

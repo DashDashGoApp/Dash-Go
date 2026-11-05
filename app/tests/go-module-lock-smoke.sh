@@ -60,8 +60,8 @@ need_notice 'github.com/tdewolff/parse/v2' 'v2.8.12' 'MIT'
 # Do not retain a stale indirect requirement merely because it also appears in
 # the broader module metadata graph; `go mod tidy -diff` blocks that drift.
 for spec in \
-  'golang.org/x/net v0.60.0 BSD 3-Clause' \
-  'golang.org/x/crypto v0.57.0 BSD 3-Clause'; do
+  'golang.org/x/net v0.62.0 BSD 3-Clause' \
+  'golang.org/x/crypto v0.58.0 BSD 3-Clause'; do
   module=${spec%% *}
   rest=${spec#* }
   version=${rest%% *}
@@ -81,9 +81,9 @@ done
 for spec in \
   'github.com/unraid/apprise-go|v0.2.6|BSD 2-Clause' \
   'github.com/gomarkdown/markdown|v0.0.0-20260417124207-7d523f7318df|BSD 2-Clause' \
-  'golang.org/x/crypto|v0.57.0|BSD 3-Clause' \
+  'golang.org/x/crypto|v0.58.0|BSD 3-Clause' \
   'golang.org/x/mod|v0.36.0|BSD 3-Clause' \
-  'golang.org/x/net|v0.60.0|BSD 3-Clause' \
+  'golang.org/x/net|v0.62.0|BSD 3-Clause' \
   'golang.org/x/sync|v0.21.0|BSD 3-Clause' \
   'golang.org/x/sys|v0.48.0|BSD 3-Clause' \
   'golang.org/x/term|v0.46.0|BSD 3-Clause' \
@@ -103,9 +103,9 @@ fi
 if grep -Fq 'golang.org/x/crypto v0.51.0' "$MOD" "$SUM"; then
   fail 'vulnerable golang.org/x/crypto v0.51.0 lock residue must not remain'
 fi
-need_line "$SUM" 'golang.org/x/crypto v0.57.0 h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M='
-need_line "$SUM" 'golang.org/x/crypto v0.57.0/go.mod h1:Fdz0i5U6CoizGwLda9DttjSk6qlZo25zYNtR+ycvuZA='
-need_line "$SUM" 'golang.org/x/net v0.60.0 h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='
-need_line "$SUM" 'golang.org/x/net v0.60.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg='
+need_line "$SUM" 'golang.org/x/crypto v0.58.0 h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54='
+need_line "$SUM" 'golang.org/x/crypto v0.58.0/go.mod h1:Xh+kl5A+M0gMiWDytH2Hhr5Z7WbNCpv/eB/EFgfSk+w='
+need_line "$SUM" 'golang.org/x/net v0.62.0 h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='
+need_line "$SUM" 'golang.org/x/net v0.62.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI='
 
 printf 'PASS: reviewed Go dependency notices and tidy Go dependency locks are present; the builder will verify the linked release-binary graph\n'
