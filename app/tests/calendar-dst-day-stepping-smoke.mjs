@@ -16,6 +16,7 @@ const read = (rel) => readFileSync(resolve(root, rel), "utf8");
 const core = read("ui/js/data-core.js");
 const helpers = read("ui/js/calendar-span-helpers.js");
 const agenda = read("ui/js/calendar-agenda.js");
+const messages = read("ui/js/messages-schedule.js");
 
 // The two offending call sites are gone; day stepping goes through addDays().
 assert.match(helpers, /const d=addDays\(base,i\);/, "weekday header must step with addDays()");
@@ -51,7 +52,10 @@ const sandbox = {
   console, Date: FrozenDate, Intl,
   LOCALE: "en-US",
   CONFIG: {firstDayOfWeek: 0},
-  FMT: {weekday: new Intl.DateTimeFormat("en-US", {weekday: "long"})},
+  FMT: {
+    weekday: new Intl.DateTimeFormat("en-US", {weekday: "long"}),
+    weekdayS: new Intl.DateTimeFormat("en-US", {weekday: "short"}),
+  },
   el: makeEl,
   document: {
     getElementById: (id) => (id === "calhead" ? head : null),
@@ -92,4 +96,62 @@ const springBase = sandbox.__startOfWeek(new Date(spring));
 const springLabels = Array.from({length: 7}, (_, i) => sandbox.__addDays(springBase, i).getDay());
 assert.deepEqual(springLabels, [0, 1, 2, 3, 4, 5, 6], "spring-forward week must also label seven distinct days");
 
+// G3: a one-off message schedule whose END time precedes its START time must
+// roll the end forward by one CALENDAR DAY (addDays), not by +86400000ms.
+// Across the US fall-back (Sun 2026-11-01, America/Chicago) the ms form lands
+// at 23:15 the same evening instead of midnight the next day. The clock is
+// frozen, so this never depends on the real date.
+let FROZEN2 = new Date(2026, 10, 1, 23, 30, 0).getTime();
+class FrozenDate2 extends Date {
+  constructor(...args) { if (args.length === 0) super(FROZEN2); else super(...args); }
+  static now() { return FROZEN2; }
+}
+const sandbox2 = {
+  console, Date: FrozenDate2, Intl,
+  LOCALE: "en-US",
+  CONFIG: {firstDayOfWeek: 0, clock24: false},
+  FMT: {
+    weekday: new Intl.DateTimeFormat("en-US", {weekday: "long"}),
+    weekdayS: new Intl.DateTimeFormat("en-US", {weekday: "short"}),
+  },
+};
+sandbox2.globalThis = sandbox2;
+vm.createContext(sandbox2);
+vm.runInContext(core, sandbox2, {filename: "data-core.js"});
+vm.runInContext(messages, sandbox2, {filename: "messages-schedule.js"});
+sandbox2.__addDays = sandbox2.addDays;
+sandbox2.__schedDate = sandbox2._schedDate;
+sandbox2.__activeScheduledMessages = sandbox2.activeScheduledMessages;
+
+const oneShot = {
+  text: "fall-back message", id: "dst1",
+  startDate: "2026-11-01", startTime: "00:30",
+  endDate: "2026-11-01", endTime: "00:15",
+  recurrence: "once",
+};
+
+// The end (00:15) precedes the start (00:30), so the schedule rolls the end
+// forward one calendar day via addDays(). addDays() steps the date and
+// normalises the time to midnight of that next day — 00:00 on Nov 2 here —
+// instead of adding 24ms, which would land at 23:15 on the same evening.
+const rolled = sandbox2.__addDays(sandbox2.__schedDate("2026-11-01", "00:15"), 1);
+assert.deepEqual(
+  [rolled.getFullYear(), rolled.getMonth() + 1, rolled.getDate(), rolled.getHours(), rolled.getMinutes()],
+  [2026, 11, 2, 0, 0],
+  "end<start must roll to the next calendar day (midnight), not +24ms"
+);
+
+// At 23:30 on the fall-back evening the message is still active: only the
+// calendar-day roll reaches the 00:15 end on the next day. Plain +24ms would
+// have ended it at 23:15, an hour earlier.
+FROZEN2 = new Date(2026, 10, 1, 23, 30, 0).getTime();
+assert.equal(sandbox2.__activeScheduledMessages([oneShot]).length, 1,
+  "fall-back one-off message must be active at 23:30 (end rolled to next day)");
+
+// Past the rolled end (00:15) the message must stop.
+FROZEN2 = new Date(2026, 10, 2, 0, 30, 0).getTime();
+assert.equal(sandbox2.__activeScheduledMessages([oneShot]).length, 0,
+  "fall-back one-off message must expire after the rolled end");
+
 console.log("PASS: weekday header and Agenda step by calendar days across DST changeovers");
+console.log("PASS: one-off message schedule rolls an end<start across the fall-back by calendar day");

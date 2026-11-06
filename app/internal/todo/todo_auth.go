@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,7 +21,10 @@ func (a *Service) readTodoTokenStore() todoTokenStore {
 	if err != nil {
 		return store
 	}
-	_ = json.Unmarshal(b, &store)
+	if err := json.Unmarshal(b, &store); err != nil {
+		log.Printf("todo: token store %s could not be decoded, treating Microsoft To Do as unlinked: %v", a.todoTokenFile, err)
+		return todoTokenStore{}
+	}
 	return store
 }
 func (a *Service) writeTodoTokenStore(store todoTokenStore) error {

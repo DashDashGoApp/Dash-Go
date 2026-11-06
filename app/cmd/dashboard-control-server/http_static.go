@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/DashDashGoApp/Dash-Go/app/internal/jsonutil"
 )
@@ -81,11 +83,13 @@ func staticPrivatePath(rel string) bool {
 		rel == "cache/dashboard-diagnostics.zip"
 }
 
-func (a *app) dashboardContentSecurityPolicy() string {
+// dashboardCSPPolicyString assembles the dashboard Content-Security-Policy
+// from the effective radar custom tile/WMS values. Keeping the build pure
+// lets the app cache the assembled string and skip the settings read on the
+// hot static-asset path.
+func dashboardCSPPolicyString(radarCustomTiles, radarCustomWms string) string {
 	imageSources := []string{"'self'", "data:", "blob:", "https://tile.openstreetmap.org", "https://opengeo.ncep.noaa.gov", "https://rainviewer.com", "https://*.rainviewer.com"}
-	settings := a.loadSettings()
-	for _, key := range []string{"radarCustomTiles", "radarCustomWms"} {
-		raw := strings.TrimSpace(jsonutil.StringValue(settings[key]))
+	for _, raw := range []string{radarCustomTiles, radarCustomWms} {
 		u, err := url.Parse(raw)
 		if err != nil || !strings.EqualFold(u.Scheme, "https") || u.User != nil || u.Host == "" {
 			continue
@@ -97,6 +101,48 @@ func (a *app) dashboardContentSecurityPolicy() string {
 	}
 	slices.Sort(imageSources[3:])
 	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src " + strings.Join(imageSources, " ") + "; connect-src 'self' https://api.rainviewer.com; frame-src https://maps.google.com; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+}
+
+// cspPolicyCache holds the assembled dashboard Content-Security-Policy. The
+// policy depends only on the effective radar tile/WMS values; the settings
+// file mtime+size is the staleness key, so a warm request performs one stat
+// and no settings read. A settings write changes the key, forcing the next
+// request to re-read and reassemble.
+type cspPolicyCache struct {
+	mu     sync.Mutex
+	valid  bool
+	mod    time.Time
+	size   int64
+	tiles  string
+	wms    string
+	policy string
+}
+
+func (a *app) dashboardContentSecurityPolicy() string {
+	st, statErr := os.Stat(a.settingsFile)
+	available := statErr == nil && !st.IsDir()
+	a.cspPolicy.mu.Lock()
+	if available && a.cspPolicy.valid && st.ModTime().Equal(a.cspPolicy.mod) && st.Size() == a.cspPolicy.size {
+		policy := a.cspPolicy.policy
+		a.cspPolicy.mu.Unlock()
+		return policy
+	}
+	a.cspPolicy.mu.Unlock()
+	settings := a.loadSettings()
+	tiles := strings.TrimSpace(jsonutil.StringValue(settings["radarCustomTiles"]))
+	wms := strings.TrimSpace(jsonutil.StringValue(settings["radarCustomWms"]))
+	policy := dashboardCSPPolicyString(tiles, wms)
+	a.cspPolicy.mu.Lock()
+	if available {
+		a.cspPolicy.mod, a.cspPolicy.size = st.ModTime(), st.Size()
+	} else {
+		a.cspPolicy.mod, a.cspPolicy.size = time.Time{}, 0
+	}
+	a.cspPolicy.tiles, a.cspPolicy.wms = tiles, wms
+	a.cspPolicy.policy = policy
+	a.cspPolicy.valid = true
+	a.cspPolicy.mu.Unlock()
+	return policy
 }
 
 func (a *app) dashboardSecurityHeaders(next http.Handler) http.Handler {

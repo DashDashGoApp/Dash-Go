@@ -85,8 +85,11 @@ func (s *Service) Matches(cfg Config) bool {
 func (s *Service) ConfigLocal() string { return s.configLocal }
 func (s *Service) FontsDir() string    { return s.fontsDir }
 
-// CloneMap is intentionally shallow; callers must not mutate nested maps or
-// slices in place. It returns a usable empty map for a nil input.
+// CloneMap is intentionally shallow: it copies the top-level entries and
+// returns a usable empty map for a nil input, while nested maps and slices
+// keep their original identity. Callers must not mutate nested values in
+// place; the service avoids this by replacing nested containers wholesale on
+// every update.
 func CloneMap(src map[string]any) map[string]any {
 	out := make(map[string]any, len(src))
 	maps.Copy(out, src)
@@ -100,6 +103,11 @@ func (s *Service) Invalidate() {
 	s.mu.Unlock()
 }
 
+// Load returns the current settings as a shared read-only snapshot: the warm
+// path hands back the cached map itself (no clone) so a steady /api/settings
+// GET costs one stat and no copy. The map and its nested values are owned by
+// the service and must not be mutated by callers; use Update or Mutate for
+// changes, because they clone the snapshot before invoking the callback.
 func (s *Service) Load() map[string]any {
 	st, err := os.Stat(s.settingsFile)
 	if err != nil || st.IsDir() {
@@ -107,7 +115,7 @@ func (s *Service) Load() map[string]any {
 	}
 	s.mu.Lock()
 	if s.cacheOK && st.ModTime().Equal(s.cacheMod) && st.Size() == s.cacheSize {
-		out := CloneMap(s.cache)
+		out := s.cache
 		s.mu.Unlock()
 		return out
 	}
@@ -120,25 +128,34 @@ func (s *Service) Load() map[string]any {
 	if err := json.Unmarshal(b, &values); err != nil {
 		values = map[string]any{}
 	}
-	s.cache = CloneMap(values)
+	// The unmarshaled map becomes the snapshot directly; no one else
+	// references it, so a clone here would only cost a copy on every cold
+	// read. The service never mutates the snapshot in place; Write
+	// replaces it wholesale.
+	s.cache = values
 	s.cacheMod = st.ModTime()
 	s.cacheSize = st.Size()
 	s.cacheOK = true
-	out := CloneMap(values)
+	out := s.cache
 	s.mu.Unlock()
 	return out
 }
 
 // Mutate serializes one complete read-modify-write transaction. It is the
 // cross-domain transaction seam for callers that need mutation errors without
-// reintroducing an app-owned settings write mutex.
+// reintroducing an app-owned settings write mutex. The callback mutates a
+// private clone of the current snapshot, and the returned map is that same
+// working clone, so mutation of it after Mutate returns cannot reach the
+// service snapshot or the persisted file.
 func (s *Service) Mutate(mut func(map[string]any) error) (map[string]any, error) {
 	if mut == nil {
 		return nil, fmt.Errorf("settings mutation is required")
 	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	values := s.Load()
+	// Load may hand back the shared snapshot; clone before the callback so
+	// the mutation cannot write into the service-owned map.
+	values := CloneMap(s.Load())
 	if err := mut(values); err != nil {
 		return nil, err
 	}

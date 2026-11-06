@@ -1,3 +1,27 @@
+## [1.5.24] — 2026-11-05
+
+Dash-Go 1.5.24 continues the stabilization work against the kiosk's software-rendered WebKit: it removes the remaining compositor-era layer hints from the dashboard's resident panes, replaces the alert bar's infinite `filter` pulse with an opacity pulse, and closes the silent-failure class — refresh CLIs that reported success while the calendar manifest or event cache had failed to refresh, and three loaders that swallowed corrupt state files and presented the damage as "signed out" or "no feeds". On the server side, `/api/calendars` no longer rescans the calendar directory on every GET, the weather payload and the Content-Security-Policy header stop being re-read and rebuilt per request, and geocoding reuses one HTTP client instead of paying a new TLS handshake per call. The message schedule's end-before-start rollover is now DST-safe.
+
+### Bug fixes
+
+- **Refresh CLIs no longer report success when the refresh failed.** The holiday and ISS-pass one-shot jobs discarded errors from the manifest regeneration and the event-cache refresh and exited 0 regardless, so the dashboard kept serving stale events with no signal. Both CLIs now print the failure to stderr and exit non-zero (consumers are cron lines and a `|| true` wrapper, so no new alerting behaviour), and the event-cache refresh logs a failed manifest regeneration instead of discarding it.
+- **A corrupt state file no longer looks like a signed-out or empty dashboard.** The todo token store, the todo list index, and the cached event-source metadata silently swallowed decode errors and fell back to empty state. Each now writes one diagnostic line before falling back, so the log shows why the state was reset.
+- **A calendar-manifest regeneration failure is logged.** The calendar service previously discarded the regeneration error and served whatever was on disk; it now records the failure and keeps serving the previous manifest.
+- **A message schedule whose end time precedes its start survives a daylight-saving changeover.** The one-off rollover added a fixed 24-hour span, which on a 25-hour fall-back day expired the message an hour early; it now rolls to the next calendar day.
+
+### Performance and reliability
+
+- **Resident panes no longer carry compositor layer hints.** The calendar scroll container and the sidebar's Agenda and 14-day panes carried `will-change:scroll-position` and `translateZ(0)` from a compositor-based rationale. The kiosk runs WebKit with compositing disabled, where the hints cannot buy a fast path but can force a separate raster surface; they are removed and the panes keep their paint containment.
+- **An extreme-weather alert pulses opacity, not `filter`.** The alert bar and tab pulsed `filter:brightness()` continuously for as long as an extreme alert was displayed — a continuous software repaint under the disabled compositor. The pulse now animates opacity with the same 2.2 s rhythm, and under the Lite profile the tap pulse drops its `filter` stage as well.
+- **`/api/calendars` stops rescanning the calendar directory on every GET.** The endpoint regenerated the whole manifest — directory scan, per-file headers, compare, possible rewrite — on each request. It now serves the cached manifest, validated by one file stat per GET, so a manifest rewritten by an external refresh job is still picked up on the next request; regeneration still runs on the mutation and refresh paths.
+- **The weather payload and the Content-Security-Policy header are cached.** `/api/weather` re-read and re-parsed the weather cache file on every call, and the security middleware rebuilt the CSP — settings read, URL parses, sort, string build — on every request including each static asset at boot. Both now hold a parsed/immutable value keyed by the file's mtime and size and rebuild only when the source changes.
+- **Geocoding reuses one HTTP client.** The three geocode call sites constructed a fresh `http.Client` per request, paying a TLS handshake on every cold geocode; they now share one client with the same 8-second timeout.
+- **The calendar header stops constructing a locale formatter per render.** `renderCalHead()` built a new `Intl.DateTimeFormat` for the abbreviated weekday on every render; it is now built once alongside the long formatter.
+
+### Build and release integrity
+
+- **Race-detector pass over the concurrency-sensitive packages.** The SSE fan-out, calendar service, todo stores, settings service, and weather packages were run under `go test -race` before this release; no races were found.
+
 ## [1.5.23] — 2026-11-05
 
 Dash-Go 1.5.23 fixes the calendar header that named the same weekday twice when the visible week crossed a daylight-saving changeover, and stops the calendar pane from re-rasterizing its whole grid every time another part of the dashboard repaints. It also makes four date-arithmetic paths DST-safe and removes two sources of needless style invalidation.

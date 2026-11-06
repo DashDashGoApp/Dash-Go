@@ -11,7 +11,7 @@
   /* The sticky toolbar owns the top inset. Keeping body padding at zero removes
      the exposed strip where scrolled timeline cards could peek under the header. */
   padding:0 18px 22px;white-space:normal;line-height:1.35;
-  touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;contain:content;
+  touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;contain:content;
 }
 #pop.daytimelinepop #popbody::-webkit-scrollbar{display:none;}
 

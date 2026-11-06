@@ -53,6 +53,15 @@ type Service struct {
 	radarRequestTimes map[string][]time.Time
 	weatherRateMu     sync.Mutex
 	weatherFetchMu    sync.Mutex
+	// weatherParseMu guards the weatherParse* fields. It is separate from
+	// weatherFetchMu because the ReadCache export reaches the parse path from
+	// callers that do not hold the fetch lock.
+	weatherParseMu    sync.Mutex
+	weatherParsePath  string
+	weatherParseMod   time.Time
+	weatherParseSize  int64
+	weatherParseValid bool
+	weatherParseValue any
 	aqiMu             sync.Mutex
 }
 

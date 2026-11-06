@@ -87,6 +87,7 @@ function buildFormatters(){
     popDay: new Intl.DateTimeFormat(LOCALE,{weekday:"short",month:"short",day:"numeric"}),
     wxDay:  new Intl.DateTimeFormat(LOCALE,{weekday:"short",month:"numeric",day:"numeric"}),
     weekday:new Intl.DateTimeFormat(LOCALE,{weekday:"long"}),
+    weekdayS:new Intl.DateTimeFormat(LOCALE,{weekday:"short"}),
     hm2:    new Intl.DateTimeFormat(LOCALE,{hour:"2-digit",minute:"2-digit",hour12:h12}),
   };
 }

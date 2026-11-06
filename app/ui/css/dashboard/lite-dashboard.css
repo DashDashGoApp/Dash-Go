@@ -52,3 +52,10 @@ html.profile-lite #compliment .cb-launch,
 html.profile-lite #snapback{
   box-shadow:none;
 }
+
+/* Lite runs WebKit without a compositor: the tap-pulse's filter:brightness()
+   would force a continuous software repaint for the whole .5s animation. Keep
+   the scale but drop the filter. @keyframes names are global, so the Lite
+   variant uses its own name and this rule swaps only the animation-name. */
+@keyframes lite-dashboard-tap-pulse{0%{transform:scale(1)}45%{transform:scale(1.08)}100%{transform:scale(1)}}
+html.profile-lite .tap-pulse{animation-name:lite-dashboard-tap-pulse;}

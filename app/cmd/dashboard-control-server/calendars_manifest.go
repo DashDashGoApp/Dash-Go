@@ -27,22 +27,34 @@ func (a *app) runDefaultCalendarsCLI(args []string) int {
 }
 func (a *app) runHolidayUpdateCLI(args []string) int {
 	result := a.updateHolidayCalendars()
-	_ = a.generateCalendarManifest()
-	_, _ = a.refreshCurrentEventCache(true)
+	manifestErr := a.generateCalendarManifest()
+	_, refreshErr := a.refreshCurrentEventCache(true)
 	body, _ := json.Marshal(result)
 	fmt.Println(string(body))
-	if result["ok"] == false {
+	if manifestErr != nil {
+		fmt.Fprintln(os.Stderr, "calendar manifest update failed:", manifestErr)
+	}
+	if refreshErr != nil {
+		fmt.Fprintln(os.Stderr, "event cache refresh failed:", refreshErr)
+	}
+	if result["ok"] == false || refreshErr != nil {
 		return 1
 	}
 	return 0
 }
 func (a *app) runISSPassesCLI(args []string) int {
 	result := a.updateISSPasses()
-	_ = a.generateCalendarManifest()
-	_, _ = a.refreshCurrentEventCache(true)
+	manifestErr := a.generateCalendarManifest()
+	_, refreshErr := a.refreshCurrentEventCache(true)
 	body, _ := json.Marshal(result)
 	fmt.Println(string(body))
-	if result["ok"] == false {
+	if manifestErr != nil {
+		fmt.Fprintln(os.Stderr, "calendar manifest update failed:", manifestErr)
+	}
+	if refreshErr != nil {
+		fmt.Fprintln(os.Stderr, "event cache refresh failed:", refreshErr)
+	}
+	if result["ok"] == false || refreshErr != nil {
 		return 1
 	}
 	return 0

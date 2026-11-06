@@ -36,7 +36,7 @@ function activeScheduledMessages(items){
     if(rec==="once"){
       let end=_schedDate(m.endDate||m.startDate,m.endTime||"23:59");
       if(!end) continue;
-      if(end<start) end=new Date(end.getTime()+86400000);
+      if(end<start) end=addDays(end,1);
       if(now<start || now>end) continue;
     }else{
       const stop=m.endDate ? _schedDate(m.endDate,"23:59") : null;

@@ -14,6 +14,11 @@ import (
 
 const mapGeocoderUserAgent = "Dash-Go/1.5.2 local-kiosk map preview"
 
+// mapGeocodeHTTPClient is the shared transport for the three stateless
+// geocode providers. It keeps the historical whole-request 8 second bound;
+// one client per lookup used to discard the TLS session after every call.
+var mapGeocodeHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
 func (s *Service) nominatimSearch(q string) ([]map[string]any, error) {
 	u := "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&q=" + url.QueryEscape(q)
 	req, err := http.NewRequest("GET", u, nil)
@@ -21,7 +26,7 @@ func (s *Service) nominatimSearch(q string) ([]map[string]any, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", mapGeocoderUserAgent)
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	resp, err := mapGeocodeHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +52,7 @@ func (s *Service) censusSearch(q string) ([]map[string]any, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", mapGeocoderUserAgent)
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	resp, err := mapGeocodeHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +114,7 @@ func (s *Service) geocode(q string) map[string]any {
 	if q == "" {
 		return map[string]any{"results": []any{}, "error": "missing q"}
 	}
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Get("https://geocoding-api.open-meteo.com/v1/search?name=" + url.QueryEscape(q) + "&count=5&language=en&format=json")
+	resp, err := mapGeocodeHTTPClient.Get("https://geocoding-api.open-meteo.com/v1/search?name=" + url.QueryEscape(q) + "&count=5&language=en&format=json")
 	if err != nil {
 		return map[string]any{"results": []any{}, "error": "lookup failed: " + err.Error()}
 	}

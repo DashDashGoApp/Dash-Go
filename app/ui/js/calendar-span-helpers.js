@@ -63,7 +63,7 @@ function renderCalHead(){
   const head=$("#calhead"); head.innerHTML="";
   const base=startOfWeek(new Date());
   const fmt=FMT.weekday;
-  const abbr=new Intl.DateTimeFormat(LOCALE,{weekday:"short"});
+  const abbr=FMT.weekdayS;
   for(let i=0;i<7;i++){
     // Calendar-day arithmetic, not ms addition: a week that contains a DST
     // changeover makes +i*DAY land at 23:00 of the previous day, which labeled

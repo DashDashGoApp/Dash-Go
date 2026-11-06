@@ -46,7 +46,10 @@ html.demo-mode #alerttab{top:36px;}
   #alertbar{font-size:18px;padding:8px 10px;gap:9px;line-height:1.14;}
   #alertbar .abdock{font-size:12px;padding:5px 9px;}
 }
-@keyframes alertpulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
+/* No compositor: a filter animation forces a continuous software repaint of
+   the element every frame, so the pulse animates opacity instead — a cheap
+   element repaint. */
+@keyframes alertpulse{0%,100%{opacity:1;}50%{opacity:.82;}}
 
 /* UV / air-quality pills inside the current-conditions block. The colored
    left edge is the standard category color; text stays theme-colored. The

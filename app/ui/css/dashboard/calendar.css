@@ -31,14 +31,12 @@
   overscroll-behavior:contain;
   touch-action:pan-y;
   contain:content;
-  /* Promote the scroll container to its own GPU compositing layer at load,
-     so WebKit doesn't do that work lazily on the FIRST scroll (which caused
-     the "first gesture doesn't take, second one works" lag). translateZ(0)
-     forces the layer up front; will-change tells the compositor to expect
-     scroll-position changes. */
-  transform:translateZ(0);
-  will-change:scroll-position;
-  backface-visibility:hidden;
+  /* No GPU layer-promotion hints here. The kiosk runs WebKit with
+     WEBKIT_DISABLE_COMPOSITING_MODE=1 (no compositor), so a translateZ(0) /
+     will-change / backface-visibility layer hint cannot buy a fast path — it
+     only forces a separate raster surface that WebKit repaints in software.
+     overscroll-behavior, touch-action and contain:content alone keep the
+     scroll cheap. */
 }
 #calscroll::-webkit-scrollbar{display:none;}
 

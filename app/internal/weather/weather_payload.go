@@ -65,6 +65,7 @@ func (s *Service) weatherPayload() any {
 			payload["cache"] = cache
 		}
 		_ = fileio.WriteJSON(cachePath, payload)
+		s.invalidateWeatherCacheParse()
 		return payload
 	}
 	if cached, ok := s.readWeatherCacheAny(cachePath); ok {
@@ -116,6 +117,7 @@ func (s *Service) refreshWeatherLive(ctx context.Context) (map[string]any, error
 	if err := fileio.WriteJSON(cachePath, payload); err != nil {
 		return nil, err
 	}
+	s.invalidateWeatherCacheParse()
 	return payload, nil
 }
 
@@ -124,20 +126,22 @@ func (s *Service) readWeatherCache(path, cacheKey string) (any, bool) {
 	if err != nil || st.IsDir() || time.Since(st.ModTime()) > s.weatherCacheTTL() {
 		return nil, false
 	}
-	raw, ok := s.readWeatherCacheAny(path)
-	if !ok {
-		return nil, false
-	}
-	m, ok := raw.(map[string]any)
+	m, ok := s.readWeatherCacheParsedMap(path, st)
 	if !ok {
 		return nil, false
 	}
 	if !weatherPayloadHasLocalDayGo(m, time.Now()) {
 		return nil, false
 	}
-	cache := anyMap(m["cache"])
-	if jsonutil.StringValue(cache["cacheKey"]) != cacheKey {
+	oldCache := anyMap(m["cache"])
+	if jsonutil.StringValue(oldCache["cacheKey"]) != cacheKey {
 		return nil, false
+	}
+	// m is a per-call private copy, so the hit markers below can be applied
+	// in place without touching the shared parsed document.
+	cache := make(map[string]any, len(oldCache)+3)
+	for k, v := range oldCache {
+		cache[k] = v
 	}
 	cache["hit"] = true
 	cache["stale"] = false
@@ -147,11 +151,76 @@ func (s *Service) readWeatherCache(path, cacheKey string) (any, bool) {
 }
 
 func (s *Service) readWeatherCacheAny(path string) (any, bool) {
-	raw := s.readJSONDefault(path, nil)
-	if raw == nil {
+	st, err := os.Stat(path)
+	if err != nil || st.IsDir() {
 		return nil, false
 	}
-	return raw, true
+	return s.readWeatherCacheParsed(path, st)
+}
+
+// readWeatherCacheParsed returns a private copy of the parsed weather-cache
+// document. The parsed document itself is cached and shared, keyed by file
+// mtime+size, so warm calls skip the file read and JSON decode entirely.
+// Every caller receives its own top-level map plus a copied cache sub-map and
+// may annotate them without affecting any other call or the shared document.
+func (s *Service) readWeatherCacheParsed(path string, st os.FileInfo) (any, bool) {
+	var value any
+	s.weatherParseMu.Lock()
+	if s.weatherParsePath == path && s.weatherParseValid && st.ModTime().Equal(s.weatherParseMod) && st.Size() == s.weatherParseSize {
+		value = s.weatherParseValue
+		s.weatherParseMu.Unlock()
+	} else {
+		value = s.readJSONDefault(path, nil)
+		if value == nil {
+			s.weatherParseValid = false
+			s.weatherParseValue = nil
+			s.weatherParseMu.Unlock()
+			return nil, false
+		}
+		s.weatherParsePath = path
+		s.weatherParseMod = st.ModTime()
+		s.weatherParseSize = st.Size()
+		s.weatherParseValue = value
+		s.weatherParseValid = true
+		s.weatherParseMu.Unlock()
+	}
+	m, isMap := value.(map[string]any)
+	if !isMap {
+		return value, true
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	if old, okc := m["cache"].(map[string]any); okc && old != nil {
+		cache := make(map[string]any, len(old)+2)
+		for k, v := range old {
+			cache[k] = v
+		}
+		out["cache"] = cache
+	}
+	return out, true
+}
+
+// readWeatherCacheParsedMap is the map-shaped view of readWeatherCacheParsed
+// used by the cache-hit path, which only accepts document objects.
+func (s *Service) readWeatherCacheParsedMap(path string, st os.FileInfo) (map[string]any, bool) {
+	value, ok := s.readWeatherCacheParsed(path, st)
+	if !ok {
+		return nil, false
+	}
+	m, isMap := value.(map[string]any)
+	return m, isMap
+}
+
+// invalidateWeatherCacheParse drops the shared parsed-document cache after a
+// refresh or write so the next read reflects the rewritten file even when its
+// mtime+size happen to be unchanged.
+func (s *Service) invalidateWeatherCacheParse() {
+	s.weatherParseMu.Lock()
+	s.weatherParseValid = false
+	s.weatherParseValue = nil
+	s.weatherParseMu.Unlock()
 }
 
 func weatherPayloadHasLocalDayGo(payload any, now time.Time) bool {

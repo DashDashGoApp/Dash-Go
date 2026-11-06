@@ -266,12 +266,37 @@ func (s *Service) generateManifestLocked(outputs map[string]bool) error {
 	return nil
 }
 
+// Calendars serves the durable manifest for the /api/calendars GET. A warm
+// call validates the manifest file with a single mtime/size stat taken before
+// taking the service lock, then returns the cached list: no directory scan,
+// no rewrite. An externally regenerated manifest changes the stat, so the
+// next GET regenerates under the lock and picks the new content up.
 func (s *Service) Calendars() any {
 	if s == nil {
 		return []any{}
 	}
-	_ = s.GenerateManifest()
-	return s.readJSONDefault(s.manifestPath(), []any{})
+	outputs := s.outputSnapshot()
+	path := s.manifestPath()
+	// The stat is file metadata only; taking it before s.mu keeps the GET on
+	// the hot path from serializing on writers.
+	info, statErr := os.Stat(path)
+	external := statErr == nil && !info.IsDir()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if external && s.manifestCacheOK && info.ModTime().Equal(s.manifestCacheMod) && info.Size() == s.manifestCacheSize {
+		return s.manifestCache
+	}
+	if err := s.generateManifestLocked(outputs); err != nil {
+		s.appendLog("calendars.log", fmt.Sprintf("%s: WARN manifest regeneration failed, serving previous manifest: %v\n", s.now().Format(time.ANSIC), err))
+	}
+	items := jsonutil.List(s.readJSONDefault(path, []any{}))
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		s.manifestCache = items
+		s.manifestCacheMod = info.ModTime()
+		s.manifestCacheSize = info.Size()
+		s.manifestCacheOK = true
+	}
+	return items
 }
 
 func (s *Service) Toggle(name, url string) (map[string]any, error) {

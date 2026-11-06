@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -282,7 +283,10 @@ func (a *Service) readTodoListsIndex() todoListsIndex {
 	idx := todoListsIndex{Lists: []todoListInfo{}}
 	b, err := os.ReadFile(a.todoIndexPath())
 	if err == nil {
-		_ = json.Unmarshal(b, &idx)
+		if err := json.Unmarshal(b, &idx); err != nil {
+			log.Printf("todo: list index %s could not be decoded, falling back to default lists: %v", a.todoIndexPath(), err)
+			idx = todoListsIndex{Lists: []todoListInfo{}}
+		}
 	}
 	idx.Lists = mergeTodoDefaultLists(idx.Lists, a.todoArchivedSourceIDs())
 	return idx
@@ -388,8 +392,7 @@ func (a *Service) todoStatusPayload() map[string]any {
 		"dashboardDock": a.todoDashboardDockEnabled(), "dashboardDockSlots": a.todoDashboardDockSlots(), "source": "local", "state": state, "syncMode": syncMode,
 		"syncActive": a.todoCloudSyncEnabled(), "account": token.Account, "clientId": settings["clientId"],
 		"map": a.todoMap(), "dockMap": a.todoDashboardDockMap(), "cadence": settings["cadence"], "inboundSync": a.todoInboundSyncStatus(),
-		"people":         a.todoHouseholdPeople(),
-		"manualListSync": a.todoManualListSyncStatuses(), "lists": a.readTodoListsIndex().Lists,
+		"people": a.todoHouseholdPeople(), "manualListSync": a.todoManualListSyncStatuses(), "lists": a.readTodoListsIndex().Lists,
 		"blockedWrites": a.todoBlockedWriteStatuses(),
 		"archives":      a.todoArchiveStatus(), "groceryMemory": a.todoGroceryMemory(), "auth": pending, "linkedAt": token.LinkedAt, "accessExpiresAt": token.AccessExpiresAt,
 	}

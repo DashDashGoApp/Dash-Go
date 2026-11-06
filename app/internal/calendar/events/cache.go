@@ -3,6 +3,7 @@ package events
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,7 +105,9 @@ func cacheMetadataFromExisting(fingerprint string, oldMeta cacheMetadata, oldCac
 	}
 	var sources []SourceMeta
 	if body, err := json.Marshal(oldCache["sources"]); err == nil {
-		_ = json.Unmarshal(body, &sources)
+		if err := json.Unmarshal(body, &sources); err != nil {
+			log.Printf("events: existing cache sources could not be re-parsed, continuing without source metadata: %v", err)
+		}
 	}
 	return cacheMetadata{
 		Fingerprint:        fingerprint,

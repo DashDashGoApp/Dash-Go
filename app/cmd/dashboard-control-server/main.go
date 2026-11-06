@@ -103,6 +103,9 @@ type app struct {
 	releaseVersion   string
 	requestSecurity  requestSecurityPolicy
 	operationLimiter *operationLimiter
+	// cspPolicy caches the assembled Content-Security-Policy; see
+	// dashboardContentSecurityPolicy for the staleness key.
+	cspPolicy cspPolicyCache
 	// releaseResolver is an in-process test seam; production always uses the
 	// canonical GitHub Release client.
 	releaseResolver func(context.Context, releasepkg.Track) (releasepkg.Resolved, error)

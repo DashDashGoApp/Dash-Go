@@ -61,6 +61,14 @@ type Service struct {
 	indexWarning      func(owner string, err error)
 	httpClient        func() *http.Client
 	mu                sync.Mutex
+	// manifestCache serves /api/calendars GETs from memory. The file
+	// mtime/size captured alongside it is the staleness key; any external
+	// writer (holiday/ISS CLI, manual edit) that changes the file forces the
+	// next GET through regeneration.
+	manifestCache     []any
+	manifestCacheMod  time.Time
+	manifestCacheSize int64
+	manifestCacheOK   bool
 }
 
 func New(cfg ServiceConfig) *Service {

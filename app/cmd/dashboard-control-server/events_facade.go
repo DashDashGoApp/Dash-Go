@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -128,6 +129,10 @@ func (a *app) refreshCurrentEventCache(force bool) (map[string]any, error) {
 func (a *app) refreshEventCache(force bool, daysPast int, daysFuture int) (map[string]any, error) {
 	// Calendar owns ownership/visibility and the manifest write. The event child
 	// receives the already-established source policy through this façade.
-	_ = a.generateCalendarManifest()
+	if err := a.generateCalendarManifest(); err != nil {
+		// The manifest failure is secondary to the event refresh; keep the
+		// refresh result as the only error while surfacing the manifest fault.
+		log.Printf("could not regenerate calendar manifest before event refresh: %v", err)
+	}
 	return a.eventService().Refresh(force, daysPast, daysFuture)
 }

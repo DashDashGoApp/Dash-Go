@@ -8,7 +8,7 @@
 #cdate{font-family:var(--dash-clock-font);font-size:var(--dash-clock-date-size);font-weight:var(--dash-clock-weight);color:var(--fg);letter-spacing:0.015em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
 #ctime{font-family:var(--dash-clock-font);font-size:min(var(--dash-clock-time-size),calc((var(--sidebarwidth) - 40px)/4.3));font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
 #ctime sup,#ctime .ap{font-size:min(var(--dash-clock-suffix-size),0.36em);color:var(--dim);vertical-align:super;}
-#agendalist{flex:1;overflow-y:auto;scrollbar-width:none;padding:4px 0 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;contain:content;}
+#agendalist{flex:1;overflow-y:auto;scrollbar-width:none;padding:4px 0 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;contain:content;}
 #agendalist::-webkit-scrollbar{display:none;}
 .agday{padding:10px 20px 9px;border-bottom:1px solid var(--line-soft);}
 .agday .lbl{font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:0.045em;color:var(--dim);text-transform:uppercase;}
@@ -51,7 +51,7 @@
 #wxnow .wx-metric-token{display:inline-flex;flex:0 0 auto;align-items:baseline;white-space:nowrap;}
 #wxnow .wx-wind-token{gap:.32em;}
 #wxnow .wx-metric-sep{color:var(--dimmer);}
-#wx14{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;flex:1;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position;overscroll-behavior:contain;contain:content;}
+#wx14{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;flex:1;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;contain:content;}
 #wx14::-webkit-scrollbar{display:none;}
 .wxday{
   flex:0 0 auto;display:grid;grid-template-columns:var(--dash-weather-day-col) var(--dash-weather-icon-col) minmax(0,1fr) minmax(64px,max-content);
