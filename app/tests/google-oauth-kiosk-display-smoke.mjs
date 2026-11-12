@@ -27,8 +27,10 @@ assert.ok(cssManifest.bundles.dashboard.includes("dashboard/oauth-display.css"),
 assert.match(html,/<div id="oauthdisplay"[^>]*aria-hidden="true"[^>]*aria-modal="true"/,"kiosk overlay must start hidden and remain an accessible modal shell");
 assert.match(html,/id="oauthdisplay-qr"[^>]*hidden/,"QR image must start hidden");
 assert.match(boot,/oauthDisplayBoot\(\)/,"dashboard boot must arm the low-frequency overlay poll");
-assert.match(ui,/fetch\("\/api\/oauth-display",\{cache:"no-store"\}\)/,"overlay must request only its no-store metadata endpoint");
-assert.match(ui,/response\.status===404\)\{ oauthDisplayHide\(\); return; \}/,"overlay must dismiss itself when the presentation is gone");
+assert.match(ui,/fetch\(\"\/api\/oauth-display\?wait=30\",{cache:\"no-store\"}\)/,"overlay must request only its no-store metadata endpoint");
+assert.match(ui,/oauthDisplayScheduleNext\(error\?5000:active\?1000:100\)/,"each long poll must re-arm immediately, with backoff only on error");
+assert.match(display,/oauthDisplayLongPollLimit\s*=\s*30\s*\*\s*time\.Second/,"the server long poll must stay bounded to 30 seconds, inside the write timeout");
+assert.match(ui,/response\.status===404\)\{ oauthDisplayHide\(\); \}/,"overlay must dismiss itself when the presentation is gone");
 assert.doesNotMatch(ui,/\.style\.display\s*=/,"overlay visibility must use semantic classes instead of inline display mutation");
 assert.match(css,/background:#fff/,"QR must use an always-white backing panel in every dashboard theme");
 assert.match(css,/min-width:min\(40vh,70vw\)/,"QR backing panel must stay touch-visible on the kiosk display");

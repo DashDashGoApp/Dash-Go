@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,6 +18,12 @@ const (
 	// client paste-back flow.
 	oauthDisplayTTL       = 10 * time.Minute
 	oauthDisplayWaitLimit = 5 * time.Minute
+	// Long-poll ceiling for the metadata endpoint. The dashboard client holds
+	// one request open until a display arms, so the panel appears in the same
+	// present as the QR write. The cap stays well inside the server's 45s
+	// WriteTimeout.
+	oauthDisplayLongPollLimit = 30 * time.Second
+	oauthDisplayPollInterval  = 500 * time.Millisecond
 )
 
 var errGoogleOAuthInterrupted = errors.New("Google authorization cancelled")
@@ -117,14 +124,45 @@ func oauthDisplayData(paths oauthDisplayPaths, now time.Time) (oauthDisplay, boo
 	return display, true
 }
 
+// oauthDisplayWaitFromRequest parses the optional wait=N seconds long-poll
+// parameter. A missing or invalid value keeps the legacy instant behavior;
+// values above the cap are clamped.
+func oauthDisplayWaitFromRequest(r *http.Request) time.Duration {
+	raw := strings.TrimSpace(r.URL.Query().Get("wait"))
+	if raw == "" {
+		return 0
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds < 0 {
+		return 0
+	}
+	limit := time.Duration(seconds) * time.Second
+	if limit > oauthDisplayLongPollLimit {
+		return oauthDisplayLongPollLimit
+	}
+	return limit
+}
+
 func (a *app) handleOAuthDisplayMetadata(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
-	display, active := oauthDisplayData(newOAuthDisplayPaths(a.oauthDisplayDir()), time.Now())
-	if !active {
-		http.NotFound(w, r)
-		return
+	paths := newOAuthDisplayPaths(a.oauthDisplayDir())
+	deadline := time.Now().Add(oauthDisplayWaitFromRequest(r))
+	for {
+		display, active := oauthDisplayData(paths, time.Now())
+		if active {
+			a.json(w, display)
+			return
+		}
+		if time.Now().After(deadline) {
+			http.NotFound(w, r)
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(oauthDisplayPollInterval):
+		}
 	}
-	a.json(w, display)
 }
 
 func (a *app) handleOAuthDisplayQR(w http.ResponseWriter, r *http.Request) {

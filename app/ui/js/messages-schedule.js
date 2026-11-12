@@ -206,8 +206,8 @@ function pickReadableCompliment(){
 function forceNextCompliment(){
   const t=$("#comptext");
   if(!t)return;
-  if(_compFadeTimer){clearTimeout(_compFadeTimer);_compFadeTimer=null;}
-  if(_compRotateTimer){clearTimeout(_compRotateTimer);_compRotateTimer=null;}
+  if(_compRotateTimer){ clearTimeout(_compRotateTimer); _compRotateTimer=null; }
+  compClearFadeTimer();
   const chosen=pickReadableCompliment();
   if(!chosen){compSetVisible(t,true);scheduleNextCompliment(_lastCompText||"",5000);return;}
   const text=chosen.text,priority=!!chosen.priority;

@@ -24,12 +24,40 @@ html.profile-lite .listsdock-ticker.is-moving .listsdock-ticker-track{
   transform:translate3d(0,0,0);
   will-change:auto;
 }
+/* Sidebar list edges: the base files mask the bottom of each scroll pane to
+   fade content into the next lane. A mask-image forces an offscreen raster of
+   the whole list on every repaint — including the once-a-second clock tick —
+   and the pane backgrounds are solid, so a static gradient overlay gives the
+   same edge at near-zero repaint cost. */
+html.profile-lite #agendalist,
+html.profile-lite #wx14{
+  -webkit-mask-image:none;
+  mask-image:none;
+  position:relative;
+}
+html.profile-lite #agendalist:after,
+html.profile-lite #wx14:after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:22px;
+  background:linear-gradient(to bottom,rgba(0,0,0,0),var(--bg));
+  pointer-events:none;
+  z-index:1;
+}
 
 /* Retain the normal short message fade, but do not reserve an opacity layer
    while the dashboard is idle. Browsers can promote it only during a swap. */
 html.profile-lite #comptext{
   will-change:auto;
   backface-visibility:visible;
+  /* Stepped opacity, sized by the present-budget probe (compApplyFadeSteps):
+     the fade advances one visible level per present the engine can actually
+     show, so it never costs more than the tick budget. The base ease-in-out
+     transition stays the non-Lite path and the fade contract's assertion. */
+  transition:opacity var(--compfade) steps(var(--compfade-steps,13),jump-end);
 }
 /* W7 hidden Lite fade modes (owner-set "liteMessageFade" in settings.json; the
    "opacity" default above stays untouched). Instead of fading an element

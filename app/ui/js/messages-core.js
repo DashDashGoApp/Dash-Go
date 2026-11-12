@@ -115,6 +115,16 @@ function eligibleCompliments(){
 let _lastCompText=null;
 let _lastCompItem=null;
 let _compFadeTimer=null;
+// The fade timer may be a raw setTimeout id (non-Lite / instant paths) or a
+// clockAfterTickAt handle (Lite with seconds): both shapes must clear without
+// double-firing the swap.
+function compClearFadeTimer(){
+  if(_compFadeTimer){
+    if(typeof _compFadeTimer.cancel==="function")_compFadeTimer.cancel();
+    else clearTimeout(_compFadeTimer);
+    _compFadeTimer=null;
+  }
+}
 let _compRotateTimer=null;
 const _messageRotationPauses=new Set();
 const _messageRotationPauseTimers=new Map();
@@ -236,7 +246,7 @@ function adjustedMessageWeights(pool){
   return weights;
 }
 function pauseComplimentMotion(){
-  if(_compFadeTimer){ clearTimeout(_compFadeTimer); _compFadeTimer=null; }
+  compClearFadeTimer();
   const t=$("#comptext");
   if(t) compSetVisible(t,true);
 }

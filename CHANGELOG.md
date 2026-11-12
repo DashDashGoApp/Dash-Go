@@ -1,3 +1,58 @@
+## [1.5.25] — 2026-11-11
+
+Dash-Go 1.5.25 is a performance point release for the software-rendered kiosk:
+it makes the once-per-second clock tick cheap, stops recurring UI work from
+repainting the whole page, and shows the Google sign-in QR in the same present
+it is armed.
+
+### Performance and reliability
+
+- **The clock tick no longer repaints the dashboard.** Tick timing now
+  re-anchors to the wall-clock second boundary every tick (it no longer drifts
+  after page stalls, NTP steps, or overlay pauses), unchanged glyphs are never
+  written (a seconds-only update touches one text node), and the clock box is
+  layout- and paint-contained with a fixed-width seconds cell, so each tick
+  repaints the clock area only.
+- **Recurring work writes only on change.** The minute-level health and
+  night-dim cycle leaves the footer pill and the page transform untouched when
+  nothing changed, and the sidebar's scroll-edge fade uses a static gradient
+  overlay instead of a mask that forced the whole list to re-raster on every
+  repaint.
+- **The message fade and swap share the tick's present.** On the Lite profile
+  the compliment fade advances in steps sized by a one-shot present-budget
+  probe (how many frames the engine can actually show), the text swap lands on
+  the next clock tick, and the fade window is scheduled to stay inside one
+  second — a 170 ms present budget costs the same work as before, never more.
+- **Press feedback and shadows cost less on Lite.** Radar, weather, and button
+  presses use plain opacity instead of software brightness filters, and the
+  popup sheet, radar canvas, and sign-in panel drop their large soft shadows on
+  the Lite profile where the border already defines the edge.
+
+### Improvements
+
+- **The Google sign-in QR appears in the same present it is armed.** The
+  dashboard now long-polls the display endpoint (held up to 30 seconds until a
+  display arms) instead of sweeping it every 5 seconds, so the kiosk shows the
+  QR immediately when setup is started from the phone terminal.
+- **The memory snapshot reports swap activity.** Control → Memory snapshot now
+  includes a pswpin/pswpout rate sampled over 2 seconds from /proc/vmstat, so
+  sustained memory pressure is visible instead of discovered later.
+- **The kiosk log records the WebKitGTK release it launched with**, so a later
+  performance complaint can be traced to the engine that produced it.
+
+### Security
+
+- **The release moves to Go 1.26.11.** Advisory GO-2026-6859 (an HTTP/1 `MaxBytesReader` header race that can crash a `net/http` server) was published after 1.5.24, with the fix in the **go1.26.11** patch. The server binary embeds the standard library, so the fix ships to the device in this release rather than only clearing the build gate. The pinned `govulncheck` (v1.5.0) reports no reachable known vulnerabilities on the bumped tree; the gate is fail-closed and had blocked this release until the patch release landed.
+
+### Known issues
+
+- On WebKitGTK 2.54.x the dashboard's base rendering costs roughly a
+  whole-window repaint per update. This release removes the application's
+  share of that cost but cannot change the engine itself; Dash-Go keeps
+  running the 2.52 series on its managed devices, and every change here keeps
+  working there.
+
+
 ## [1.5.24] — 2026-11-05
 
 Dash-Go 1.5.24 continues the stabilization work against the kiosk's software-rendered WebKit: it removes the remaining compositor-era layer hints from the dashboard's resident panes, replaces the alert bar's infinite `filter` pulse with an opacity pulse, and closes the silent-failure class — refresh CLIs that reported success while the calendar manifest or event cache had failed to refresh, and three loaders that swallowed corrupt state files and presented the damage as "signed out" or "no feeds". On the server side, `/api/calendars` no longer rescans the calendar directory on every GET, the weather payload and the Content-Security-Policy header stop being re-read and rebuilt per request, and geocoding reuses one HTTP client instead of paying a new TLS handshake per call. The message schedule's end-before-start rollover is now DST-safe.

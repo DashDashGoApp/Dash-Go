@@ -15,7 +15,9 @@ const css=read("ui/css/dashboard/sidebar-weather-messages.css");
 const base=read("ui/css/dashboard/base.css");
 function block(source,name){const at=source.indexOf(`function ${name}(`);assert.notEqual(at,-1,`missing ${name}`);const open=source.indexOf("{",at);let depth=0;for(let i=open;i<source.length;i++){if(source[i]==="{")depth++;else if(source[i]==="}"&&!--depth)return source.slice(at,i+1);}throw new Error(`unterminated ${name}`);}
 for(const name of ["complimentFadeValueMs","complimentFadeDelayMs"])assert.ok(fit.includes(`function ${name}(`),`missing ${name}`);
-assert.ok(block(rotation,"rotateCompliment").includes("},fadeMs);"),"swap must wait for its smooth fade-out duration");
+const swapBlock=block(rotation,"rotateCompliment");
+assert.ok(swapBlock.includes("clockAfterTickAt(Date.now()+fadeMs,doSwap)"),"the Lite swap must land on the tick reached after the fade-out duration");
+assert.ok(swapBlock.includes("setTimeout(doSwap,fadeMs)"),"the smooth path must wait for its fade-out duration before swapping");
 assert.ok(css.includes("transition:opacity var(--compfade) ease-in-out"),"message fade must use one compositor opacity transition");
 assert.ok(base.includes("--compfade:750ms"),"CSS fallback must use the automatic smooth fade");
 assert.ok(!profile.includes("complimentFadeMs")&&!profile.includes("Message timing"),"Profile must not expose fade tuning");

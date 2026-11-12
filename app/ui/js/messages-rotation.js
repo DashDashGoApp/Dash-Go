@@ -7,6 +7,8 @@ function scheduleNextCompliment(text, overrideMs){
 function showInitialCompliment(){
   const t=$("#comptext");
   if(!t) return;
+  if(typeof compApplyFadeSteps==="function")compApplyFadeSteps(complimentFadeDelayMs());
+  if(typeof compProbePresentBudget==="function")compProbePresentBudget();
   const chosen=pickReadableCompliment();
   const text=chosen?chosen.text:"";
   fitCompliment(text,{priority:!!(chosen&&chosen.priority)});
@@ -17,7 +19,7 @@ function rotateCompliment(){
   if(complimentsPaused()){ pauseComplimentMotion(); scheduleNextCompliment(_lastCompText||"",5000); return; }
   const t=$("#comptext");
   if(!t) return;
-  if(_compFadeTimer){ clearTimeout(_compFadeTimer); _compFadeTimer=null; }
+  compClearFadeTimer();
   if(_compRotateTimer){ clearTimeout(_compRotateTimer); _compRotateTimer=null; }
   const fadeMs=complimentFadeDelayMs();
   // Heavy work runs while the old text is fully visible and static: the pick
@@ -31,7 +33,7 @@ function rotateCompliment(){
   const planned=complimentLiteProfile()?computeComplimentFit(text,t,{priority}):null;
   const beginFadeIn=()=>{ if(complimentsPaused())return; compSetVisible(t,true); };
   const swap=()=>{
-    _compFadeTimer=null;
+    compClearFadeTimer();
     if(complimentsPaused()){
       // Paused mid-fade: discard the pick, refit the previous text at its own priority, fade back.
       pauseComplimentMotion();
@@ -47,8 +49,16 @@ function rotateCompliment(){
   };
   if(fadeMs<=0){ swap(); return; }
   compSetVisible(t,false);
-  _compFadeTimer=setTimeout(()=>{
+  const doSwap=()=>{
     if(typeof requestAnimationFrame==="function") requestAnimationFrame(swap);
     else swap();
-  },fadeMs);
+  };
+  if(complimentLiteProfile()&&CONFIG.showSeconds&&typeof clockAfterTickAt==="function"){
+    // Land the text swap on the next clock tick: the change shares the tick's
+    // present instead of forcing its own, and the stepped fade-in starts on a
+    // boundary-aligned frame.
+    _compFadeTimer=clockAfterTickAt(Date.now()+fadeMs,doSwap);
+  }else{
+    _compFadeTimer=setTimeout(doSwap,fadeMs);
+  }
 }

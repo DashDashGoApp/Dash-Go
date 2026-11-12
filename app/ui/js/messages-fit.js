@@ -330,11 +330,68 @@ function complimentFadeValueMs(value){const raw=Number(value);return Number.isFi
 function complimentFadeLabel(value){const ms=complimentFadeValueMs(value);if(ms===0)return "Instant";if(ms<=150)return "Very fast";if(ms<=350)return "Fast";if(ms<=800)return "Normal";if(ms<=1500)return "Slow";return "Very slow";}
 function complimentFadeSummary(value){const ms=complimentFadeValueMs(value);return ms===0?"Instant (0 ms)":complimentFadeLabel(ms)+" ("+ms+" ms)";}
 function complimentFadeDelayMs(){return complimentFadeValueMs(CONFIG.complimentFadeMs);}
+// Present-budget probe (Lite only, one-shot): the only way to know how many
+// frames this engine can actually show. Toggles a hidden 1px element on
+// consecutive requestAnimationFrame callbacks and takes the median interval;
+// the result only sizes the compliment fade's step count (compApplyFadeSteps)
+// and no recurring timer is left behind.
+let _compPresentBudgetMs=190;
+function compPresentBudget(){ return _compPresentBudgetMs; }
+function compFadeStepCount(fadeMs){
+  const d=Math.max(0,Number(fadeMs)||0);
+  if(d<=0)return 0;
+  const budget=Math.max(60,Math.min(400,_compPresentBudgetMs||190));
+  return Math.max(2,Math.min(15,Math.round(d/budget)));
+}
+function compApplyFadeSteps(fadeMs){
+  if(typeof document==="undefined"||!document.documentElement)return;
+  document.documentElement.style.setProperty("--compfade-steps",String(compFadeStepCount(fadeMs)));
+}
+let _compProbeInFlight=false;
+function compProbePresentBudget(){
+  if(typeof window==="undefined"||typeof requestAnimationFrame!=="function")return;
+  if(typeof complimentLiteProfile!=="function"||!complimentLiteProfile())return;
+  if(_compProbeInFlight)return;
+  _compProbeInFlight=true;
+  const probe=document.createElement("div");
+  probe.setAttribute("aria-hidden","true");
+  probe.style.cssText="position:fixed;left:-999px;top:-999px;width:1px;height:1px;visibility:hidden;";
+  (document.body||document.documentElement).appendChild(probe);
+  const intervals=[];
+  let last=0;
+  const cleanup=()=>{ try{probe.remove();}catch(_){} _compProbeInFlight=false; };
+  const tick=()=>{
+    const now=Date.now();
+    if(last)intervals.push(now-last);
+    last=now;
+    if(intervals.length<7){
+      probe.style.background=(intervals.length%2)?"#000":"#fff";
+      requestAnimationFrame(tick);
+      return;
+    }
+    probe.style.background="";
+    cleanup();
+    const sorted=intervals.slice().sort((a,b)=>a-b);
+    const median=sorted[Math.floor(sorted.length/2)];
+    if(median>10&&median<1500)_compPresentBudgetMs=Math.max(60,Math.min(400,median));
+    compApplyFadeSteps(typeof CONFIG!=="undefined"?CONFIG.complimentFadeMs:750);
+  };
+  requestAnimationFrame(tick);
+}
+if(typeof document!=="undefined"&&document.addEventListener){
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden)compProbePresentBudget();
+  });
+}
 function clockSafeComplimentDelay(delay){
   delay=Math.max(500,+delay||500);
   if(!(CONFIG.showSeconds&&complimentLiteProfile()))return delay;
   const projected=(Date.now()+delay)%1000;
-  if(projected<180)return delay+(220-projected);
-  if(projected>840)return delay+(1220-projected);
+  // Start the fade 60–120 ms after a second boundary so the whole fade window
+  // (default 750 ms) stays inside one second and no fade frame shares the
+  // clock tick's present; either boundary case moves the start to +60 ms of
+  // the next second.
+  if(projected<60)return delay+(1000-projected)+60;
+  if(projected>120)return delay+(1000-projected)+60;
   return delay;
 }

@@ -103,3 +103,55 @@ func TestGoogleOAuthDisplayRoutesRejectHEAD(t *testing.T) {
 		}
 	}
 }
+
+func TestGoogleOAuthDisplayMetadataLongPollWakesWhenArmed(t *testing.T) {
+	withFixtureQRCode(t)
+	a := &app{home: t.TempDir()}
+	paths := newOAuthDisplayPaths(a.oauthDisplayDir())
+	code := make(chan int, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/api/oauth-display?wait=3", nil)
+		request.RemoteAddr = "127.0.0.1:10005"
+		a.handle(recorder, request)
+		code <- recorder.Code
+	}()
+	// The request must be held while nothing is armed: no response yet.
+	select {
+	case got := <-code:
+		t.Fatalf("long poll answered before arming: %d", got)
+	case <-time.After(250 * time.Millisecond):
+	}
+	if !googleOAuthDisplayOnly(paths, "display-state", "family", "https://accounts.example/authorize", time.Now()) {
+		t.Fatal("display presentation was not armed")
+	}
+	select {
+	case got := <-code:
+		if got != http.StatusOK {
+			t.Fatalf("long poll status=%d, want 200", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("long poll did not return after the display armed")
+	}
+}
+
+func TestGoogleOAuthDisplayWaitFromRequestBounds(t *testing.T) {
+	cases := []struct {
+		query string
+		want  time.Duration
+	}{
+		{"", 0},
+		{"?wait=0", 0},
+		{"?wait=30", oauthDisplayLongPollLimit},
+		{"?wait=900", oauthDisplayLongPollLimit},
+		{"?wait=-5", 0},
+		{"?wait=abc", 0},
+		{"?wait=7", 7 * time.Second},
+	}
+	for _, tc := range cases {
+		request := httptest.NewRequest(http.MethodGet, "/api/oauth-display"+tc.query, nil)
+		if got := oauthDisplayWaitFromRequest(request); got != tc.want {
+			t.Fatalf("wait query %q = %v, want %v", tc.query, got, tc.want)
+		}
+	}
+}

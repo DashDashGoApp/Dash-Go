@@ -51,21 +51,34 @@ function oauthDisplayShow(meta){
 async function oauthDisplayPoll(){
   if(OAUTH_DISPLAY_BUSY)return;
   OAUTH_DISPLAY_BUSY=true;
+  let active=false,error=false;
   try{
-    const response=await fetch("/api/oauth-display",{cache:"no-store"});
-    if(response.status===404){ oauthDisplayHide(); return; }
-    if(!response.ok)throw new Error("OAuth display unavailable");
-    const meta=await response.json();
-    oauthDisplayShow(meta);
-  }catch(_){ oauthDisplayHide(); }
+    // Long poll: the server holds the request (up to 30s) until a display
+    // arms, so the panel appears in the same present as the QR write.
+    const response=await fetch("/api/oauth-display?wait=30",{cache:"no-store"});
+    if(response.status===404){ oauthDisplayHide(); }
+    else{
+      if(!response.ok)throw new Error("OAuth display unavailable");
+      const meta=await response.json();
+      oauthDisplayShow(meta);
+      active=!!(meta&&meta.url);
+    }
+  }catch(_){ oauthDisplayHide(); error=true; }
   finally{ OAUTH_DISPLAY_BUSY=false; }
+  // One request at a time; the successor is scheduled immediately, so the
+  // panel's lifetime is a tight chain of long polls instead of a periodic sweep.
+  oauthDisplayScheduleNext(error?5000:active?1000:100);
+}
+function oauthDisplayScheduleNext(delay){
+  if(OAUTH_DISPLAY_POLL_TIMER)clearTimeout(OAUTH_DISPLAY_POLL_TIMER);
+  OAUTH_DISPLAY_POLL_TIMER=setTimeout(()=>{
+    OAUTH_DISPLAY_POLL_TIMER=null;
+    const poll=()=>oauthDisplayPoll();
+    if(typeof runOrDeferDashboardWork==="function")runOrDeferDashboardWork("oauth-display",poll); else poll();
+  },delay);
 }
 function oauthDisplayBoot(){
   if(OAUTH_DISPLAY_POLL_TIMER)return;
   oauthDisplayPoll();
-  OAUTH_DISPLAY_POLL_TIMER=setInterval(()=>{
-    const poll=()=>oauthDisplayPoll();
-    if(typeof runOrDeferDashboardWork==="function")runOrDeferDashboardWork("oauth-display",poll); else poll();
-  },5000);
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden)oauthDisplayPoll(); });
 }

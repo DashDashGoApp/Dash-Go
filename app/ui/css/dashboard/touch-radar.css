@@ -49,5 +49,15 @@ summary::-webkit-details-marker{display:none;}
 #radarscrub::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;margin-top:-11px;border:2px solid var(--accent);border-radius:50%;background:var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.24);}
 #radarscrub:focus-visible{outline:2px solid var(--accent);outline-offset:5px;}
 #radarscrub:disabled{cursor:default;opacity:.48;}
-#radarstamp{font-family:var(--mono);font-size:16px;font-weight:750;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+#radarstamp{font-family:var(--mono);font-size:16px;font-weight:750;color:var(--fg);white-space:nowrap;overflow:hidden;text-align:right;}
+/* Lite engine: press feedback as plain opacity/transform instead of software
+   brightness/saturate filters (one filter pass over the whole control tree
+   per press); the radar canvas shadow and the static stamp/controls rows are
+   dropped or contained so their subtrees repaint independently. */
+html.profile-lite :where(button,.cbtn,.actionbtn,[role="button"],summary,#sun .moon,#wxnow):active{filter:none;opacity:.82;}
+html.profile-lite #sun .moon{transition:transform .15s ease;}
+html.profile-lite #wxnow{transition:transform .12s ease;}
+html.profile-lite #radarfull.radar-lite #radarlitecanvas{box-shadow:none;}
+html.profile-lite #radarstamp{contain:layout paint;}
+html.profile-lite #radarcontrols{contain:layout paint;}
 @media(max-width:640px){#radarbar{padding:8px 10px;}#radarcontrols{grid-template-columns:1fr;padding:8px;gap:6px;}#radarbuttons{justify-content:center;}#radarstamp{text-align:center;font-size:14px;}#radarprovider{font-size:11px;}}

@@ -119,7 +119,7 @@ function renderCtrlCalendarHealth(st,wrap,withSummary){
 }
 function formatMemorySnapshot(r){
   const when=r.capturedAt?fmtDateTime(r.capturedAt*1000):"now";
-  return ["Memory snapshot — "+when,"===== free -h =====",r.free||"", "===== swapon --show =====",r.swap||"", "===== vmstat =====",r.vmstat||"", "===== top RSS =====",r.top||"", "===== dashboard/browser tree =====",r.tree||"", "===== cache/log sizes =====",r.cache||""].join("\n");
+  return ["Memory snapshot — "+when,"===== free -h =====",r.free||"", "===== swapon --show =====",r.swap||"", "===== swap activity =====",r.swapio||"", "===== vmstat =====",r.vmstat||"", "===== top RSS =====",r.top||"", "===== dashboard/browser tree =====",r.tree||"", "===== cache/log sizes =====",r.cache||""].join("\n");
 }
 async function renderCtrlDiagnostics(){
   const wrap=$("#ctrldiag"); if(!wrap) return;

@@ -2,7 +2,7 @@ module github.com/DashDashGoApp/Dash-Go/app
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require github.com/tdewolff/minify/v2 v2.24.13
 

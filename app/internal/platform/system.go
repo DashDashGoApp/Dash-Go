@@ -234,6 +234,11 @@ func MemoryStatus() map[string]any {
 		args    []string
 	}{
 		{key: "vmstat", timeout: 6 * time.Second, name: "vmstat", args: []string{"1", "3"}},
+		// Swap activity: two /proc/vmstat samples 2s apart via bash (no
+		// process spawn per sample), so this adds two file reads on top of the
+		// already-running vmstat window. A sustained nonzero rate is the signal
+		// this snapshot should surface instead of waiting for the owner to notice.
+		{key: "swapio", timeout: 6 * time.Second, name: "bash", args: []string{"-c", "grep -E '^(pswpin|pswpout) ' /proc/vmstat; sleep 2; grep -E '^(pswpin|pswpout) ' /proc/vmstat"}},
 		{key: "free", timeout: 5 * time.Second, name: "free", args: []string{"-h"}},
 		{key: "swap", timeout: 5 * time.Second, name: "swapon", args: []string{"--show"}},
 		{key: "top", timeout: 8 * time.Second, name: "bash", args: []string{"-c", "ps -eo pid,comm,rss,%mem,args --sort=-rss | head -25"}},
@@ -253,10 +258,62 @@ func MemoryStatus() map[string]any {
 
 	out := map[string]any{"ok": true, "capturedAt": time.Now().Unix()}
 	for result := range results {
+		if result.key == "swapio" {
+			out["swapio"] = formatSwapIORate(result.value)
+			continue
+		}
 		out[result.key] = result.value
 	}
 	out["cache"] = CommandText(8*time.Second, "bash", "-c", "nice -n 10 du -sh ~/.cache/surf ~/.local/share/webkit* ~/.cache/webkit* ~/dashboard/cache ~/dashboard/logs 2>/dev/null")
 	return out
+}
+
+// formatSwapIORate turns the two /proc/vmstat samples into pages-per-second
+// for swap in and out. Zero over the 2s window is the common healthy answer;
+// a rate that persists across hours is the memory-pressure signal the
+// snapshot should make visible.
+func formatSwapIORate(raw string) string {
+	var samples [][2]int64 // [pswpin, pswpout] in file order
+	for _, line := range strings.Split(raw, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || (fields[0] != "pswpin" && fields[0] != "pswpout") {
+			continue
+		}
+		value, err := strconv.ParseInt(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		var sample [2]int64
+		if len(samples) > 0 {
+			sample = samples[len(samples)-1]
+		}
+		if fields[0] == "pswpin" {
+			sample[0] = value
+		} else {
+			sample[1] = value
+		}
+		if len(samples) < 2 {
+			samples = append(samples, sample)
+		}
+	}
+	if len(samples) < 2 {
+		return "swap activity sample unavailable"
+	}
+	inDelta := samples[1][0] - samples[0][0]
+	outDelta := samples[1][1] - samples[0][1]
+	if inDelta < 0 {
+		inDelta = 0
+	}
+	if outDelta < 0 {
+		outDelta = 0
+	}
+	inPerSec := inDelta / 2
+	outPerSec := outDelta / 2
+	if inPerSec == 0 && outPerSec == 0 {
+		return "no swap activity over 2s window (healthy)"
+	}
+	return fmt.Sprintf("pswpin %d pages/s (%.1f MiB/s) · pswpout %d pages/s (%.1f MiB/s) over 2s — sustained movement means memory pressure",
+		inPerSec, float64(inPerSec*4)/1024, outPerSec, float64(outPerSec*4)/1024)
 }
 func MemorySnapshotMB() (availableMB, swapUsedMB int) {
 	b, e := os.ReadFile("/proc/meminfo")

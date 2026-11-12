@@ -48,7 +48,8 @@ function pauseUiAnimations(){
 }
 function resumeUiAfterOverlay(){
   if(uiOverlayActive()) return;
-  if(typeof _lastTickMin !== "undefined"){ _lastTickMin=-1; tickClock(); }
+  if(typeof clockResyncTimer === "function"){ clockResyncTimer(); }
+  else if(typeof _lastTickMin !== "undefined"){ _lastTickMin=-1; tickClock(); }
   flushDeferredDashboardWork();
 }
 function mapClamp(n,min,max){ return Math.max(min,Math.min(max,n)); }

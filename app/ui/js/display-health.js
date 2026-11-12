@@ -61,6 +61,7 @@ function deviceHealthWarningEntries(){
     return staleWarning(key,text,{tier:"device",silenceable:f.level==="degraded"&&DEVICE_WARNING_SILENCEABLE_KEYS.has(key)});
   });
 }
+let _lastStaleSig="";
 function updateStale(){
   const e=$("#stale"); if(!e) return;
   const now=Date.now(),entries=[],calMin=Math.max(1,Number(CONFIG.refreshCalMinutes)||10),wxMin=Math.max(1,typeof effectiveWeatherRefreshMinutes==="function"?effectiveWeatherRefreshMinutes():Number(CONFIG.refreshWxMinutes)||30);
@@ -90,6 +91,11 @@ function updateStale(){
   }
   const visible=entries.filter(entry=>!healthWarningMuted(entry.key,now));
   ACTIVE_STALE_WARNINGS=visible;
+  // Write-on-change: on an unchanged minute (the usual case) the pill DOM is
+  // untouched, so the minute interval no longer costs a footer repaint.
+  const sig=visible.length ? visible.map(entry=>entry.key+":"+entry.text).join("|")+(dev==="failing"?"!":"") : "";
+  if(sig===_lastStaleSig) return;
+  _lastStaleSig=sig;
   if(visible.length){
     const text="Check soon: "+visible.map(entry=>entry.text).join(" · ");
     e.textContent=text; e.hidden=false; e.classList.add("show"); e.classList.toggle("severe",dev==="failing");
@@ -149,9 +155,13 @@ function shiftOffset(step,maxPx){
   return [c(x),c(y)];
 }
 let _shiftStep=0;
+let _lastShiftTransform="";
 function applyPixelShift(){
   const px=Math.max(1,CONFIG.pixelShift|0);
   _shiftStep++;
   const [x,y]=shiftOffset(_shiftStep,px);
-  document.body.style.transform="translate("+x+"px,"+y+"px)";
+  const t="translate("+x+"px,"+y+"px)";
+  if(t===_lastShiftTransform)return;
+  _lastShiftTransform=t;
+  document.body.style.transform=t;
 }

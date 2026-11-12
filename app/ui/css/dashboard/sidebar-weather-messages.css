@@ -4,9 +4,13 @@
   display:flex;flex-direction:column;overflow:hidden;
   flex:1 1 55%;min-height:0;          /* shares sidebar height with weather */
 }
-#clock{padding:var(--dash-clock-pad);border-bottom:1px solid var(--line);}  /* generous triple-tap target */
+#clock{padding:var(--dash-clock-pad);border-bottom:1px solid var(--line);contain:layout paint;}  /* generous triple-tap target */
 #cdate{font-family:var(--dash-clock-font);font-size:var(--dash-clock-date-size);font-weight:var(--dash-clock-weight);color:var(--fg);letter-spacing:0.015em;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
-#ctime{font-family:var(--dash-clock-font);font-size:min(var(--dash-clock-time-size),calc((var(--sidebarwidth) - 40px)/4.3));font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;}
+#ctime{font-family:var(--dash-clock-font);font-size:min(var(--dash-clock-time-size),calc((var(--sidebarwidth) - 40px)/4.3));font-weight:var(--dash-clock-weight);line-height:1;margin-top:4px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;contain:layout paint;}
+/* The seconds cell is the only glyph that changes every tick: a fixed
+   inline-block width keeps the hm/ap column from re-laying out when it does,
+   so each tick repaints the clock box only. */
+#ctime .ss{display:inline-block;min-width:2.05ch;text-align:right;}
 #ctime sup,#ctime .ap{font-size:min(var(--dash-clock-suffix-size),0.36em);color:var(--dim);vertical-align:super;}
 #agendalist{flex:1;overflow-y:auto;scrollbar-width:none;padding:4px 0 8px;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;contain:content;}
 #agendalist::-webkit-scrollbar{display:none;}

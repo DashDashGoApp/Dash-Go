@@ -4,23 +4,39 @@
 
 ## Current stable release candidate
 
-- **Version:** `1.5.17`
+- **Version:** `1.5.25`
 - **Track:** stable
-- **Promotion basis:** a validated `1.5.17` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
-- **Primary scope:** radar popup open speed in both profiles — the standard overlay starts its base map and RainViewer frame index alongside the local status request instead of after it, Lite prewarms its base tile plan during the status and frame-index round trips through the same bounded loads (zero extra requests, same concurrency caps), and the keyed radar tile proxy gains a shared connection pool. The moved-code smoke marker for the bounded Open-Meteo decoder was repointed at the shared decoder it has called since 1.5.13.
-- **Required release proof:** Dash-Go Local Builder must use Go 1.26.9, extract and validate this exact repository-ready stable source handoff, prove the 43-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
-- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that the radar popup opens visibly sooner in both profiles, and that the update path installs cleanly with a clean server stop.
+- **Promotion basis:** a validated `1.5.25` source handoff. Stable promotion synchronizes release identity, public documentation, cache busters, the source-feature contract, and one consolidated stable changelog section.
+- **Primary scope:** software-render kiosk performance — the once-per-second clock tick no longer repaints the dashboard (re-anchored tick timing, unchanged-glyph skip, layout- and paint-contained clock box); recurring UI work (minute-level health and night-dim cycles, the sidebar scroll-edge fade) writes only on change and no longer re-rasters the page; the message fade and swap share the tick's present, with the fade stepped to a one-shot present-budget probe so a fast present budget never costs more work; press feedback and popup shadows drop their software filter and large-blur costs on the Lite profile; and the Google sign-in QR is shown in the same present it is armed, via a long-polled display endpoint, instead of the next 5 s sweep. The memory snapshot also reports swap activity.
+- **Required release proof:** Dash-Go Local Builder must use Go 1.26.11, extract and validate this exact repository-ready stable source handoff, prove the 63-feature source contract and focused JSON v2 lane, run `go mod tidy -diff`, `go mod verify`, vet, tests, Linux race coverage, all browser and Chromium layout gates, regenerate and verify minified JavaScript and CSS bundles, build all five Linux targets reproducibly, derive the binary-linked SPDX inventory, and pass installer, package, checksum, catalog, and final-archive validation before publication.
+- **Physical stable proof:** on the Pi kiosk, verify the four boring numbers (server RSS, WebKit RSS, zram used, server CPU time) show no regression, that the kiosk log records the WebKitGTK release, and that the update path installs cleanly with a clean server stop.
 - **Compatibility:** existing settings, calendars, private-calendar mappings, provider configuration and keys, local apps, display schedules, four-digit PINs, and the repository-ready source workflow remain compatible. No user-visible feature or persistent data is removed.
 - **Current release boundary:** this is a stable source handoff. It is not a deployable or published release until the local Windows/WSL Builder completes the pinned-toolchain, generated-asset, browser, package, architecture, catalog, checksum, SBOM, and final-ZIP gates.
 
 ## Current published stable release
 
-- **Version:** `1.5.16`
+- **Version:** `1.5.24`
 - **Track:** stable
 - **Minimum upgrade version:** `1.4.0`
-- **Status:** remains the published stable release until the validated 1.5.17 Builder output is published and verified.
+- **Status:** remains the published stable release until the validated 1.5.25 Builder output is published and verified.
 - **Official distribution model:** the [Dash-Go GitHub repository](https://github.com/DashDashGoApp/Dash-Go) and immutable GitHub Releases.
 - **Release asset contract:** each published release provides a versioned installation bundle, public source archive, SPDX SBOM, and `SHA256SUMS`.
+
+## 1.5.25 stable scope
+
+- **Clock tick:** timing re-anchors to the wall-clock second boundary every tick, unchanged glyphs are never rewritten, and the clock box is layout- and paint-contained with a fixed-width seconds cell, so each tick repaints the clock area only.
+- **Recurring work:** the minute-level health and night-dim cycle leaves the footer pill and page transform untouched when nothing changed, and the sidebar scroll-edge fade uses a static gradient overlay instead of a re-rasterizing mask.
+- **Message fade:** on the Lite profile the fade advances in steps sized by a one-shot present-budget probe, the text swap lands on the next clock tick, and the fade window stays inside one second — the same work as before at a fast present budget, never more.
+- **Press and shadow cost:** radar, weather, and button presses use plain opacity instead of software brightness filters, and the popup sheet, radar canvas, and sign-in panel drop their large soft shadows on the Lite profile.
+- **Sign-in:** the dashboard long-polls the display endpoint until a display arms, so the kiosk shows the Google QR in the same present setup is started from the phone terminal.
+- **Observability:** the Control memory snapshot reports pswpin/pswpout activity over a 2 s window, and the kiosk log records the WebKitGTK release it launched with.
+
+## 1.5.24 stable scope
+
+- **Installation size:** the 127 MB installation bundle shrank to 52 MB — 6.6% of the device's 800 MB ceiling instead of 24.8% — by packaging only what the installer stages.
+- **Family Board writeback:** a note that already held its expiry no longer rewrote the note on every save, and an explicit duration or date choice still moved the expiry as expected.
+- **Update resilience:** a failed update no longer auto-restarted the server; the running installation kept serving, and the recovery path stayed manual.
+- **Calendar and smoke integrity:** the calendar pane gained a paint budget, the stable smoke suite runs at 118/120 with two known-bad browser smakes, and the 63-feature source contract and the single-source cache buster contract were carried forward.
 
 ## 1.5.17 stable scope
 

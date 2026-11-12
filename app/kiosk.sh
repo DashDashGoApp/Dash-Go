@@ -46,6 +46,10 @@ if removal_requested; then
 fi
 acquire_kiosk_lock
 kiosk_log "kiosk session started pid=$$ display=${DISPLAY:-:0}"
+# Record the WebKitGTK release the session actually runs: 2.52.x and 2.54.x
+# repaint differently, and the log line is the cheapest way to tell which
+# engine produced a later performance complaint on this device.
+kiosk_log "engine webkitgtk=$(dpkg-query -W -f='${Version}' libwebkit2gtk-4.1-0 2>/dev/null || echo unknown)"
 
 # Low-memory profile helper. Keep this self-contained so kiosk.sh can make
 # launch-smoothing decisions even before the control server/installer is run.

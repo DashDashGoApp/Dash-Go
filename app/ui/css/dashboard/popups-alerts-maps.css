@@ -393,3 +393,8 @@ html[data-theme="daylight"] #pop.messagepop .msgpindots{background:rgba(20,28,34
   .healthwarning-copy{font-size:16px;}
   .healthwarning-btn{min-height:48px;}
 }
+/* Lite engine: the sheet edge is already defined by border + background
+   contrast; the large soft shadow costs a full-page raster on every open. */
+html.profile-lite #pop{box-shadow:none;}
+html.profile-lite #pophead,
+html.profile-lite[data-theme="daylight"] #pophead{box-shadow:none;}
