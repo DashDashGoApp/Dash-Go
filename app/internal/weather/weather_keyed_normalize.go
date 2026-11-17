@@ -161,6 +161,14 @@ func toWindGo(v any, unit, target string) any {
 	if target == "mph" && (unit == "kmh" || unit == "kph") {
 		return f / 1.609344
 	}
+	if target == "ms" {
+		if unit == "mph" {
+			return f * 0.44704
+		}
+		if unit == "kmh" || unit == "kph" {
+			return f / 3.6
+		}
+	}
 	return f
 }
 func textCodeGo(v any) int {

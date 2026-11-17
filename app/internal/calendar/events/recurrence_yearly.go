@@ -38,10 +38,9 @@ func expandYearly(ev ICSEvent, winStart, winEnd time.Time, r map[string]string, 
 func yearlyCandidates(ev ICSEvent, year int, r map[string]string) []time.Time {
 	start := ev.Start
 	months := parseMonthNumbers(r["BYMONTH"], int(start.Month()))
-	strict := r["BYMONTH"] != "" || r["BYMONTHDAY"] != "" || r["BYDAY"] != ""
 	out := []time.Time{}
 	for _, month := range months {
-		for _, day := range selectorDays(year, time.Month(month), start.Day(), r, strict) {
+		for _, day := range selectorDays(year, time.Month(month), start.Day(), r) {
 			out = append(out, eventDate(ev, year, time.Month(month), day, start.Hour(), start.Minute(), start.Second(), start.Nanosecond()))
 		}
 	}

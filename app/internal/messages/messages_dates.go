@@ -64,9 +64,12 @@ func (s *Service) saveBirthdays(items []any) []any {
 		txt = "window.DASHBOARD_LOCAL = {\n};\n"
 	}
 	arr, _ := json.Marshal(clean)
+	// "$..." in a replacement is group expansion; a name like "Toy $100 Fund"
+	// must stay literal, so escape it before substitution.
+	replacement := "${1}birthdays: " + strings.ReplaceAll(string(arr), "$", "$$") + ","
 	pat := reBirthdayListLine
 	if pat.MatchString(txt) {
-		txt = pat.ReplaceAllString(txt, "${1}birthdays: "+string(arr)+",")
+		txt = pat.ReplaceAllString(txt, replacement)
 	} else {
 		idx := strings.LastIndex(txt, "};")
 		ins := "  birthdays: " + string(arr) + ",\n"

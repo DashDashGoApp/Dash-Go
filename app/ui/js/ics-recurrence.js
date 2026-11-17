@@ -39,13 +39,17 @@ function expand(ev, winStart, winEnd){
   if(freq==="WEEKLY" && r.BYDAY){
     const days=r.BYDAY.split(",").map(d=>ICAL_DOW[d.replace(/^[+-]?\d+/,"")]).filter(d=>d!==undefined).sort((a,b)=>a-b);
     if(!days.length) return [ev];
-    let weekStart=startOfWeek(ev.start);
+    // Honor WKST (RFC 5545 week start) when the rule declares one; the house
+    // week-start setting is only the fallback.
+    const wkst=r.WKST?(ICAL_DOW[r.WKST.toUpperCase()]??CONFIG.firstDayOfWeek):CONFIG.firstDayOfWeek;
+    const weekAnchor=(d)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()-wkst+7)%7));
+    let weekStart=weekAnchor(ev.start);
     let emitted=0, guard=0;
     // Fast-forward whole interval-steps to just before the window when COUNT
     // is unbounded (with COUNT we must walk from the start to count correctly).
     if(count===Infinity && weekStart<winStart){
       const stepMs=interval*7*DAY;
-      const steps=Math.floor((startOfWeek(winStart)-weekStart)/stepMs);
+      const steps=Math.floor((weekAnchor(winStart)-weekStart)/stepMs);
       if(steps>0){
         const ws=new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+steps*interval*7);
         if(ws<=winStart) weekStart=ws;
@@ -53,7 +57,7 @@ function expand(ev, winStart, winEnd){
     }
     while(weekStart<=until && weekStart<=winEnd && emitted<count && guard<400){
       for(const wd of days){
-        const offset=(wd-CONFIG.firstDayOfWeek+7)%7;
+        const offset=(wd-wkst+7)%7;
         const occ=new Date(weekStart.getFullYear(),weekStart.getMonth(),weekStart.getDate()+offset,
                            s.getHours(),s.getMinutes(),s.getSeconds());
         if(occ<ev.start) continue;

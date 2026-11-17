@@ -101,7 +101,7 @@ func observanceTransitions(obs zoneObservance, year int) []civilDateTime {
 	months := parseMonthNumbers(obs.rule["BYMONTH"], obs.start.month)
 	out := []civilDateTime{}
 	for _, month := range months {
-		for _, day := range selectorDays(year, time.Month(month), obs.start.day, obs.rule, true) {
+		for _, day := range selectorDays(year, time.Month(month), obs.start.day, obs.rule) {
 			out = append(out, civilDateTime{year, month, day, obs.start.hour, obs.start.minute, obs.start.sec, obs.start.nsec})
 		}
 	}

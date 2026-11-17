@@ -17,7 +17,7 @@ func expandMonthly(ev ICSEvent, winStart, winEnd time.Time, r map[string]string,
 		if monthStart.After(until) || monthStart.After(winEnd) {
 			break
 		}
-		for _, day := range selectorDays(base.Year(), base.Month(), start.Day(), r, false) {
+		for _, day := range selectorDays(base.Year(), base.Month(), start.Day(), r) {
 			d := eventDate(ev, base.Year(), base.Month(), day, start.Hour(), start.Minute(), start.Second(), start.Nanosecond())
 			if d.Before(start) {
 				continue

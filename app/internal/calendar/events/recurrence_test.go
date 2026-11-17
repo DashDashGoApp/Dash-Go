@@ -45,6 +45,12 @@ func TestMonthlyRecurrenceRFC5545ByMonthDayAndByDay(t *testing.T) {
 			rule:  "FREQ=MONTHLY;BYMONTHDAY=1,15;COUNT=6",
 			want:  []string{"20260101", "20260115", "20260201", "20260215", "20260301", "20260315"},
 		},
+		{
+			name:  "implicit day-of-month skips months without it",
+			start: time.Date(2026, 1, 31, 9, 0, 0, 0, loc),
+			rule:  "FREQ=MONTHLY;COUNT=5",
+			want:  []string{"20260131", "20260331", "20260531", "20260731", "20260831"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -62,5 +68,19 @@ func TestMonthlyRecurrenceRFC5545ByMonthDayAndByDay(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestYearlyImplicitFeb29SkipsNonLeapYears(t *testing.T) {
+	start := time.Date(2024, 2, 29, 9, 0, 0, 0, time.UTC)
+	got := expand(ICSEvent{Start: start, RRule: "FREQ=YEARLY"}, start, time.Date(2029, 12, 31, 23, 59, 59, 0, time.UTC))
+	want := []string{"20240229", "20280229"}
+	if len(got) != len(want) {
+		t.Fatalf("dates=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i].Start.Format("20060102") != want[i] {
+			t.Fatalf("dates=%v want=%v", got, want)
+		}
 	}
 }

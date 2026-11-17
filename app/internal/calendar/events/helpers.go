@@ -9,8 +9,6 @@ import (
 
 func epochMs(t time.Time) int64 { return t.UnixMilli() }
 
-func clamp(n, lo, hi int) int { return max(lo, min(hi, n)) }
-
 func daysInMonth(y int, m time.Month) int { return time.Date(y, m+1, 0, 0, 0, 0, 0, time.UTC).Day() }
 
 // calendarDayDiff compares civil dates without letting a DST-short/long day

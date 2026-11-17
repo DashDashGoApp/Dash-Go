@@ -1,3 +1,29 @@
+## [1.5.26] — 2026-11-16
+
+Dash-Go 1.5.26 is a correctness point release for the calendar recurrence
+engine, wind-unit conversion, and birthday persistence: it stops inventing
+dates in months that do not contain the event's day, converts wind speeds to
+m/s correctly, and stores names containing "$" verbatim.
+
+### Bug fixes
+
+- **Recurrence no longer clamps missing days.** A monthly or yearly event whose
+  day of month does not exist in a given month (a 31st-starting monthly event
+  in February, a Feb 29 yearly event in a common year) is skipped rather than
+  landing on the month's last day, matching RFC 5545 and the browser engine's
+  existing behavior; both engines now agree.
+- **The browser weekly engine honors WKST.** When a weekly rule declares a
+  week start (e.g. `WKST=MO`), its week grid is anchored to that day instead
+  of always using the house first-day-of-week setting, so the server and the
+  browser produce the same dates for rules with an explicit WKST.
+- **Wind speeds convert to m/s.** With `windUnit` set to `ms`, provider
+  readings in mph or km/h are now actually converted (20 mph is 8.94 m/s);
+  previously the raw number was labeled m/s, which also skewed the
+  provider-agreement check in the weather blend.
+- **Birthday names keep "$".** Names containing a dollar sign (e.g. "Toy $100
+  Fund") are stored verbatim; previously, re-saving the birthday list expanded
+  "$" as a regex capture group and silently corrupted the stored name.
+
 ## [1.5.25] — 2026-11-11
 
 Dash-Go 1.5.25 is a performance point release for the software-rendered kiosk:

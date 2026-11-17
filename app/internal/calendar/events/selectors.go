@@ -69,7 +69,7 @@ func parseMonthDays(raw string, year int, month time.Month) []int {
 	return uniqueInts(out)
 }
 
-func selectorDays(year int, month time.Month, fallbackDay int, r map[string]string, strictFallback bool) []int {
+func selectorDays(year int, month time.Month, fallbackDay int, r map[string]string) []int {
 	byMonthDay := strings.TrimSpace(r["BYMONTHDAY"])
 	byDay := parseMonthlyByDay(r["BYDAY"])
 	values := []int{}
@@ -96,9 +96,9 @@ func selectorDays(year int, month time.Month, fallbackDay int, r map[string]stri
 	default:
 		if fallbackDay >= 1 && fallbackDay <= daysInMonth(year, month) {
 			values = append(values, fallbackDay)
-		} else if !strictFallback {
-			values = append(values, clamp(fallbackDay, 1, daysInMonth(year, month)))
 		}
+		// RFC 5545: months without the implicit day-of-month are skipped,
+		// never clamped to the month's last day (parity with the JS engine).
 	}
 	slices.Sort(values)
 	return uniqueInts(values)
